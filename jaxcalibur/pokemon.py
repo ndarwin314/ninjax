@@ -2,11 +2,10 @@ from typing import Union, Tuple, Dict, Any
 
 import chex
 from flax import struct
-from gymnax.environments.environment import Environment
-import jax.numpy as jnp
+import jax
 
 from jaxcalibur.move import Move
-from jaxcalibur.stats import StatTable
+from jaxcalibur.stats import StatTable, StatBoosts
 
 @struct.dataclass
 class Pokemon:
@@ -21,4 +20,5 @@ class Pokemon:
     moves: (Move, Move, Move, Move)
     ability: str
     item: str
-    stats: StatTable
+    stat_table: StatTable
+    stat_boosts: StatBoosts

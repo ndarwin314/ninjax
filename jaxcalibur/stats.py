@@ -29,3 +29,9 @@ class StatTable:
     def multiplied_stat(self, stat: chex.Array[StatEnum], boost: chex.Array[int]):
         # should be making a copy
         return self.stats.at[stat].mul(stat_multiplier_lookup[boost])
+
+
+@struct.dataclass
+class StatBoosts:
+    normal_boosts: Array = (0, 0, 0, 0, 0)
+    acc_boosts: Array = (0, 0)

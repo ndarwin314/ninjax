@@ -2,7 +2,6 @@ from typing import Union, Tuple, Dict, Any
 
 import chex
 from flax import struct
-from gymnax.environments.environment import Environment
 import jax.numpy as jnp
 
 from jaxcalibur.pokemon import Pokemon

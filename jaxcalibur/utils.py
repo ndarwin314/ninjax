@@ -37,3 +37,11 @@ def calculate_stats(level: int, nature: Nature, base_stats: Array, ivs: Array, e
     stats.at[0].add(level + 5)
 
     return stats
+
+# computes damage before any multiplicative modifiers
+def base_damage_compute(
+        attacker_level: int,
+        attack_stat: int,
+        defence_stat: int,
+        base_power: int):
+    return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
