@@ -1,23 +1,43 @@
+from typing import Union, Tuple, Dict, Any
+
+import chex
 from flax import struct
-from pettingzoo.utils.env import ParallelEnv
+from gymnax.environments.environment import Environment
 import jax.numpy as jnp
 
-
-@struct.dataclass
-class EnvState:
-    time: int
+from jaxcalibur.side import SideState
 
 
 @struct.dataclass
-class EnvParams:
+class BattleState:
+    turn: int
+    agents: (SideState, SideState)
+    field_state: "FieldState"
+
+
+
+@struct.dataclass
+class BattleParams:
     max_steps_in_episode: int = 1
 
-class Battle(ParallelEnv):
+class Battle(Environment[BattleState, BattleParams]):
 
     def __init__(self):
         pass
 
 
+    def step_env(
+        self,
+        key: chex.PRNGKey,
+        state: BattleState,
+        action: Union[int, float, chex.Array],
+        params: BattleParams,
+    ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+        # the fun part :))))
+        pass
 
-    def render(self) -> None | jnp.ndarray | str | list:
-        raise NotImplemented
+    def reset_env(
+        self, key: chex.PRNGKey, params: BattleParams
+    ) -> Tuple[chex.Array, BattleState]:
+        pass
+
