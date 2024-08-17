@@ -4,7 +4,7 @@ import chex
 from flax import struct
 import jax.numpy as jnp
 
-from jaxcalibur.enum_types import MoveType, Type
+from ninjax.enum_types import MoveType, Type
 
 @struct.dataclass
 class Move:
@@ -15,3 +15,4 @@ class Move:
     type: Type
     base_power: int
     accuracy: int
+    priority: int

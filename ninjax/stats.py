@@ -6,8 +6,8 @@ from flax import struct
 import jax
 import jax.numpy as jnp
 
-from jaxcalibur.enum_types import StatEnum
-from jaxcalibur.utils import calculate_stats, stat_multiplier_lookup
+from ninjax.enum_types import StatEnum
+from ninjax.utils import calculate_stats, stat_multiplier_lookup
 
 Array = jax.Array
 
@@ -15,6 +15,10 @@ Array = jax.Array
 # may need to modify with struct.dataclass
 Nature = namedtuple("Nature", ["increased", "decreased"])
 
+@struct.dataclass
+class StatBoosts:
+    normal_boosts: Array = (0, 0, 0, 0, 0)
+    acc_boosts: Array = (0, 0)
 
 @struct.dataclass
 class StatTable:
@@ -25,13 +29,11 @@ class StatTable:
     evs: Array = (84, 84, 84, 84, 84, 84)
     stats: Array = calculate_stats(level, nature, base_stats, ivs, evs)
     current_hp: int = stats[0]
+    boosts: StatBoosts = StatBoosts()
 
-    def multiplied_stat(self, stat: chex.Array[StatEnum], boost: chex.Array[int]):
-        # should be making a copy
-        return self.stats.at[stat].mul(stat_multiplier_lookup[boost])
+    @property
+    def boosted_stats(self):
+        return self.stats * stat_multiplier_lookup[self.boosts.normal_boosts]
 
 
-@struct.dataclass
-class StatBoosts:
-    normal_boosts: Array = (0, 0, 0, 0, 0)
-    acc_boosts: Array = (0, 0)
+

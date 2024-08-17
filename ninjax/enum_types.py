@@ -58,3 +58,17 @@ class StatEnum(IntEnum):
 class AccuracyEnum(IntEnum):
     ACCURACY = 0
     EVASION = 1
+
+class WeatherEnum(IntEnum):
+    NONE = 0
+    RAIN = 1
+    SUN = 2
+    SANDSTORM = 3
+    SNOW = 4
+
+class TerrainEnum(IntEnum):
+    NONE = 0
+    ELECTRIC = 1
+    GRASSY = 2
+    PSYCHIC = 3
+    MISTY = 4
