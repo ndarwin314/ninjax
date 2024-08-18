@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.enum_types import StatEnum
-from ninjax.utils import calculate_stats, stat_multiplier_lookup
+from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
 
 Array = jax.Array
 

@@ -11,6 +11,8 @@ from ninjax.pokemon import Pokemon, clear_boosts, clear_volatile_status
 class SideState:
     # incredible code
     team: list[Pokemon]
+    # figure out how to represent no pokemon on field, maybe active_index=-1?
+    # or make a flag variable?
     active_index: int = 0
     stealth_rocks: bool = False
     sticky_webs: bool = False
@@ -63,3 +65,19 @@ def step_side(
         tailwind=max(side.tailwind-1, 0)
     )
     return key, side
+
+def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
+    active = side.active
+    # TODO: there are some effects that trigger based on damage taken, like mirror coat
+    # i guess i need to figure out that bullshit later but that is also low priority
+    active.replace(current_hp=max(active.current_hp-damage, 0))
+    # this keeps active the same if current_hp!=0 and sets field as empty otherwise
+    # there are some other conditions that should trigger emptying field like eject button
+    # idk if that should be handled here or elsewhere
+    new_active = (side.active_index + 1) * (active.current_hp == 0) - 1
+    side = update_pokemon_at_index(side, side.active_index, active)
+    return side.replace(active_index=new_active)
+
+def take_damage_percent(side: SideState, percent: chex.Array) -> SideState:
+    damage = jnp.round(side.active.max_hp * percent)
+    return take_damage_value(side, damage)

@@ -9,10 +9,10 @@ from gymnax.environments import environment
 import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
 
-from ninjax.side import SideState, step_side, swap_out
+from ninjax.side import SideState, step_side, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum
 from ninjax.move import Move, MoveType
-from ninjax.utils import base_damage_compute
+from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -23,14 +23,14 @@ Binary = (0,1)
 @struct.dataclass
 class BattleState(environment.EnvState):
     turn: int
-    agents: list[SideState]  # always length 2
+    sides: list[SideState]  # always length 2
     weather: Weather = (WeatherEnum.NONE, 0)
     terrain: Terrain = (TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
 
     def get_active(self, index):
-        return self.agents[index].active
+        return self.sides[index].active
 
 
 @struct.dataclass
@@ -69,8 +69,8 @@ class Battle(environment.Environment[BattleState, BattleParams]):
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         # the fun part :))))
         first, second = action_order(key, state, actions)
-        key, state.agents[first] = step_action(key, state, actions, first)
-        key, state.agents[second] = step_action(key, state, actions, second)
+        key, state.sides[first] = step_action(key, state, actions, first)
+        key, state.sides[second] = step_action(key, state, actions, second)
 
         key, state = step_field(key, state)
 
@@ -96,7 +96,7 @@ def action_order(
     priorities = jnp.zeros(2)
     for i in range(2):
         # TODO: will eventually need to account for other sources of speed boost
-        speeds[i] = state.agents[i].active.boosted_stats[StatEnum.SPEED]
+        speeds[i] = state.sides[i].active.boosted_stats[StatEnum.SPEED]
     first = jnp.argmax(speeds)
     return first, 1 - first
 
@@ -138,6 +138,7 @@ def step_move(
     attacker = state.get_active(player_index)
     defender = state.get_active(1 - player_index)
     move = attacker.moves[index]
+    # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
     offensive_stat = attacker.boosted_stats[1 + 3 * move.move_type == MoveType.SPECIAL]
     defensive_stat = defender.boosted_stats[2 + 3 * move.move_type == MoveType.SPECIAL]
     base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.bp)
@@ -147,20 +148,30 @@ def step_move(
     # at some point we can see if it makes any difference for speed to not do it this way
     damage = base_damage
     key, one, two = random.split(key, num=3)
+    # crit multiplier
     crit_chance = 1 / 24
     is_crit = random.uniform(one) < crit_chance
     crit_multiplier = 1.5
+    # damage roll, idc about preserving the in game RNG
     damage = conditional_mult_round(damage, crit_multiplier, is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
     damage = conditional_mult_round(damage, damage_roll, 1)
     # idk if jit likes the "in" operator, this might be challenging to write
+    # stab multiplier
     is_stab = move.type in attacker.type_list
     stab_multiplier = 1.5
     damage = conditional_mult_round(damage, stab_multiplier, is_stab)
-    # i just realized that because jax only likes pure functions
-    # the type chart needs to be included somewhere in the state
-    # YAY!
-    # make some function that does damage asshole
+    # Type effectiveness, when we get around to implementing observations
+    # it should include does not effect, not very effective, or super effective
+    effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
+    damage = conditional_mult_round(damage, effectiveness, 1)
+
+    # dealing damage
+    defending_side = take_damage_value(state.sides[1 - player_index], damage)
+    new_sides = deepcopy(state.sides)
+    new_sides[1 - player_index] = defending_side
+    return state.replace(agents=new_sides)
+
 
 def step_switch(
     key: chex.PRNGKey,
@@ -170,8 +181,8 @@ def step_switch(
     *args):
     # switch needs to access the battle state because opponent switching triggers annoying things
     # TODO: add an opponent switched field somewhere for stakeout + analytic
-    new_side = swap_out(key, state.agents[player_index], index)
-    new_agents = deepcopy(state.agents)
+    new_side = swap_out(key, state.sides[player_index], index)
+    new_agents = deepcopy(state.sides)
     new_agents[player_index] = new_side
     return key, state.replace(agents=new_agents)
 
@@ -198,8 +209,8 @@ def step_field(
     # TODO: add damage from sand at some point and resulting switches
     terrain_duration = max(state.terrain.duration-1, 0)
     new_terrain = state.terrain * terrain_duration
-    key, agent0 = step_side(key, state.agents[0])
-    key, agent1 = step_side(key, state.agents[0])
+    key, agent0 = step_side(key, state.sides[0])
+    key, agent1 = step_side(key, state.sides[0])
     state = state.replace(
         turn=max(state.turn-1, 0),
         agents=(agent0, agent1),

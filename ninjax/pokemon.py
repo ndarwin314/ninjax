@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum
-from ninjax.utils import stat_multiplier_lookup
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
 @struct.dataclass
 class VolatileStatus:
@@ -39,11 +39,19 @@ class Pokemon:
 
     @property
     def boosted_stats(self):
-        return self.stats * stat_multiplier_lookup[self.boosts.normal_boosts]
+        return self.stats * STAT_MULTIPLIER_LOOKUP[self.boosts.normal_boosts]
 
     @property
     def accuracy_boosts(self):
         return self.boosts.acc_boosts
+
+    @property
+    def current_hp(self):
+        return self.stat_table.current_hp
+
+    @property
+    def max_hp(self):
+        return self.stat_table.stats[0]
 
 def clear_boosts(pokemon: Pokemon):
     return pokemon.replace(boosts=StatBoosts())
