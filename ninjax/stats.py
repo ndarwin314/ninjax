@@ -29,11 +29,6 @@ class StatTable:
     evs: Array = (84, 84, 84, 84, 84, 84)
     stats: Array = calculate_stats(level, nature, base_stats, ivs, evs)
     current_hp: int = stats[0]
-    boosts: StatBoosts = StatBoosts()
-
-    @property
-    def boosted_stats(self):
-        return self.stats * stat_multiplier_lookup[self.boosts.normal_boosts]
 
 
 

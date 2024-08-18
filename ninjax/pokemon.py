@@ -8,6 +8,12 @@ import jax.numpy as jnp
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum
+from ninjax.utils import stat_multiplier_lookup
+
+@struct.dataclass
+class VolatileStatus:
+    confused: bool = False
+    # TODO this is gonna suck, make sure everything as default values
 
 @struct.dataclass
 class Pokemon:
@@ -23,6 +29,8 @@ class Pokemon:
     ability: str
     item: str
     stat_table: StatTable
+    boosts: StatBoosts = StatBoosts()
+    volatile_status: Any # TODO
     # add stats conditions and volatile status conditions
 
     @property
@@ -31,12 +39,14 @@ class Pokemon:
 
     @property
     def boosted_stats(self):
-        return self.stat_table.boosted_stats
-
-    @property
-    def boosts(self):
-        return self.stat_table.boosts.normal_boosts
+        return self.stats * stat_multiplier_lookup[self.boosts.normal_boosts]
 
     @property
     def accuracy_boosts(self):
-        return self.stat_table.boosts.acc_boosts
+        return self.boosts.acc_boosts
+
+def clear_boosts(pokemon: Pokemon):
+    return pokemon.replace(boosts=StatBoosts())
+
+def clear_volatile_status(pokemon: Pokemon):
+    return pokemon.replace(volatile_status=VolatileStatus())

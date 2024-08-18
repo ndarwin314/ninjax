@@ -1,15 +1,16 @@
 from typing import Union, Tuple, Dict, Any
+from copy import deepcopy
 
 import chex
 from flax import struct
 import jax.numpy as jnp
 
-from ninjax.pokemon import Pokemon
+from ninjax.pokemon import Pokemon, clear_boosts, clear_volatile_status
 
 @struct.dataclass
 class SideState:
     # incredible code
-    team: (Pokemon, Pokemon, Pokemon, Pokemon, Pokemon, Pokemon)
+    team: list[Pokemon]
     active_index: int = 0
     stealth_rocks: bool = False
     sticky_webs: bool = False
@@ -26,6 +27,29 @@ class SideState:
     @property
     def active(self) -> Pokemon:
         return self.team[self.active_index]
+
+def update_pokemon_at_index(side: SideState, index: int, new_mon:Pokemon) -> SideState:
+    new_team = deepcopy(side.team)
+    new_team[index] = new_mon
+    return side.replace(team=new_team)
+
+
+# TODO: at some point probably factor out part of this into like
+# just swapping out to implement baton pass idk
+def swap_out(
+    side: SideState,
+    new_active: int
+) -> (chex.PRNGKey, SideState):
+    # swaps the active pokemon and does appropriate things like
+    # 1. clearing volatile statuses
+    # 2. resting boosts
+    # 3. probably stuff im forgetting
+    # 4. ahhh palafin, ahhh regenerator
+    active = side.active
+    active = clear_volatile_status(clear_boosts(active))
+    side = update_pokemon_at_index(side, side.active_index, active)
+    return side.replace(active_index=new_active)
+
 
 def step_side(
     key: chex.PRNGKey,

@@ -1,15 +1,18 @@
 from typing import Union, Tuple, Dict, Any, Optional
 from collections import namedtuple
+from copy import deepcopy
 
 import chex
 from flax import struct
-from jax import lax
+from jax import lax, random
 from gymnax.environments import environment
 import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
 
-from ninjax.side import SideState, step_side
+from ninjax.side import SideState, step_side, swap_out
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum
+from ninjax.move import Move, MoveType
+from ninjax.utils import base_damage_compute
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -20,11 +23,14 @@ Binary = (0,1)
 @struct.dataclass
 class BattleState(environment.EnvState):
     turn: int
-    agents: (SideState, SideState)
+    agents: list[SideState]  # always length 2
     weather: Weather = (WeatherEnum.NONE, 0)
     terrain: Terrain = (TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
+
+    def get_active(self, index):
+        return self.agents[index].active
 
 
 @struct.dataclass
@@ -34,7 +40,10 @@ class BattleParams(environment.EnvParams):
 class Battle(environment.Environment[BattleState, BattleParams]):
 
     def __init__(self):
-        self.action_set = jnp.array(range(10))
+        # this is a bad way to represent actions but i cant think of a better way
+        # we have 4 actions for moves, 4 for move + tera, and 6 for switching
+        # one of these actions is still illegal, switching to self but that makes it way worse
+        self.action_set = jnp.array(range(14))
         # idk
         #self.obs_shape = (1, 1)
 
@@ -60,8 +69,8 @@ class Battle(environment.Environment[BattleState, BattleParams]):
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         # the fun part :))))
         first, second = action_order(key, state, actions)
-        key, state.agents[first] = step_action(key, BattleState.agents[first], state, actions[first])
-        key, state.agents[second] = step_action(key, BattleState.agents[second], state, actions[second])
+        key, state.agents[first] = step_action(key, state, actions, first)
+        key, state.agents[second] = step_action(key, state, actions, second)
 
         key, state = step_field(key, state)
 
@@ -91,14 +100,93 @@ def action_order(
     first = jnp.argmax(speeds)
     return first, 1 - first
 
+def decode_action(action: int) -> (bool, int, bool):
+    # takes int in [0, 14) and returns a tuple of is_move, index, is_tera
+    # index is a move index in [0,4) if action is a move, and in [0,6) if its a switch
+    # if is_move == False then the third index should be ignored
+    is_move_action = action < 8
+    move_index = (action - 4) % 14
+    is_tera = action >= 4
+    switch_index = action - 8
+    index = move_index * is_move_action + switch_index * (1 - is_move_action)
+    return is_move_action, index, is_tera
+
+
+def conditional_mult_round(damage, mult, cond):
+    return jnp.floor(damage * mult ** cond + 1 / 2)
+
+
+def step_move(
+    key: chex.PRNGKey,
+    state: BattleState,
+    player_index: int,
+    index: int,
+    is_tera: bool):
+    # this, or something this calls is probably going to be the most complex function
+    # for now im just going to implement a simplistic version
+    # TODO: add the tera part of move
+    # TODO: if condition for status moves before we do damage stuff
+
+    # TODO: stuff to add
+    # 1. glaive rush mult
+    # 2. burn mult
+    # 3. unaware for both
+    # 4. guts/facade
+    # 5. weather
+    # 6. tera + adaptability stab modifiers
+    # 7. various crit damage and rate multipliers
+    attacker = state.get_active(player_index)
+    defender = state.get_active(1 - player_index)
+    move = attacker.moves[index]
+    offensive_stat = attacker.boosted_stats[1 + 3 * move.move_type == MoveType.SPECIAL]
+    defensive_stat = defender.boosted_stats[2 + 3 * move.move_type == MoveType.SPECIAL]
+    base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.bp)
+
+    # there is a specific order to the multipliers that i will preserve since rounding is done
+    # between every multiplication by a modifier
+    # at some point we can see if it makes any difference for speed to not do it this way
+    damage = base_damage
+    key, one, two = random.split(key, num=3)
+    crit_chance = 1 / 24
+    is_crit = random.uniform(one) < crit_chance
+    crit_multiplier = 1.5
+    damage = conditional_mult_round(damage, crit_multiplier, is_crit)
+    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
+    damage = conditional_mult_round(damage, damage_roll, 1)
+    # idk if jit likes the "in" operator, this might be challenging to write
+    is_stab = move.type in attacker.type_list
+    stab_multiplier = 1.5
+    damage = conditional_mult_round(damage, stab_multiplier, is_stab)
+    # i just realized that because jax only likes pure functions
+    # the type chart needs to be included somewhere in the state
+    # YAY!
+    # make some function that does damage asshole
+
+def step_switch(
+    key: chex.PRNGKey,
+    state: BattleState,
+    player_index: int,
+    index: int,
+    *args):
+    # switch needs to access the battle state because opponent switching triggers annoying things
+    # TODO: add an opponent switched field somewhere for stakeout + analytic
+    new_side = swap_out(key, state.agents[player_index], index)
+    new_agents = deepcopy(state.agents)
+    new_agents[player_index] = new_side
+    return key, state.replace(agents=new_agents)
+
 def step_action(
     key: chex.PRNGKey,
-    side: SideState,
     state: BattleState,
     action: int,
-) -> (chex.PRNGKey, SideState):
+    player_index: int
+) -> (chex.PRNGKey, BattleState):
     # this will execute whatever move is selected
-    return key, side
+    is_move_action, index, is_tera = decode_action(action)
+    # i think this is the best way to implement this conditional in jax
+    lax.cond(is_move_action, step_move, step_switch, )
+    return key, state
+
 
 def step_field(
     key: chex.PRNGKey,

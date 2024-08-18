@@ -45,3 +45,4 @@ def base_damage_compute(
         defence_stat: int,
         base_power: int):
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
+
