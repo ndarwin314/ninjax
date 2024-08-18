@@ -22,7 +22,7 @@ Binary = (0,1)
 
 @struct.dataclass
 class BattleState(environment.EnvState):
-    turn: int
+    turn: int = 0
     sides: list[SideState]  # always length 2
     weather: Weather = (WeatherEnum.NONE, 0)
     terrain: Terrain = (TerrainEnum.NONE, 0)

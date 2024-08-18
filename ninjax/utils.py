@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-
 Array = jax.Array
 increase_mult = 1.1
 
@@ -50,12 +49,9 @@ def calculate_stats(level: int, nature: Nature, base_stats: Array, ivs: Array, e
     stats: Array = jnp.floor((2 * base_stats + evs + ivs + jnp.floor(evs)) * level / 100) + 5
 
     # factor in nature modifiers
-    # probably remove these at some point
-
-    # this handles edge case when same stat is increased and decreased
     stats_tenth = stats / 10
     stats.at[nature.increased].add(stats_tenth)
-    stats.at[nature.increased].add(stats_tenth)
+    stats.at[nature.decreased].add(-stats_tenth)
     stats.at[nature.increased].apply(jnp.floor)
     stats.at[nature.decreased].apply(jnp.floor)
 
@@ -65,6 +61,7 @@ def calculate_stats(level: int, nature: Nature, base_stats: Array, ivs: Array, e
     return stats
 
 # computes damage before any multiplicative modifiers
+@jax.jit
 def base_damage_compute(
         attacker_level: int,
         attack_stat: int,

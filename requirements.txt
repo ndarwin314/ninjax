@@ -4,3 +4,4 @@ pettingzoo>=1.24.3
 gymnax>=0.0.8
 chex>=0.1.86
 numpy>=2.0.1
+orjson>=3.10.7

@@ -18,8 +18,8 @@ class VolatileStatus:
 @struct.dataclass
 class Pokemon:
     species: str
-    name: str
-    level: int
+    name: str = species
+    level: int = 100
     gender: bool # :(
     # this might need to be changed later for dumb shenanigans with moves adding types
     type_list: (str, str)
