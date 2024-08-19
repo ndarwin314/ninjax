@@ -1,18 +1,21 @@
 from typing import Union, Tuple, Dict, Any, Optional
 from collections import namedtuple
+from functools import partial
 from copy import deepcopy
 
 import chex
+import jax.lax
 from flax import struct
-from jax import lax, random
+from jax import lax, random, jit
 from gymnax.environments import environment
 import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
+import numpy as np
 
 from ninjax.side import SideState, step_side, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum
 from ninjax.move import Move, MoveType
-from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier
+from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -22,20 +25,27 @@ Binary = (0,1)
 
 @struct.dataclass
 class BattleState(environment.EnvState):
-    turn: int = 0
-    sides: list[SideState]  # always length 2
+    sides: (SideState, SideState)  # always length 2
     weather: Weather = (WeatherEnum.NONE, 0)
     terrain: Terrain = (TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
 
+    @jit
+    def get_side(self, index):
+        # are you having fun yet?
+        return lax.cond(index, lambda: self.sides[1], lambda: self.sides[0])
+
+    @jit
     def get_active(self, index):
-        return self.sides[index].active
+        # are you having fun yet?
+        return self.get_side(index).active
+
 
 
 @struct.dataclass
 class BattleParams(environment.EnvParams):
-    max_steps_in_episode: int = 1
+    max_steps_in_episode: int = 100
 
 class Battle(environment.Environment[BattleState, BattleParams]):
 
@@ -60,6 +70,7 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         """Action space of the environment."""
         return spaces.Discrete(len(self.action_set))
 
+
     def step_env(
         self,
         key: chex.PRNGKey,
@@ -68,11 +79,13 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         params: BattleParams,
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         # the fun part :))))
-        first, second = action_order(key, state, actions)
-        key, state.sides[first] = step_action(key, state, actions, first)
-        key, state.sides[second] = step_action(key, state, actions, second)
+        act1, act2 = actions
+        first, second = action_order(state, actions)
+        key, state = step_action(key, state, act1, first)
+        key, state = step_action(key, state, act2, second)
 
         key, state = step_field(key, state)
+        return key, state, jnp.array([0]), jnp.array([0]), {}
 
 
     def reset_env(
@@ -81,9 +94,8 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         pass
 
 
-
+@jit
 def action_order(
-    key: chex.PRNGKey,
     state: BattleState,
     actions: (int, int),
 ) -> (int, int):
@@ -92,12 +104,12 @@ def action_order(
     # key and actions arent used now but they will be needed for
     # 1. breaking ties
     # 2. getting priority
-    speeds = jnp.zeros(2)
-    priorities = jnp.zeros(2)
+    speeds = [0, 0]
+    priorities = []
     for i in range(2):
         # TODO: will eventually need to account for other sources of speed boost
-        speeds[i] = state.sides[i].active.boosted_stats[StatEnum.SPEED]
-    first = jnp.argmax(speeds)
+        speeds[i] = state.sides[i].boosted_stats[StatEnum.SPEED].astype(float)
+    first = speeds[0] < speeds[1]
     return first, 1 - first
 
 def decode_action(action: int) -> (bool, int, bool):
@@ -111,11 +123,18 @@ def decode_action(action: int) -> (bool, int, bool):
     index = move_index * is_move_action + switch_index * (1 - is_move_action)
     return is_move_action, index, is_tera
 
+def update_side_at_index(state: BattleState, index: int, new_side: SideState):
+    new_sides = deepcopy(state.sides)
+    for i in range(2):
+        new_sides[i] = jax.lax.cond(i == index, lambda: new_side, lambda: state.sides[i])
+    return state.replace(sides=new_sides)
+
+
 
 def conditional_mult_round(damage, mult, cond):
     return jnp.floor(damage * mult ** cond + 1 / 2)
 
-
+@partial(jit, static_argnums=(2,3))
 def step_move(
     key: chex.PRNGKey,
     state: BattleState,
@@ -135,13 +154,21 @@ def step_move(
     # 5. weather
     # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
-    attacker = state.get_active(player_index)
-    defender = state.get_active(1 - player_index)
-    move = attacker.moves[index]
+    attack_side = state.get_side(player_index)
+    defend_side = state.get_side(1 - player_index)
+    attacker = attack_side.active
+    defender = defend_side.active
+    move = attacker.get_move(index)
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
-    offensive_stat = attacker.boosted_stats[1 + 3 * move.move_type == MoveType.SPECIAL]
-    defensive_stat = defender.boosted_stats[2 + 3 * move.move_type == MoveType.SPECIAL]
-    base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.bp)
+    offensive_stat = jax.lax.cond(
+        move.move_type == MoveType.SPECIAL,
+        lambda: attack_side.boosted_stats[4],
+        lambda: attack_side.boosted_stats[1])
+    defensive_stat = jax.lax.cond(
+        move.move_type == MoveType.SPECIAL,
+        lambda: defend_side.boosted_stats[5],
+        lambda: defend_side.boosted_stats[2])
+    base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.base_power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
@@ -156,21 +183,19 @@ def step_move(
     damage = conditional_mult_round(damage, crit_multiplier, is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
     damage = conditional_mult_round(damage, damage_roll, 1)
-    # idk if jit likes the "in" operator, this might be challenging to write
     # stab multiplier
-    is_stab = move.type in attacker.type_list
+    is_stab = np.any(attacker.type_list==move.type)
     stab_multiplier = 1.5
     damage = conditional_mult_round(damage, stab_multiplier, is_stab)
     # Type effectiveness, when we get around to implementing observations
-    # it should include does not effect, not very effective, or super effective
+    # it should include does not affect, not very effective, or super effective
     effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
     damage = conditional_mult_round(damage, effectiveness, 1)
 
     # dealing damage
-    defending_side = take_damage_value(state.sides[1 - player_index], damage)
-    new_sides = deepcopy(state.sides)
-    new_sides[1 - player_index] = defending_side
-    return state.replace(agents=new_sides)
+    defending_side = take_damage_value(state.get_side(1-player_index), damage)
+    new_sides = update_side_at_index(state, 1-player_index, defending_side)
+    return key, state.replace(sides=new_sides)
 
 
 def step_switch(
@@ -178,14 +203,14 @@ def step_switch(
     state: BattleState,
     player_index: int,
     index: int,
-    *args):
+    is_tera: bool):
     # switch needs to access the battle state because opponent switching triggers annoying things
     # TODO: add an opponent switched field somewhere for stakeout + analytic
-    new_side = swap_out(key, state.sides[player_index], index)
-    new_agents = deepcopy(state.sides)
-    new_agents[player_index] = new_side
-    return key, state.replace(agents=new_agents)
+    new_side = swap_out(state.get_side(player_index), index)
+    new_sides = update_side_at_index(state, player_index, new_side)
+    return key, state.replace(sides=new_sides)
 
+@jit
 def step_action(
     key: chex.PRNGKey,
     state: BattleState,
@@ -195,7 +220,7 @@ def step_action(
     # this will execute whatever move is selected
     is_move_action, index, is_tera = decode_action(action)
     # i think this is the best way to implement this conditional in jax
-    lax.cond(is_move_action, step_move, step_switch, )
+    lax.cond(is_move_action, step_move, step_switch, key, state, player_index, index, is_tera)
     return key, state
 
 

@@ -2,14 +2,21 @@ from typing import Union, Tuple, Dict, Any
 from copy import deepcopy
 
 import chex
+import jax.lax
 from flax import struct
 import jax.numpy as jnp
 
-from ninjax.pokemon import Pokemon, clear_boosts, clear_volatile_status
+from ninjax.stats import StatBoosts
+from ninjax.pokemon import Pokemon
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP
+
+@struct.dataclass
+class VolatileStatus:
+    confused: bool = False
+    # TODO this is gonna suck, make sure everything as default values
 
 @struct.dataclass
 class SideState:
-    # incredible code
     team: list[Pokemon]
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
@@ -22,17 +29,34 @@ class SideState:
     light_screen: int = 0
     aurora_veil: int = 0
     tailwind: int = 0
+    boosts: StatBoosts = StatBoosts()
+    volatile_status: VolatileStatus = VolatileStatus() # TODO
     # notably this needs like wish, healing wish, and future sight things
     # but those are lowish priority
 
 
     @property
     def active(self) -> Pokemon:
-        return self.team[self.active_index]
+        return jax.lax.switch(self.active_index, [lambda : self.team[i] for i in range(6)])
 
-def update_pokemon_at_index(side: SideState, index: int, new_mon:Pokemon) -> SideState:
+    @property
+    def boosted_stats(self):
+        return self.active.stats * STAT_MULTIPLIER_LOOKUP[self.boosts.normal_boosts]
+
+    @property
+    def accuracy_boosts(self):
+        return self.boosts.acc_boosts
+
+def clear_boosts(side: SideState):
+    return side.replace(boosts=StatBoosts())
+
+def clear_volatile_status(side: SideState):
+    return side.replace(volatile_status=VolatileStatus())
+
+def update_pokemon_at_index(side: SideState, index: int, new_mon: Pokemon) -> SideState:
     new_team = deepcopy(side.team)
-    new_team[index] = new_mon
+    for i in range(6):
+        new_team[i] = jax.lax.cond(i==index, lambda:  new_mon, lambda: new_team[i])
     return side.replace(team=new_team)
 
 
@@ -47,9 +71,7 @@ def swap_out(
     # 2. resting boosts
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
-    active = side.active
-    active = clear_volatile_status(clear_boosts(active))
-    side = update_pokemon_at_index(side, side.active_index, active)
+    side = clear_volatile_status(clear_boosts(side))
     return side.replace(active_index=new_active)
 
 
@@ -70,7 +92,9 @@ def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
     active = side.active
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     # i guess i need to figure out that bullshit later but that is also low priority
-    active.replace(current_hp=max(active.current_hp-damage, 0))
+    new_health = active.current_hp-damage
+    new_health *= new_health > 0
+    active.replace(current_hp=new_health)
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere

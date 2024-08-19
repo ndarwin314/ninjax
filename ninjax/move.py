@@ -8,7 +8,7 @@ from ninjax.enum_types import MoveType, Type
 
 @struct.dataclass
 class Move:
-    name: str
+    name: int
     move_type: MoveType
     max_pp: int
     current_pp: int

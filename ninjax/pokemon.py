@@ -7,30 +7,24 @@ import jax.numpy as jnp
 
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
-from ninjax.enum_types import StatEnum
+from ninjax.enum_types import StatEnum, Type
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
 @struct.dataclass
-class VolatileStatus:
-    confused: bool = False
-    # TODO this is gonna suck, make sure everything as default values
-
-@struct.dataclass
 class Pokemon:
-    species: str
-    name: str = species
+    type_list: chex.Array
+    moves: list[Move]
+    tera_type: Type = 0
+    species: int = 0
+    name: int = 0
     level: int = 100
-    gender: bool # :(
+    gender: bool = False
     # this might need to be changed later for dumb shenanigans with moves adding types
-    type_list: (str, str)
-    tera_type: str # TODO: enum
-    is_terastallized: bool
-    moves: (Move, Move, Move, Move)
-    ability: str
-    item: str
-    stat_table: StatTable
-    boosts: StatBoosts = StatBoosts()
-    volatile_status: Any # TODO
+    is_terastallized: bool = False
+    ability: int = 0
+    item: int = 0
+    stat_table: StatTable = StatTable()
+    current_hp: int = stat_table.current_hp
     # add stats conditions and volatile status conditions
 
     @property
@@ -38,23 +32,8 @@ class Pokemon:
         return self.stat_table.stats
 
     @property
-    def boosted_stats(self):
-        return self.stats * STAT_MULTIPLIER_LOOKUP[self.boosts.normal_boosts]
-
-    @property
-    def accuracy_boosts(self):
-        return self.boosts.acc_boosts
-
-    @property
-    def current_hp(self):
-        return self.stat_table.current_hp
-
-    @property
     def max_hp(self):
         return self.stat_table.stats[0]
 
-def clear_boosts(pokemon: Pokemon):
-    return pokemon.replace(boosts=StatBoosts())
-
-def clear_volatile_status(pokemon: Pokemon):
-    return pokemon.replace(volatile_status=VolatileStatus())
+    def get_move(self, index: int):
+        return jax.lax.switch(index, [lambda: self.moves[i] for i in range(4)])
