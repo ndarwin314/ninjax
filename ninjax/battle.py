@@ -237,10 +237,10 @@ def step_field(
     key, agent0 = step_side(key, state.sides[0])
     key, agent1 = step_side(key, state.sides[0])
     state = state.replace(
-        turn=max(state.turn-1, 0),
+        time=state.time + 1,
         agents=(agent0, agent1),
-        weather=(new_weather, weather_duration),
-        terrain=(new_terrain, terrain_duration),
+        weather=Weather(new_weather, weather_duration),
+        terrain=Terrain(new_terrain, terrain_duration),
         trick_room_duration=max(state.trick_room_duration - 1, 0),
         gravity_duration=max(state.gravity_duration - 1, 0),
     )
