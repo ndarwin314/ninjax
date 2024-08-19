@@ -26,8 +26,8 @@ Binary = (0,1)
 @struct.dataclass
 class BattleState(environment.EnvState):
     sides: (SideState, SideState)  # always length 2
-    weather: Weather = (WeatherEnum.NONE, 0)
-    terrain: Terrain = (TerrainEnum.NONE, 0)
+    weather: Weather = Weather(WeatherEnum.NONE, 0)
+    terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
 
@@ -229,10 +229,10 @@ def step_field(
     state: "BattleState",
 ) -> (chex.PRNGKey, "BattleState"):
     # there is probably som reason we need rng or actions but idk rn
-    weather_duration = max(state.weather.duration-1, 0)
+    weather_duration = (state.weather.duration - 1) * (state.weather.duration > 1)
     new_weather = state.weather * weather_duration
     # TODO: add damage from sand at some point and resulting switches
-    terrain_duration = max(state.terrain.duration-1, 0)
+    terrain_duration = (state.terrain.duration - 1) * (state.terrain.duration > 0)
     new_terrain = state.terrain * terrain_duration
     key, agent0 = step_side(key, state.sides[0])
     key, agent1 = step_side(key, state.sides[0])
