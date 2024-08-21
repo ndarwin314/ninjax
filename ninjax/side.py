@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
-from ninjax.enum_types import Type
+from ninjax.enum_types import Type, StatEnum, Status
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier
 
 @struct.dataclass
@@ -48,17 +48,26 @@ class SideState:
     def accuracy_boosts(self):
         return self.boosts.acc_boosts
 
-def clear_boosts(side: SideState):
+def clear_boosts(side: SideState) -> SideState:
     return side.replace(boosts=StatBoosts())
 
-def clear_volatile_status(side: SideState):
+def clear_volatile_status(side: SideState) -> SideState:
     return side.replace(volatile_status=VolatileStatus())
+
+def update_boosts(side: SideState, idxs, vals) -> SideState:
+    return side.replace(boosts=jax.lax.clamp(-6, side.boosts.normal_boosts.at[idxs].set(vals), 6))
+
+def add_boosts(side: SideState, idxs, vals) -> SideState:
+    return update_boosts(side, idxs, vals+side.boosts.normal_boosts)
 
 def update_pokemon_at_index(side: SideState, index: int, new_mon: Pokemon) -> SideState:
     new_team = deepcopy(side.team)
     for i in range(6):
         new_team[i] = jax.lax.cond(i==index, lambda:  new_mon, lambda: new_team[i])
     return side.replace(team=new_team)
+
+def update_active(side: SideState, new_mon: Pokemon) -> SideState:
+    return update_pokemon_at_index(side, side.active_index, new_mon)
 
 
 # TODO: at some point probably factor out part of this into like
@@ -75,15 +84,25 @@ def swap_out(
     side = clear_volatile_status(clear_boosts(side))
     side = side.replace(active_index=new_active)
     # hazards
+    # TODO: add toxic spikes, webs and status in general
+    # need to add some function to do stat updates
+    # also add stuff like magic guard and boots
+    is_not_flying = jnp.any(side.active.type_list == Type.FLYING)
     side = take_damage_percent(
         side,
         side.stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side.active.type_list) / 8)
     side = take_damage_percent(
         side,
-        (side.spikes != 0) / (10 - 2 * side.spikes)
+        (side.spikes != 0) / (10 - 2 * side.spikes) * is_not_flying
     )
-    # TODO: add toxic spikes, webs and status in general
-    # need to add some function to do stat updates
+    side = add_boosts(side, StatEnum.SPEED, -1 * is_not_flying)
+    active = side.active
+    no_status = active.status != Status.NONE
+    is_poison_immune = jnp.any(side.active.type_list == Type.POISON + side.active.type_list == Type.STEEL)
+    # this returns 0, 5, 6 for 0, 1, 2
+    status_ = (7 - side.toxic_spikes) * (side.toxic_spikes != 0)
+    new_mon = active.replace(status=status_ * no_status * is_poison_immune)
+    side = update_active(side, new_mon)
     return side
 
 

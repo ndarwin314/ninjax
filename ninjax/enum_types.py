@@ -55,7 +55,7 @@ class TerrainEnum(IntEnum):
     PSYCHIC = 3
     MISTY = 4
 
-class Satus(IntEnum):
+class Status(IntEnum):
     NONE = 0
     BURN = 1
     PARALYZE = 2

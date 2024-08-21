@@ -229,10 +229,10 @@ def step_field(
     state: "BattleState",
 ) -> (chex.PRNGKey, "BattleState"):
     # there is probably som reason we need rng or actions but idk rn
-    weather_duration = (state.weather.duration - 1) * (state.weather.duration > 1)
+    weather_duration = jnp.maximum(state.weather.duration - 1, 0)
     new_weather = state.weather * weather_duration
     # TODO: add damage from sand at some point and resulting switches
-    terrain_duration = (state.terrain.duration - 1) * (state.terrain.duration > 0)
+    terrain_duration = jnp.maximum(state.terrain.duration - 1, 0)
     new_terrain = state.terrain * terrain_duration
     key, side0 = step_side(key, state.sides[0])
     key, side1 = step_side(key, state.sides[1])
@@ -241,8 +241,8 @@ def step_field(
         sides=(side0, side1),
         weather=Weather(new_weather, weather_duration),
         terrain=Terrain(new_terrain, terrain_duration),
-        trick_room_duration=max(state.trick_room_duration - 1, 0),
-        gravity_duration=max(state.gravity_duration - 1, 0),
+        trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),
+        gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
     )
 
     return key, state

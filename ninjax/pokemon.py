@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
-from ninjax.enum_types import StatEnum, Type
+from ninjax.enum_types import StatEnum, Type, Status
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
 @struct.dataclass
@@ -25,6 +25,7 @@ class Pokemon:
     item: int = 0
     stat_table: StatTable = StatTable()
     current_hp: int = stat_table.current_hp
+    status: Status = Status.NONE
     # add stats conditions and volatile status conditions
 
     @property
