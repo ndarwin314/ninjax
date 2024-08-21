@@ -234,11 +234,11 @@ def step_field(
     # TODO: add damage from sand at some point and resulting switches
     terrain_duration = (state.terrain.duration - 1) * (state.terrain.duration > 0)
     new_terrain = state.terrain * terrain_duration
-    key, agent0 = step_side(key, state.sides[0])
-    key, agent1 = step_side(key, state.sides[0])
+    key, side0 = step_side(key, state.sides[0])
+    key, side1 = step_side(key, state.sides[1])
     state = state.replace(
         time=state.time + 1,
-        agents=(agent0, agent1),
+        sides=(side0, side1),
         weather=Weather(new_weather, weather_duration),
         terrain=Terrain(new_terrain, terrain_duration),
         trick_room_duration=max(state.trick_room_duration - 1, 0),

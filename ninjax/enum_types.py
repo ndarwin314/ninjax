@@ -54,3 +54,12 @@ class TerrainEnum(IntEnum):
     GRASSY = 2
     PSYCHIC = 3
     MISTY = 4
+
+class Satus(IntEnum):
+    NONE = 0
+    BURN = 1
+    PARALYZE = 2
+    SLEEP = 3
+    FREEZE = 4
+    POISON = 5
+    TOXIC = 6

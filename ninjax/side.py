@@ -8,7 +8,8 @@ import jax.numpy as jnp
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP
+from ninjax.enum_types import Type
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier
 
 @struct.dataclass
 class VolatileStatus:
@@ -72,7 +73,19 @@ def swap_out(
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
     side = clear_volatile_status(clear_boosts(side))
-    return side.replace(active_index=new_active)
+    side = side.replace(active_index=new_active)
+    # hazards
+    side = take_damage_percent(
+        side,
+        side.stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side.active.type_list) / 8)
+    side = take_damage_percent(
+        side,
+        (side.spikes != 0) / (10 - 2 * side.spikes)
+    )
+    # TODO: add toxic spikes, webs and status in general
+    # need to add some function to do stat updates
+    return side
+
 
 
 def step_side(
