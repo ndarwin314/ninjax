@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ninjax.side import SideState, step_side, swap_out, take_damage_percent, take_damage_value
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status
 from ninjax.move import Move, MoveType
 from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
 
@@ -223,19 +223,44 @@ def step_action(
     lax.cond(is_move_action, step_move, step_switch, key, state, player_index, index, is_tera)
     return key, state
 
+def end_turn_damage(state: BattleState, side: SideState) -> (BattleState, SideState):
+    # TODO: the order of all these updates is probably incorrect
+    # i think it should be like sand, sand, grass, grass
+    # whereas this is currently sand, grass, sand grass,
+    # and order should also depend on speed
+    # that being said idk if that is super important
+    active = side.active
+    is_sand_immune = active.is_sand_immune
+    is_floating = active.is_floating
+    # sand damage
+    sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
+    take_damage_percent(side, sand_damage)
+    # grassy terrain healing
+    grass_healing = (is_floating - 1) / 16 * state.terrain.terrain == TerrainEnum.GRASSY
+    take_damage_percent(side, grass_healing)
+    # status damage
+    status_damage = (1 / 8 * (active.status==Status.POISON) +
+                     1 / 16 * (active.status==Status.BURN) +
+                     side.toxic_counter / 16 * (active.status==Status.TOXIC))
+    side = take_damage_percent(side, status_damage)
+    return state, side
 
 def step_field(
     key: chex.PRNGKey,
-    state: "BattleState",
-) -> (chex.PRNGKey, "BattleState"):
-    # there is probably som reason we need rng or actions but idk rn
+    state: BattleState,
+) -> (chex.PRNGKey, BattleState):
+    # there is probably some reason we need rng or actions but idk rn
     weather_duration = jnp.maximum(state.weather.duration - 1, 0)
     new_weather = state.weather * weather_duration
-    # TODO: add damage from sand at some point and resulting switches
     terrain_duration = jnp.maximum(state.terrain.duration - 1, 0)
     new_terrain = state.terrain * terrain_duration
+
     key, side0 = step_side(key, state.sides[0])
     key, side1 = step_side(key, state.sides[1])
+    state, side0 = end_turn_damage(state, side0)
+    state, side1 = end_turn_damage(state, side1)
+    # terrain and weather damage
+    # TODO: check the order of these since it matters, if something dies to weather it cant then be healed
     state = state.replace(
         time=state.time + 1,
         sides=(side0, side1),

@@ -30,6 +30,7 @@ class SideState:
     light_screen: int = 0
     aurora_veil: int = 0
     tailwind: int = 0
+    toxic_counter: int = 0
     boosts: StatBoosts = StatBoosts()
     volatile_status: VolatileStatus = VolatileStatus() # TODO
     # notably this needs like wish, healing wish, and future sight things
@@ -82,12 +83,11 @@ def swap_out(
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
     side = clear_volatile_status(clear_boosts(side))
-    side = side.replace(active_index=new_active)
+    side = side.replace(active_index=new_active, toxic_counter=0)
     # hazards
-    # TODO: add toxic spikes, webs and status in general
-    # need to add some function to do stat updates
-    # also add stuff like magic guard and boots
-    is_not_flying = jnp.any(side.active.type_list == Type.FLYING)
+    active = side.active
+    is_not_flying = 1 - active.is_floating
+    is_not_hazard_immune = 1 - active.is_hazard_immune
     side = take_damage_percent(
         side,
         side.stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side.active.type_list) / 8)
@@ -96,12 +96,15 @@ def swap_out(
         (side.spikes != 0) / (10 - 2 * side.spikes) * is_not_flying
     )
     side = add_boosts(side, StatEnum.SPEED, -1 * is_not_flying)
-    active = side.active
     no_status = active.status != Status.NONE
-    is_poison_immune = jnp.any(side.active.type_list == Type.POISON + side.active.type_list == Type.STEEL)
+    # only remove is poison type and not floating
+    is_poison = active.is_type(Type.POISON)
+    toxic_spikes = side.toxic_spikes * (1 - jnp.logical_and(is_poison, is_not_flying))
+    side = side.replace(toxic_spikes=toxic_spikes)
+    is_poison_immune = jnp.any(side.active.type_list == Type.STEEL)
     # this returns 0, 5, 6 for 0, 1, 2
     status_ = (7 - side.toxic_spikes) * (side.toxic_spikes != 0)
-    new_mon = active.replace(status=status_ * no_status * is_poison_immune)
+    new_mon = active.replace(status=status_ * no_status * is_poison_immune * is_not_flying)
     side = update_active(side, new_mon)
     return side
 
@@ -111,12 +114,13 @@ def step_side(
     key: chex.PRNGKey,
     side: SideState,
 ) -> (chex.PRNGKey, SideState):
-    # hazards should always be changed mid-turn, not end
+    toxic_counter = (side.toxic_counter + 1) * (side.active.status==Status.TOXIC)
     side.replace(
-        reflect=max(side.reflect-1, 0),
-        light_screen=max(side.light_screen-1, 0),
-        aurora_veil=max(side.aurora_veil-1, 0),
-        tailwind=max(side.tailwind-1, 0)
+        reflect=jnp.maximum(side.reflect-1, 0),
+        light_screen=jnp.maximum(side.light_screen-1, 0),
+        aurora_veil=jnp.maximum(side.aurora_veil-1, 0),
+        tailwind=jnp.maximum(side.tailwind-1, 0),
+        toxic_counter=toxic_counter
     )
     return key, side
 
@@ -124,9 +128,9 @@ def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
     active = side.active
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     # i guess i need to figure out that bullshit later but that is also low priority
-    new_health = active.current_hp-damage
-    new_health *= new_health > 0
-    active.replace(current_hp=new_health)
+    new_health = jax.lax.clamp(0, active.current_hp-damage, active.max_hp)
+    is_alive = new_health != 0
+    active.replace(current_hp=new_health, is_alive=is_alive)
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
