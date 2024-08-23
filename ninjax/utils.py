@@ -47,17 +47,15 @@ def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array
 @jax.jit
 def calculate_stats(level: int, nature: "Nature", base_stats: Array, ivs: Array, evs: Array):
     # initial part of compute
-    stats: Array = jnp.floor((2 * base_stats + evs + ivs + jnp.floor(evs)) * level / 100) + 5
+    stats: Array = jnp.floor_divide((2 * base_stats + evs + ivs + jnp.floor(evs)) * level, 100) + 5
 
     # factor in nature modifiers
-    stats_tenth = stats / 10
-    stats.at[nature.increased].add(stats_tenth[nature.increased])
-    stats.at[nature.decreased].add(-stats_tenth[nature.decreased])
-    stats.at[nature.increased].apply(jnp.floor)
-    stats.at[nature.decreased].apply(jnp.floor)
+    stats_tenth = jnp.floor_divide(stats, 10)
+    stats = stats.at[nature.increased].add(stats_tenth[nature.increased])
+    stats = stats.at[nature.decreased].add(-stats_tenth[nature.decreased])
 
     # HP has an extra increase
-    stats.at[0].add(level + 5)
+    stats = stats.at[0].add(level + 5)
 
     return stats
 

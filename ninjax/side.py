@@ -18,7 +18,7 @@ class VolatileStatus:
 
 @struct.dataclass
 class SideState:
-    team: list[Pokemon]
+    team: (Pokemon, Pokemon, Pokemon, Pokemon, Pokemon, Pokemon)
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
     active_index: int = 0
@@ -35,7 +35,6 @@ class SideState:
     volatile_status: VolatileStatus = VolatileStatus() # TODO
     # notably this needs like wish, healing wish, and future sight things
     # but those are lowish priority
-
 
     @property
     def active(self) -> Pokemon:
@@ -56,10 +55,11 @@ def clear_volatile_status(side: SideState) -> SideState:
     return side.replace(volatile_status=VolatileStatus())
 
 def update_boosts(side: SideState, idxs, vals) -> SideState:
-    return side.replace(boosts=jax.lax.clamp(-6, side.boosts.normal_boosts.at[idxs].set(vals), 6))
+    new_boosts = side.boosts.replace(normal_boosts=jnp.clip(side.boosts.normal_boosts.at[idxs].set(vals), -6, 6))
+    return side.replace(boosts=new_boosts)
 
 def add_boosts(side: SideState, idxs, vals) -> SideState:
-    return update_boosts(side, idxs, vals+side.boosts.normal_boosts)
+    return update_boosts(side, idxs, vals+side.boosts.normal_boosts[idxs])
 
 def update_pokemon_at_index(side: SideState, index: int, new_mon: Pokemon) -> SideState:
     new_team = deepcopy(side.team)
@@ -129,8 +129,8 @@ def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     # i guess i need to figure out that bullshit later but that is also low priority
     new_health = jax.lax.clamp(0, active.current_hp-damage, active.max_hp)
-    is_alive = new_health != 0
-    active.replace(current_hp=new_health, is_alive=is_alive)
+    alive = new_health != 0
+    active.replace(current_hp=new_health, is_alive=alive)
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
@@ -139,5 +139,5 @@ def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
     return side.replace(active_index=new_active)
 
 def take_damage_percent(side: SideState, percent: chex.Array) -> SideState:
-    damage = jnp.round(side.active.max_hp * percent)
+    damage = jnp.round(side.active.max_hp * percent).astype(int)
     return take_damage_value(side, damage)

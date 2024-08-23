@@ -13,12 +13,12 @@ from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 @struct.dataclass
 class Pokemon:
     type_list: chex.Array
-    moves: list[Move]
+    moves: (Move, Move, Move, Move)
     tera_type: Type = 0
     species: int = 0
     name: int = 0
     level: int = 100
-    is_alive = True
+    is_alive: bool = True
     gender: bool = False
     # this might need to be changed later for dumb shenanigans with moves adding types
     is_terastallized: bool = False
@@ -26,7 +26,6 @@ class Pokemon:
     item: int = 0
     stat_table: StatTable = StatTable()
     current_hp: int = stat_table.current_hp
-    max_hp: int = current_hp
     status: Status = Status.NONE
     # add stats conditions and volatile status conditions
 
@@ -56,11 +55,7 @@ class Pokemon:
 
     @property
     def is_sand_immune(self):
-        return jnp.any(
-            self.type_list==Type.STEEL +
-            self.type_list==Type.GROUND +
-            self.type_list==Type.ROCK
-        )
+        return jnp.logical_or(self.is_type(Type.STEEL), jnp.logical_or(Type.GROUND, Type.ROCK))
 
     @property
     def is_poison_immune(self):

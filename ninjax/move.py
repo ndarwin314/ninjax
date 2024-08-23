@@ -6,6 +6,7 @@ import jax.numpy as jnp
 
 from ninjax.enum_types import MoveType, Type
 
+
 @struct.dataclass
 class Move:
     name: int

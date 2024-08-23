@@ -25,18 +25,16 @@ Binary = (0,1)
 
 @struct.dataclass
 class BattleState(environment.EnvState):
-    sides: (SideState, SideState)  # always length 2
+    sides: (SideState, SideState)
     weather: Weather = Weather(WeatherEnum.NONE, 0)
     terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
 
-    @jit
     def get_side(self, index):
         # are you having fun yet?
         return lax.cond(index, lambda: self.sides[1], lambda: self.sides[0])
 
-    @jit
     def get_active(self, index):
         # are you having fun yet?
         return self.get_side(index).active
@@ -104,13 +102,11 @@ def action_order(
     # key and actions arent used now but they will be needed for
     # 1. breaking ties
     # 2. getting priority
-    speeds = [0, 0]
+    speeds = [state.sides[0].boosted_stats[StatEnum.SPEED],
+              state.sides[1].boosted_stats[StatEnum.SPEED]]
     priorities = []
-    for i in range(2):
-        # TODO: will eventually need to account for other sources of speed boost
-        speeds[i] = state.sides[i].boosted_stats[StatEnum.SPEED].astype(float)
     first = speeds[0] < speeds[1]
-    return first, 1 - first
+    return first + 0, 1 - first
 
 def decode_action(action: int) -> (bool, int, bool):
     # takes int in [0, 14) and returns a tuple of is_move, index, is_tera
@@ -123,18 +119,19 @@ def decode_action(action: int) -> (bool, int, bool):
     index = move_index * is_move_action + switch_index * (1 - is_move_action)
     return is_move_action, index, is_tera
 
-def update_side_at_index(state: BattleState, index: int, new_side: SideState):
-    new_sides = deepcopy(state.sides)
-    for i in range(2):
-        new_sides[i] = jax.lax.cond(i == index, lambda: new_side, lambda: state.sides[i])
+
+def update_side_at_index(state: BattleState, index: int, new_side: SideState) -> BattleState:
+    new_sides = jax.lax.cond(
+        index,
+        lambda: (state.sides[0], new_side),
+        lambda: (new_side, state.sides[1])
+    )
     return state.replace(sides=new_sides)
-
-
 
 def conditional_mult_round(damage, mult, cond):
     return jnp.floor(damage * mult ** cond + 1 / 2)
 
-@partial(jit, static_argnums=(2,3))
+@partial(jit, static_argnums=2)
 def step_move(
     key: chex.PRNGKey,
     state: BattleState,
@@ -154,8 +151,10 @@ def step_move(
     # 5. weather
     # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
-    attack_side = state.get_side(player_index)
-    defend_side = state.get_side(1 - player_index)
+    attack_side, defend_side = lax.cond(
+        player_index,
+        (lambda: (state.sides[1], state.sides[0])),
+        (lambda: (state.sides[0], state.sides[1])))
     attacker = attack_side.active
     defender = defend_side.active
     move = attacker.get_move(index)
@@ -190,12 +189,12 @@ def step_move(
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
     effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    damage = conditional_mult_round(damage, effectiveness, 1)
+    damage = conditional_mult_round(damage, effectiveness, 1).astype(int)
 
     # dealing damage
-    defending_side = take_damage_value(state.get_side(1-player_index), damage)
-    new_sides = update_side_at_index(state, 1-player_index, defending_side)
-    return key, state.replace(sides=new_sides)
+    defending_side = take_damage_value(defend_side, damage)
+    new_state = update_side_at_index(state, 1-player_index, defending_side)
+    return key, new_state
 
 
 def step_switch(
@@ -207,8 +206,8 @@ def step_switch(
     # switch needs to access the battle state because opponent switching triggers annoying things
     # TODO: add an opponent switched field somewhere for stakeout + analytic
     new_side = swap_out(state.get_side(player_index), index)
-    new_sides = update_side_at_index(state, player_index, new_side)
-    return key, state.replace(sides=new_sides)
+    new_state = update_side_at_index(state, player_index, new_side)
+    return key, new_state
 
 @jit
 def step_action(
@@ -230,8 +229,8 @@ def end_turn_damage(state: BattleState, side: SideState) -> (BattleState, SideSt
     # and order should also depend on speed
     # that being said idk if that is super important
     active = side.active
-    is_sand_immune = active.is_sand_immune
     is_floating = active.is_floating
+    is_sand_immune = active.is_sand_immune
     # sand damage
     sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
     take_damage_percent(side, sand_damage)
