@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ninjax.side import SideState, step_side, swap_out, take_damage_percent, take_damage_value
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType
 from ninjax.move import Move, MoveType
 from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
 
@@ -30,6 +30,10 @@ class BattleState(environment.EnvState):
     terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
     trick_room_duration: int = 0
     gravity_duration: int = 0
+    turn_type: TurnType = TurnType.STANDARD
+    legal_action_mask: jax.Array = jnp.ones((2, 15))
+    can_tera: jax.Array = jnp.ones((2,))
+
 
     def get_side(self, index):
         # are you having fun yet?
@@ -49,9 +53,9 @@ class Battle(environment.Environment[BattleState, BattleParams]):
 
     def __init__(self):
         # this is a bad way to represent actions but i cant think of a better way
-        # we have 4 actions for moves, 4 for move + tera, and 6 for switching
+        # we have 4 actions for moves, 4 for move + tera, and 6 for switching, 1 for no-op
         # one of these actions is still illegal, switching to self but that makes it way worse
-        self.action_set = jnp.array(range(14))
+        self.action_set = jnp.array(range(15))
         # idk
         #self.obs_shape = (1, 1)
 
@@ -83,7 +87,8 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         key, state = step_action(key, state, act2, second)
 
         key, state = step_field(key, state)
-        return key, state, jnp.array([0]), jnp.array([0]), {}
+        # should return obs, state, reward, done, info
+        return jnp.array([0]), state, jnp.array([0]), jnp.array([0]), {}
 
 
     def reset_env(
@@ -91,6 +96,42 @@ class Battle(environment.Environment[BattleState, BattleParams]):
     ) -> Tuple[chex.Array, BattleState]:
         pass
 
+def standard_turn_step(
+    key: chex.PRNGKey,
+    state: BattleState,
+    actions: (int, int)
+) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+    act1, act2 = actions
+    first, second = action_order(state, actions)
+    key, state = step_action(key, state, act1, first)
+    # also check for like is flinched here, and check for sleep for both or something
+    key, state = jax.lax.cond(
+        second.active.is_alive,
+        step_action,
+        lambda k, s, a, _: (key, state), key, state, act2, second)
+
+    key, state = step_field(key, state)
+    # set legal action masks here
+    mask = jnp.zeros((2, 15))
+    alive = (state.sides[0].active.is_alive, state.sides[1].active.is_alive)
+    bad = jnp.zeros((2, 6))
+    for i in range(2):
+        bad = bad.at[i].set(state.sides[i].legal_switch_mask())
+    # make sure this broadcast works correctly
+    bad = bad * alive
+    mask = mask.at[,8:14].set(bad)
+    # make sure this axis is the right way
+    mask = mask.at[,15].set(1 - jnp.any(mask[,8:14], axis=0))
+    state = state.replace(legal_action_mask=mask)
+
+    return jnp.array([0]), state, jnp.array([0]), jnp.array([0]), {}
+
+def switch_move_step(
+    key: chex.PRNGKey,
+    state: BattleState,
+    actions: (int, int)
+):
+    pass
 
 @jit
 def action_order(
@@ -117,7 +158,8 @@ def decode_action(action: int) -> (bool, int, bool):
     is_tera = action >= 4
     switch_index = action - 8
     index = move_index * is_move_action + switch_index * (1 - is_move_action)
-    return is_move_action, index, is_tera
+    is_no_op = action==15
+    return is_move_action, index, is_tera, is_no_op
 
 
 def update_side_at_index(state: BattleState, index: int, new_side: SideState) -> BattleState:
@@ -158,6 +200,9 @@ def step_move(
     attacker = attack_side.active
     defender = defend_side.active
     move = attacker.get_move(index)
+    # do tera stuff
+    can_tera = state.can_tera.at[player_index].set(1 - is_tera)
+    attacker = attacker.replace(is_terastallized=is_tera)
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
     offensive_stat = jax.lax.cond(
         move.move_type == MoveType.SPECIAL,
@@ -194,6 +239,8 @@ def step_move(
     # dealing damage
     defending_side = take_damage_value(defend_side, damage)
     new_state = update_side_at_index(state, 1-player_index, defending_side)
+    new_state = update_side_at_index(new_state, player_index, attack_side)
+    new_state = new_state.replace(can_tera=can_tera)
     return key, new_state
 
 

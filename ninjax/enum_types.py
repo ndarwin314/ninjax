@@ -63,3 +63,8 @@ class Status(IntEnum):
     FREEZE = 4
     POISON = 5
     TOXIC = 6
+
+class TurnType(IntEnum):
+    STANDARD = 0
+    SWITCH_MOVE = 1
+    END_SWITCH = 2

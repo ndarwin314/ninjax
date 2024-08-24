@@ -48,6 +48,9 @@ class SideState:
     def accuracy_boosts(self):
         return self.boosts.acc_boosts
 
+    def legal_switch_mask(self):
+        return [self.team[j].is_alive * (j != self.active_index) for j in range(6)]
+
 def clear_boosts(side: SideState) -> SideState:
     return side.replace(boosts=StatBoosts())
 
