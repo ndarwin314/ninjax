@@ -77,10 +77,35 @@ def update_pokemon_at_index(pokemon: Pokemon, index: int, new_mon: Pokemon):
     
 def create_pokemon(species: str, moves: list, level: int):
     data = load_json('pokedex.json')
-    if data is None:
+    move_list = load_json('gen9moves.json')
+    if species not in data:
         raise ValueError(f"Species {species} not found in pokedex")
     species_data = data[species]
-    return 
+    type_list = chex.Array([species_data['types'][0], species_data['types'][1]])
+    
+    for move in moves:
+        if move not in move_list:
+            raise ValueError(f"Move {move} not found in move list")
+    
+    return Pokemon(
+        type_list=type_list,
+        moves=[Move(
+            name=move_list[move]['name'],
+            move_type=move_list[move]['type'],
+            max_pp=move_list[move]['pp'],
+            current_pp=move_list[move]['pp'],
+            type=move_list[move]['category'],
+            base_power=move_list[move]['basePower'],
+            accuracy=move_list[move]['accuracy'],
+            priority=move_list[move]['priority']
+        ) for move in moves],
+        species=species,
+        level=level
+    )
+
+
+
+    
 
 
     
