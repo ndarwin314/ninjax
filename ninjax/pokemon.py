@@ -9,6 +9,7 @@ from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum, Type, Status
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP
+from .data.load_json import load_json
 
 @struct.dataclass
 class Pokemon:
@@ -71,5 +72,17 @@ class Pokemon:
         # add check for goggles
         return self.is_type(Type.GRASS)
 
+def update_pokemon_at_index(pokemon: Pokemon, index: int, new_mon: Pokemon):
+    return jax.lax.switch(index, [lambda: new_mon, lambda: pokemon])
+    
+def create_pokemon(species: str, moves: list, level: int):
+    data = load_json('pokedex.json')
+    if data is None:
+        raise ValueError(f"Species {species} not found in pokedex")
+    species_data = data[species]
+    return 
+
+
+    
 
 
