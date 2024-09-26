@@ -3,6 +3,7 @@ from copy import deepcopy
 
 import chex
 import jax.lax
+from dataclass_array import DataclassArray
 from flax import struct
 import jax.numpy as jnp
 
@@ -14,11 +15,11 @@ from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multipl
 @struct.dataclass
 class VolatileStatus:
     confused: bool = False
-    # TODO this is gonna suck, make sure everything as default values
+    # TODO this is gonna suck, make sure everything has default values
 
-@struct.dataclass
-class SideState:
-    team: (Pokemon, Pokemon, Pokemon, Pokemon, Pokemon, Pokemon)
+
+class SideState(DataclassArray):
+    team: Pokemon
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
     active_index: int = 0
@@ -38,7 +39,7 @@ class SideState:
 
     @property
     def active(self) -> Pokemon:
-        return jax.lax.switch(self.active_index, [lambda : self.team[i] for i in range(6)])
+        return self.team[self.active_index]
 
     @property
     def boosted_stats(self):
@@ -65,9 +66,19 @@ def add_boosts(side: SideState, idxs, vals) -> SideState:
     return update_boosts(side, idxs, vals+side.boosts.normal_boosts[idxs])
 
 def update_pokemon_at_index(side: SideState, index: int, new_mon: Pokemon) -> SideState:
-    new_team = deepcopy(side.team)
-    for i in range(6):
-        new_team[i] = jax.lax.cond(i==index, lambda:  new_mon, lambda: new_team[i])
+    # there should be a better way to do this but for the life of me i dont know what it is
+    new_team = side.team[index].replace(
+        type_list=new_mon.type_list,
+        moves=new_mon.moves,
+        tera_type=new_mon.tera_type,
+        level=new_mon.level,
+        is_alive=new_mon.is_alive,
+        gender=new_mon.gender,
+        is_terastallized=new_mon.is_terastallized,
+        status=new_mon.status,
+        stat_table=new_mon.stat_table,
+        current_hp=new_mon.current_hp
+    )
     return side.replace(team=new_team)
 
 def update_active(side: SideState, new_mon: Pokemon) -> SideState:
@@ -132,7 +143,7 @@ def take_damage_value(side: SideState, damage: chex.Array) -> SideState:
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     # i guess i need to figure out that bullshit later but that is also low priority
     new_health = jax.lax.clamp(0, active.current_hp-damage, active.max_hp)
-    alive = new_health != 0
+    alive = jnp.bool([new_health != 0])
     active.replace(current_hp=new_health, is_alive=alive)
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button

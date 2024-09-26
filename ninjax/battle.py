@@ -1,10 +1,10 @@
 from typing import Union, Tuple, Dict, Any, Optional
 from collections import namedtuple
 from functools import partial
-from copy import deepcopy
 
 import chex
 import jax.lax
+import dataclass_array as dca
 from flax import struct
 from jax import lax, random, jit
 from gymnax.environments import environment
@@ -119,19 +119,53 @@ def standard_turn_step(
         bad = bad.at[i].set(state.sides[i].legal_switch_mask())
     # make sure this broadcast works correctly
     bad = bad * alive
-    mask = mask.at[,8:14].set(bad)
+    mask = mask.at[:,8:14].set(bad)
     # make sure this axis is the right way
-    mask = mask.at[,15].set(1 - jnp.any(mask[,8:14], axis=0))
+    mask = mask.at[:,15].set(1 - jnp.any(mask[:,8:14], axis=0))
     state = state.replace(legal_action_mask=mask)
 
     return jnp.array([0]), state, jnp.array([0]), jnp.array([0]), {}
+
+no_op_func = lambda k, s, a, b, c: (k, s)
+
 
 def switch_move_step(
     key: chex.PRNGKey,
     state: BattleState,
     actions: (int, int)
 ):
-    pass
+    bad = True
+    mask = jnp.ones((2, 15))
+    for i in range(2):
+        # TODO: add assertions to verify action is legal
+        is_move_action, index, is_tera, is_no_op = decode_action(actions[i])
+        key, state = jax.lax.cond(is_no_op, no_op_func, step_switch, key, state, i, index, is_tera)
+        is_alive = state.sides[i].active.is_alive
+        mask = mask.at[i, 8:14].set(state.sides[i].legal_switch_mask())
+        bad = jnp.logical_or(bad, is_alive)
+    mask = mask.at[:, 0:8].mul(bad)
+    state = state.replace(legal_action_mask=mask)
+    # TODO: ugggghhhhhh, run it back if not bad, return the correct stuff
+
+
+def update_side_at_index(state, index, new_side):
+    new_sides = state.sides[index].replace(
+        team=new_side.team,
+        active_index=new_side.active_index,
+        stealth_rocks=new_side.stealth_rocks,
+        spikes=new_side.spikes,
+        toxic_spikes=new_side.toxic_spikes,
+        sticky_webs=new_side.sticky_webs,
+        reflect=new_side.reflect,
+        light_screen=new_side.light_screen,
+        aurora_veil=new_side.aurora_veil,
+        tailwind=new_side.tailwind,
+        toxic_counter=new_side.toxic_counter,
+        boosts=new_side.boosts,
+        volatile_status=new_side.volatile_status
+    )
+    return state.replace(sides=new_sides)
+
 
 @jit
 def action_order(
@@ -143,10 +177,10 @@ def action_order(
     # key and actions arent used now but they will be needed for
     # 1. breaking ties
     # 2. getting priority
-    speeds = [state.sides[0].boosted_stats[StatEnum.SPEED],
-              state.sides[1].boosted_stats[StatEnum.SPEED]]
+    s1 = state.sides[0].boosted_stats[StatEnum.SPEED]
+    s2 = state.sides[1].boosted_stats[StatEnum.SPEED]
     priorities = []
-    first = speeds[0] < speeds[1]
+    first = s1 < s2
     return first + 0, 1 - first
 
 def decode_action(action: int) -> (bool, int, bool):
@@ -161,14 +195,6 @@ def decode_action(action: int) -> (bool, int, bool):
     is_no_op = action==15
     return is_move_action, index, is_tera, is_no_op
 
-
-def update_side_at_index(state: BattleState, index: int, new_side: SideState) -> BattleState:
-    new_sides = jax.lax.cond(
-        index,
-        lambda: (state.sides[0], new_side),
-        lambda: (new_side, state.sides[1])
-    )
-    return state.replace(sides=new_sides)
 
 def conditional_mult_round(damage, mult, cond):
     return jnp.floor(damage * mult ** cond + 1 / 2)
@@ -193,25 +219,19 @@ def step_move(
     # 5. weather
     # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
-    attack_side, defend_side = lax.cond(
-        player_index,
-        (lambda: (state.sides[1], state.sides[0])),
-        (lambda: (state.sides[0], state.sides[1])))
-    attacker = attack_side.active
-    defender = defend_side.active
-    move = attacker.get_move(index)
+    attacking_side = state.sides[player_index]
+    defending_side = state.sides[1 - player_index]
+    attacker = attacking_side.active
+    defender = defending_side.active
+    move = attacker.moves[index]
     # do tera stuff
     can_tera = state.can_tera.at[player_index].set(1 - is_tera)
-    attacker = attacker.replace(is_terastallized=is_tera)
+    attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
-    offensive_stat = jax.lax.cond(
-        move.move_type == MoveType.SPECIAL,
-        lambda: attack_side.boosted_stats[4],
-        lambda: attack_side.boosted_stats[1])
-    defensive_stat = jax.lax.cond(
-        move.move_type == MoveType.SPECIAL,
-        lambda: defend_side.boosted_stats[5],
-        lambda: defend_side.boosted_stats[2])
+    # TODO i put a sum here to make jax stop complainign even though this should always be a scalar
+    test = 3 * jnp.sum(move.move_type == MoveType.SPECIAL)
+    offensive_stat = attacking_side.boosted_stats[1 + test]
+    defensive_stat = defending_side.boosted_stats[2 + test]
     base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.base_power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
@@ -237,10 +257,9 @@ def step_move(
     damage = conditional_mult_round(damage, effectiveness, 1).astype(int)
 
     # dealing damage
-    defending_side = take_damage_value(defend_side, damage)
-    new_state = update_side_at_index(state, 1-player_index, defending_side)
-    new_state = update_side_at_index(new_state, player_index, attack_side)
-    new_state = new_state.replace(can_tera=can_tera)
+    defending_side = take_damage_value(defending_side, damage)
+
+    new_state = dca.stack([attacking_side, defending_side])
     return key, new_state
 
 
@@ -264,17 +283,18 @@ def step_action(
     player_index: int
 ) -> (chex.PRNGKey, BattleState):
     # this will execute whatever move is selected
-    is_move_action, index, is_tera = decode_action(action)
+    is_move_action, index, is_tera, is_no_op = decode_action(action)
     # i think this is the best way to implement this conditional in jax
     lax.cond(is_move_action, step_move, step_switch, key, state, player_index, index, is_tera)
     return key, state
+
 
 def end_turn_damage(state: BattleState, side: SideState) -> (BattleState, SideState):
     # TODO: the order of all these updates is probably incorrect
     # i think it should be like sand, sand, grass, grass
     # whereas this is currently sand, grass, sand grass,
     # and order should also depend on speed
-    # that being said idk if that is super important
+    # that being said idk if that is high priority
     active = side.active
     is_floating = active.is_floating
     is_sand_immune = active.is_sand_immune

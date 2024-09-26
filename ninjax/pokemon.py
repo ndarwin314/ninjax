@@ -8,25 +8,26 @@ import jax.numpy as jnp
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum, Type, Status
+from dataclass_array import DataclassArray, dataclass_array
+from dataclass_array.typing import FloatArray, IntArray, BoolArray
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
-@struct.dataclass
-class Pokemon:
-    type_list: chex.Array
-    moves: (Move, Move, Move, Move)
-    tera_type: Type = 0
-    species: int = 0
-    name: int = 0
-    level: int = 100
-    is_alive: bool = True
-    gender: bool = False
-    # this might need to be changed later for dumb shenanigans with moves adding types
-    is_terastallized: bool = False
-    ability: int = 0
-    item: int = 0
+@dataclass_array(broadcast=True)
+class Pokemon(DataclassArray):
+    type_list: IntArray['*batch_size 2']
+    moves: Move['*batch_size 4']
+    tera_type: IntArray['*batch_size 1'] = jnp.int32([0])
+    #species: IntArray['*batch_size'] = jnp.int32([0])
+    #name: IntArray['*batch_size'] = jnp.int32([0])
+    level: IntArray['*batch_size 1'] = jnp.int32([0])
+    is_alive: BoolArray['*batch_size 1'] = jnp.bool([0])
+    gender: BoolArray['*batch_size 1'] = jnp.bool([0])
+    is_terastallized: BoolArray['*batch_size 1'] = jnp.bool([0])
+    status: IntArray['*batch_size 1'] = jnp.int32([0])
+    #ability: IntArray['*batch_size'] = jnp.int32([0])
+    #item: IntArray['*batch_size'] = jnp.int32([0])
     stat_table: StatTable = StatTable()
-    current_hp: int = stat_table.current_hp
-    status: Status = Status.NONE
+    current_hp: IntArray['*batch_size 1'] = jnp.int32([stat_table.current_hp])
     # add stats conditions and volatile status conditions
 
     @property
@@ -36,9 +37,6 @@ class Pokemon:
     @property
     def max_hp(self):
         return self.stat_table.stats[0]
-
-    def get_move(self, index: int):
-        return jax.lax.switch(index, [lambda: self.moves[i] for i in range(4)])
 
     def is_type(self, t: Type):
         return jnp.any(self.type_list==t)
