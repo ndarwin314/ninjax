@@ -86,6 +86,10 @@ class BattleState(DataclassArray):
     def accuracy_boosts(self):
         return self.boosts.acc_boosts
 
+    @property
+    def current_hp(self):
+        return self.active.stat_table.current_hp
+
     def legal_switch_mask(self):
         # TODO: replace list comprehension with some kind of jax control flow
         return [self.team[j].is_alive * (j != self.active_index) for j in range(6)]
@@ -108,7 +112,7 @@ def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState
     new_team = state[side_idx].team.replace_row(state[side_idx].active_index, new_mon)
     return state.replace(team=new_team)
 
-def clear_volatile_status(state: BattleState) -> BattleState:
+def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     # TODO
     return state
 
@@ -125,32 +129,54 @@ def swap_out(
     # 2. resting boosts
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
-    side = state[side_idx]
-    side = clear_volatile_status(clear_boosts(side))
-    side = side.replace(active_index=new_active, toxic_counter=0)
+
+    # clear boosts and volatile status from active pokemon, maybe add baton pass check here?
+    state = clear_volatile_status(clear_boosts(state, side_idx), side_idx)
+
+    # update active pokemon index
+    # this update could be saved since we need an update later but idk if it will matter
+    active = state.active_index.at[side_idx].set(new_active)
+    toxic_counter = state.toxic_counter.at[side_idx].set(0)
+    state = state.replace(active=active, toxic_counter=toxic_counter)
+
     # hazards
-    active = side.active
+    active = state[side_idx].team[new_active]
     is_not_flying = 1 - active.is_floating
     is_not_hazard_immune = 1 - active.is_hazard_immune
+    no_status = active.status != Status.NONE
+    is_poison = active.is_type(Type.POISON)
+    is_poison_immune = jnp.any(active.type_list == Type.STEEL)
+    # stealth rocks
     state = take_damage_percent(
         state,
-        side.stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side_idx, side.active.type_list) / 8)
+        side_idx,
+        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side_idx, active.type_list) / 8
+    )
+
+    # spikes
     state = take_damage_percent(
         state, side_idx,
-        (side.spikes != 0) / (10 - 2 * side.spikes) * is_not_flying
+        (state[side_idx].spikes != 0) / (10 - 2 * state[side_idx].spikes) * is_not_flying
     )
-    side = add_boosts(side, StatEnum.SPEED, -1 * is_not_flying)
-    no_status = active.status != Status.NONE
+
+    # sticky webs
+    state = add_boosts(state, side_idx, StatEnum.SPEED, -1 * is_not_flying * state[side_idx].sticky_webs)
+
+    # toxic spikes
     # only remove is poison type and not floating
-    is_poison = active.is_type(Type.POISON)
-    toxic_spikes = side.toxic_spikes * (1 - jnp.logical_and(is_poison, is_not_flying))
-    side = side.replace(toxic_spikes=toxic_spikes)
-    is_poison_immune = jnp.any(side.active.type_list == Type.STEEL)
+    toxic_spikes = state[side_idx].toxic_spikes * (1 - jnp.logical_and(is_poison, is_not_flying))
+    toxic_spikes = state.toxic_spikes.at[side_idx].set(toxic_spikes)
+    state = state.replace(toxic_spikes=toxic_spikes)
     # this returns 0, 5, 6 for 0, 1, 2
-    status_ = (7 - side.toxic_spikes) * (side.toxic_spikes != 0)
-    new_mon = active.replace(status=status_ * no_status * is_poison_immune * is_not_flying)
-    side = update_active(side, new_mon)
-    return side
+    status_ = (7 - state[side_idx].toxic_spikes) * (state[side_idx].toxic_spikes != 0)
+    state = set_status(state, side_idx, status_ * no_status * is_poison_immune * is_not_flying)
+
+    #check if switch in is still alive
+    active_hp = state[side_idx].active.stat_table.current_hp[side_idx]
+    is_alive = active_hp != 0
+    active = state.active[side_idx].replace(is_alive=is_alive)
+    state = update_active(state, side_idx, active)
+    return state
 
 
 
@@ -184,3 +210,9 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array)
 def take_damage_percent(side: BattleState, defender_idx , percent: chex.Array) -> BattleState:
     damage = jnp.round(side.active.max_hp * percent).astype(int)
     return take_damage_value(side, defender_idx, damage)
+
+def set_status(state: BattleState, side_idx, status: Status):
+    active = state[side_idx].active
+    active = active.replace(status=status)
+    return update_active(state, side_idx, active)
+

@@ -139,7 +139,7 @@ def action_order(
     # 2. getting priority
     s1 = state[0].boosted_stats[StatEnum.SPEED]
     s2 = state[1].boosted_stats[StatEnum.SPEED]
-    priorities = []
+    # priorities = []
     first = s1 < s2
     return first + 0, 1 - first
 
