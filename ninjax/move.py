@@ -10,14 +10,14 @@ from ninjax.enum_types import MoveType, Type
 
 
 class Move(DataclassArray):
-    name: IntArray['*batch_shape']
-    move_type: IntArray['*batch_shape']
-    max_pp: IntArray['*batch_shape']
-    current_pp: IntArray['*batch_shape']
-    type: IntArray['*batch_shape']
-    base_power: IntArray['*batch_shape']
-    accuracy: FloatArray['*batch_shape']
-    priority: IntArray['*batch_shape']
+    #name: IntArray['*batch_shape']
+    move_type: IntArray['*batch_shape, 1']
+    max_pp: IntArray['*batch_shape, 1']
+    current_pp: IntArray['*batch_shape, 1']
+    type: IntArray['*batch_shape, 1']
+    base_power: IntArray['*batch_shape, 1']
+    accuracy: FloatArray['*batch_shape, 1']
+    priority: IntArray['*batch_shape, 1']
 
 
 

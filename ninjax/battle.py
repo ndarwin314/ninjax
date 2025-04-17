@@ -12,7 +12,7 @@ import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
 import numpy as np
 
-from ninjax.side import SideState, step_side, swap_out, take_damage_percent, take_damage_value
+from ninjax.side import BattleState, step_side, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType
 from ninjax.move import Move, MoveType
 from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
@@ -22,28 +22,6 @@ Terrain = namedtuple("Terrain", ["terrain", "duration"])
 
 
 Binary = (0,1)
-
-@struct.dataclass
-class BattleState(environment.EnvState):
-    sides: (SideState, SideState)
-    weather: Weather = Weather(WeatherEnum.NONE, 0)
-    terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
-    trick_room_duration: int = 0
-    gravity_duration: int = 0
-    turn_type: TurnType = TurnType.STANDARD
-    legal_action_mask: jax.Array = jnp.ones((2, 15))
-    can_tera: jax.Array = jnp.ones((2,))
-
-
-    def get_side(self, index):
-        # are you having fun yet?
-        return lax.cond(index, lambda: self.sides[1], lambda: self.sides[0])
-
-    def get_active(self, index):
-        # are you having fun yet?
-        return self.get_side(index).active
-
-
 
 @struct.dataclass
 class BattleParams(environment.EnvParams):
@@ -82,6 +60,7 @@ class Battle(environment.Environment[BattleState, BattleParams]):
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         # the fun part :))))
         act1, act2 = actions
+        # TODO: stupid action order code probably needs to be rewritten to be more jax-y
         first, second = action_order(state, actions)
         key, state = step_action(key, state, act1, first)
         key, state = step_action(key, state, act2, second)
@@ -148,25 +127,6 @@ def switch_move_step(
     # TODO: ugggghhhhhh, run it back if not bad, return the correct stuff
 
 
-def update_side_at_index(state, index, new_side):
-    new_sides = state.sides[index].replace(
-        team=new_side.team,
-        active_index=new_side.active_index,
-        stealth_rocks=new_side.stealth_rocks,
-        spikes=new_side.spikes,
-        toxic_spikes=new_side.toxic_spikes,
-        sticky_webs=new_side.sticky_webs,
-        reflect=new_side.reflect,
-        light_screen=new_side.light_screen,
-        aurora_veil=new_side.aurora_veil,
-        tailwind=new_side.tailwind,
-        toxic_counter=new_side.toxic_counter,
-        boosts=new_side.boosts,
-        volatile_status=new_side.volatile_status
-    )
-    return state.replace(sides=new_sides)
-
-
 @jit
 def action_order(
     state: BattleState,
@@ -177,8 +137,8 @@ def action_order(
     # key and actions arent used now but they will be needed for
     # 1. breaking ties
     # 2. getting priority
-    s1 = state.sides[0].boosted_stats[StatEnum.SPEED]
-    s2 = state.sides[1].boosted_stats[StatEnum.SPEED]
+    s1 = state[0].boosted_stats[StatEnum.SPEED]
+    s2 = state[1].boosted_stats[StatEnum.SPEED]
     priorities = []
     first = s1 < s2
     return first + 0, 1 - first
@@ -219,8 +179,8 @@ def step_move(
     # 5. weather
     # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
-    attacking_side = state.sides[player_index]
-    defending_side = state.sides[1 - player_index]
+    attacking_side = state[player_index]
+    defending_side = state[1 - player_index]
     attacker = attacking_side.active
     defender = defending_side.active
     move = attacker.moves[index]
@@ -228,11 +188,11 @@ def step_move(
     can_tera = state.can_tera.at[player_index].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
-    # TODO i put a sum here to make jax stop complainign even though this should always be a scalar
-    test = 3 * jnp.sum(move.move_type == MoveType.SPECIAL)
+    # TODO i put a sum here to make jax stop complaining even though this should always be a scalar
+    test = 3 * move.move_type == MoveType.SPECIAL
     offensive_stat = attacking_side.boosted_stats[1 + test]
     defensive_stat = defending_side.boosted_stats[2 + test]
-    base_damage = base_damage_compute(attacker.level, offensive_stat, defensive_stat, move.base_power)
+    base_damage = base_damage_compute(attacker.stat_table.level, offensive_stat, defensive_stat, move.base_power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
@@ -243,7 +203,7 @@ def step_move(
     crit_chance = 1 / 24
     is_crit = random.uniform(one) < crit_chance
     crit_multiplier = 1.5
-    # damage roll, idc about preserving the in game RNG
+    # damage roll, idc about preserving the in game RNG generation
     damage = conditional_mult_round(damage, crit_multiplier, is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
     damage = conditional_mult_round(damage, damage_roll, 1)
@@ -259,7 +219,7 @@ def step_move(
     # dealing damage
     defending_side = take_damage_value(defending_side, damage)
 
-    new_state = dca.stack([attacking_side, defending_side])
+    new_state = state.replace()
     return key, new_state
 
 
@@ -289,7 +249,7 @@ def step_action(
     return key, state
 
 
-def end_turn_damage(state: BattleState, side: SideState) -> (BattleState, SideState):
+def end_turn_damage(state: BattleState, side: BattleState) -> (BattleState, BattleState):
     # TODO: the order of all these updates is probably incorrect
     # i think it should be like sand, sand, grass, grass
     # whereas this is currently sand, grass, sand grass,

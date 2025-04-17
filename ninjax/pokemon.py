@@ -19,7 +19,7 @@ class Pokemon(DataclassArray):
     tera_type: IntArray['*batch_size 1'] = jnp.int32([0])
     #species: IntArray['*batch_size'] = jnp.int32([0])
     #name: IntArray['*batch_size'] = jnp.int32([0])
-    level: IntArray['*batch_size 1'] = jnp.int32([0])
+    #level: IntArray['*batch_size 1'] = jnp.int32([0])
     is_alive: BoolArray['*batch_size 1'] = jnp.bool([0])
     gender: BoolArray['*batch_size 1'] = jnp.bool([0])
     is_terastallized: BoolArray['*batch_size 1'] = jnp.bool([0])
@@ -27,8 +27,29 @@ class Pokemon(DataclassArray):
     #ability: IntArray['*batch_size'] = jnp.int32([0])
     #item: IntArray['*batch_size'] = jnp.int32([0])
     stat_table: StatTable = StatTable()
-    current_hp: IntArray['*batch_size 1'] = jnp.int32([stat_table.current_hp])
     # add stats conditions and volatile status conditions
+
+    def replace_row(self, idx: int, new_pokemon: "Pokemon"):
+        # unfortunately this is literally the best way i can think of to do this
+        # it saves ugliness everywhere else
+        # with the cost of needing to update all fields manually like this
+        type = self.type_list.at[idx].set(new_pokemon.type_list)
+        # probably need to call a similar function for move to update it properly
+        # the only time moves should need to be changed is transform and i dont need to deal with that yet
+        #new_moves = self.moves.at[idx].set(new_pokemon.moves)
+        #level = self.level.at[idx].set(new_pokemon.level)
+        is_alive = self.is_alive.at[idx].set(new_pokemon.is_alive)
+        gender = self.gender.at[idx].set(new_pokemon.gender)
+        is_terastallized = self.is_terastallized.at[idx].set(new_pokemon.is_terastallized)
+        status = self.status.at[idx].set(new_pokemon.status)
+        stat_table = status.at[idx].set(new_pokemon.stat_table)
+        return self.replace(
+            type=type, is_alive=is_alive, gender=gender, is_terastallized=is_terastallized, status=status,
+            stat_table=stat_table
+        )
+
+
+
 
     @property
     def stats(self):
