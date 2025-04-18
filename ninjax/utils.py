@@ -7,7 +7,6 @@ from flax import struct
 import jax
 import jax.numpy as jnp
 import numpy as np
-from flax.nnx.nnx.transforms.transforms import jit_fn
 
 Array = jax.Array
 increase_mult = 1.1

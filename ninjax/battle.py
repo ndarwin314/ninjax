@@ -12,7 +12,7 @@ import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
 import numpy as np
 
-from ninjax.side import BattleState, step_side, swap_out, take_damage_percent, take_damage_value
+from ninjax.side import BattleState, step_side_conditions, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType
 from ninjax.move import Move, MoveType
 from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
@@ -137,10 +137,9 @@ def action_order(
     # key and actions arent used now but they will be needed for
     # 1. breaking ties
     # 2. getting priority
-    s1 = state[0].boosted_stats[StatEnum.SPEED]
-    s2 = state[1].boosted_stats[StatEnum.SPEED]
+    speeds = state.boosted_stats[StatEnum.SPEED]
     # priorities = []
-    first = s1 < s2
+    first = speeds[0] < speeds[1]
     return first + 0, 1 - first
 
 def decode_action(action: int) -> (bool, int, bool):
@@ -163,7 +162,7 @@ def conditional_mult_round(damage, mult, cond):
 def step_move(
     key: chex.PRNGKey,
     state: BattleState,
-    player_index: int,
+    player_idx: int,
     index: int,
     is_tera: bool):
     # this, or something this calls is probably going to be the most complex function
@@ -179,19 +178,19 @@ def step_move(
     # 5. weather
     # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
-    attacking_side = state[player_index]
-    defending_side = state[1 - player_index]
-    attacker = attacking_side.active
-    defender = defending_side.active
+    active = state.active
+    attacker = active[player_idx]
+    defender = active[1 - player_idx]
     move = attacker.moves[index]
     # do tera stuff
-    can_tera = state.can_tera.at[player_index].set(1 - is_tera)
+    can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
     # TODO i put a sum here to make jax stop complaining even though this should always be a scalar
     test = 3 * move.move_type == MoveType.SPECIAL
-    offensive_stat = attacking_side.boosted_stats[1 + test]
-    defensive_stat = defending_side.boosted_stats[2 + test]
+    boosted_stats = state.boosted_stats
+    offensive_stat = boosted_stats[player_idx][1 + test]
+    defensive_stat = boosted_stats[1-player_idx][2 + test]
     base_damage = base_damage_compute(attacker.stat_table.level, offensive_stat, defensive_stat, move.base_power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
@@ -217,10 +216,9 @@ def step_move(
     damage = conditional_mult_round(damage, effectiveness, 1).astype(int)
 
     # dealing damage
-    defending_side = take_damage_value(defending_side, damage)
+    state = take_damage_value(state, 1 - player_idx, damage)
 
-    new_state = state.replace()
-    return key, new_state
+    return key, state
 
 
 def step_switch(
@@ -231,9 +229,7 @@ def step_switch(
     is_tera: bool):
     # switch needs to access the battle state because opponent switching triggers annoying things
     # TODO: add an opponent switched field somewhere for stakeout + analytic
-    new_side = swap_out(state.get_side(player_index), index)
-    new_state = update_side_at_index(state, player_index, new_side)
-    return key, new_state
+    return key, swap_out(state, player_index, index)
 
 @jit
 def step_action(
@@ -249,27 +245,37 @@ def step_action(
     return key, state
 
 
-def end_turn_damage(state: BattleState, side: BattleState) -> (BattleState, BattleState):
+def end_turn_damage(state: BattleState) -> BattleState:
     # TODO: the order of all these updates is probably incorrect
     # i think it should be like sand, sand, grass, grass
     # whereas this is currently sand, grass, sand grass,
     # and order should also depend on speed
     # that being said idk if that is high priority
-    active = side.active
+    # find something for gen 9 https://www.smogon.com/forums/threads/sword-shield-battle-mechanics-research.3655528/page-64#post-9244179
+    # also another wrinkle is that effects take effect based on speed order
+    # i.e it would go sand fast, sand slow, grass fast, grass slow
+    # this matters a lot in vgc but usually less in singles
+    # it also matters for determining winner if the last pokemon for both players faints on the same turn
+    active = state.active
+    idx = jnp.array([0,1])
     is_floating = active.is_floating
     is_sand_immune = active.is_sand_immune
+
     # sand damage
     sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
-    take_damage_percent(side, sand_damage)
+    take_damage_percent(state, idx, sand_damage)
+
     # grassy terrain healing
     grass_healing = (is_floating - 1) / 16 * state.terrain.terrain == TerrainEnum.GRASSY
-    take_damage_percent(side, grass_healing)
+    take_damage_percent(state, idx, grass_healing)
+
     # status damage
+    # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
     status_damage = (1 / 8 * (active.status==Status.POISON) +
                      1 / 16 * (active.status==Status.BURN) +
-                     side.toxic_counter / 16 * (active.status==Status.TOXIC))
-    side = take_damage_percent(side, status_damage)
-    return state, side
+                     state.toxic_counter / 16 * (active.status==Status.TOXIC))
+    state = take_damage_percent(state, idx, status_damage)
+    return state
 
 def step_field(
     key: chex.PRNGKey,
@@ -281,15 +287,13 @@ def step_field(
     terrain_duration = jnp.maximum(state.terrain.duration - 1, 0)
     new_terrain = state.terrain * terrain_duration
 
-    key, side0 = step_side(key, state.sides[0])
-    key, side1 = step_side(key, state.sides[1])
-    state, side0 = end_turn_damage(state, side0)
-    state, side1 = end_turn_damage(state, side1)
-    # terrain and weather damage
-    # TODO: check the order of these since it matters, if something dies to weather it cant then be healed
+    key, state = step_side_conditions(key, state)
+
+    # weather, terrain, status, items (leftovers etc)
+    state = end_turn_damage(state)
+
     state = state.replace(
-        time=state.time + 1,
-        sides=(side0, side1),
+        turn_number=state.turn_number + 1,
         weather=Weather(new_weather, weather_duration),
         terrain=Terrain(new_terrain, terrain_duration),
         trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),

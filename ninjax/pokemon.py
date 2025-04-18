@@ -1,4 +1,5 @@
 from typing import Union, Tuple, Dict, Any
+from dataclasses import field
 
 import chex
 from flax import struct
@@ -16,17 +17,17 @@ from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 class Pokemon(DataclassArray):
     type_list: IntArray['*batch_size 2']
     moves: Move['*batch_size 4']
-    tera_type: IntArray['*batch_size 1'] = jnp.int32([0])
+    tera_type: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     #species: IntArray['*batch_size'] = jnp.int32([0])
     #name: IntArray['*batch_size'] = jnp.int32([0])
     #level: IntArray['*batch_size 1'] = jnp.int32([0])
-    is_alive: BoolArray['*batch_size 1'] = jnp.bool([0])
-    gender: BoolArray['*batch_size 1'] = jnp.bool([0])
-    is_terastallized: BoolArray['*batch_size 1'] = jnp.bool([0])
-    status: IntArray['*batch_size 1'] = jnp.int32([0])
+    is_alive: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([1]))
+    gender: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
+    is_terastallized: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
+    status: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     #ability: IntArray['*batch_size'] = jnp.int32([0])
     #item: IntArray['*batch_size'] = jnp.int32([0])
-    stat_table: StatTable = StatTable()
+    stat_table: StatTable = field(default_factory=StatTable)
     # add stats conditions and volatile status conditions
 
     def replace_row(self, idx: int, new_pokemon: "Pokemon"):
@@ -84,6 +85,10 @@ class Pokemon(DataclassArray):
     def is_powder_immune(self):
         # add check for goggles
         return self.is_type(Type.GRASS)
+
+    @property
+    def current_hp(self):
+        return self.stat_table.current_hp
 
 
 

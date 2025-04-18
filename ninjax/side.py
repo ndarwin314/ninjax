@@ -1,5 +1,6 @@
 from typing import Union, Tuple, Dict, Any
 from collections import namedtuple
+from dataclasses import field
 
 import chex
 import jax.lax
@@ -29,25 +30,26 @@ class BattleState(DataclassArray):
     team: Pokemon
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
-    active_index: IntArray['*batch_size 1'] = jnp.array(0)
-    stealth_rocks: BoolArray['*batch_size 1'] = jnp.array(0)
-    sticky_webs: BoolArray['*batch_size 1'] = jnp.array(0)
-    spikes: IntArray['*batch_size 1'] = jnp.array(0)
-    toxic_spikes: IntArray['*batch_size 1'] = jnp.array(0)
-    reflect: IntArray['*batch_size 1'] = jnp.array(0)
-    light_screen: IntArray['*batch_size 1'] = jnp.array(0)
-    aurora_veil: IntArray['*batch_size 1'] = jnp.array(0)
-    tailwind: IntArray['*batch_size 1'] = jnp.array(0)
-    toxic_counter: IntArray['*batch_size 1'] = jnp.array(0)
-    boosts: StatBoosts = StatBoosts()
-    legal_action_mask: jax.Array = jnp.ones((2, 15))
-    can_tera: jax.Array = jnp.ones((2,))
+    active_index: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    stealth_rocks: BoolArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    sticky_webs: BoolArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    spikes: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    toxic_spikes: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    reflect: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    light_screen: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    aurora_veil: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    tailwind: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    toxic_counter: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
+    boosts: StatBoosts = field(default_factory=StatBoosts)
+    legal_action_mask: jax.Array = field(default_factory=lambda: jnp.ones((2, 15)))
+    can_tera: jax.Array = field(default_factory=lambda: jnp.ones(2))
     # notably volatile status needs like wish, healing wish, and future sight things
     # but those are lowish priority
-    volatile_status: VolatileStatus = VolatileStatus() # TODO
+    volatile_status: VolatileStatus = field(default_factory=VolatileStatus) # TODO
 
     weather: Weather = Weather(WeatherEnum.NONE, 0)
     terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
+    turn_number: int = 0
     trick_room_duration: int = 0
     gravity_duration: int = 0
     turn_type: TurnType = TurnType.STANDARD
@@ -180,27 +182,27 @@ def swap_out(
 
 
 
-def step_side(
+def step_side_conditions(
     key: chex.PRNGKey,
-    side: BattleState,
+    state: BattleState,
 ) -> (chex.PRNGKey, BattleState):
-    toxic_counter = (side.toxic_counter + 1) * (side.active.status==Status.TOXIC)
-    side.replace(
-        reflect=jnp.maximum(side.reflect-1, 0),
-        light_screen=jnp.maximum(side.light_screen-1, 0),
-        aurora_veil=jnp.maximum(side.aurora_veil-1, 0),
-        tailwind=jnp.maximum(side.tailwind-1, 0),
+    toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
+    state.replace(
+        reflect=jnp.maximum(state.reflect - 1, 0),
+        light_screen=jnp.maximum(state.light_screen - 1, 0),
+        aurora_veil=jnp.maximum(state.aurora_veil - 1, 0),
+        tailwind=jnp.maximum(state.tailwind - 1, 0),
         toxic_counter=toxic_counter
     )
-    return key, side
+    return key, state
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array) -> BattleState:
     defending_side = state[defender_idx]
     active = defending_side.active
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
-    # i guess i need to figure out that bullshit later but that is also low priority
-    new_health = jax.lax.clamp(0, active.stat_table.current_hp-damage, active.max_hp)
-    alive = jnp.bool([new_health != 0])
+    new_health = jax.lax.clamp(0, (active.stat_table.current_hp-damage), active.max_hp)
+    # check to make sure we don't accidentally revive a pokemon
+    alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
     active = active.replace(current_hp=new_health, is_alive=alive)
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
