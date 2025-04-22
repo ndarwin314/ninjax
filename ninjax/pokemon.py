@@ -1,5 +1,6 @@
 from typing import Union, Tuple, Dict, Any
 from dataclasses import field
+import dataclass_array as dca
 
 import chex
 from flax import struct
@@ -13,7 +14,7 @@ from dataclass_array import DataclassArray, dataclass_array
 from dataclass_array.typing import FloatArray, IntArray, BoolArray
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
-@dataclass_array(broadcast=True)
+@dataclass_array(broadcast=True, cast_list=True)
 class Pokemon(DataclassArray):
     type_list: IntArray['*batch_size 2']
     moves: Move['*batch_size 4']
@@ -58,8 +59,10 @@ class Pokemon(DataclassArray):
 
     @property
     def max_hp(self):
-        return self.stat_table.stats[0]
+        # TODO: idk if this works long term but im doing this as a hack right now
+        return self.stat_table.stats[...,0]
 
+    # TODO: this method doesnt seem to work properly for stacked pokemon
     def is_type(self, t: Type):
         return jnp.any(self.type_list==t)
 
@@ -89,6 +92,7 @@ class Pokemon(DataclassArray):
     @property
     def current_hp(self):
         return self.stat_table.current_hp
+
 
 
 

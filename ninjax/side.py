@@ -6,6 +6,7 @@ import chex
 import jax.lax
 from dataclass_array import DataclassArray
 from dataclass_array.typing import FloatArray, IntArray, BoolArray
+import dataclass_array as dca
 from flax import struct
 import jax.numpy as jnp
 
@@ -25,22 +26,24 @@ class VolatileStatus:
     def replace_row(self, idx: int, new_status: 'VolatileStatus'):
         return self
 
-
+@dca.dataclass_array(broadcast=True)
 class BattleState(DataclassArray):
-    team: Pokemon
+    team: Pokemon['*batch_size 6']
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
-    active_index: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    stealth_rocks: BoolArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    sticky_webs: BoolArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    spikes: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    toxic_spikes: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    reflect: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    light_screen: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    aurora_veil: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    tailwind: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    toxic_counter: IntArray['*batch_size 1'] = field(default_factory=jnp.int32([0]))
-    boosts: StatBoosts = field(default_factory=StatBoosts)
+    active_index: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    stealth_rocks: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
+    sticky_webs: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
+    spikes: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    toxic_spikes: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    reflect: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    light_screen: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    aurora_veil: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    tailwind: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    toxic_counter: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    boosts: StatBoosts = StatBoosts(
+        normal_boosts=jnp.zeros((2, 6) ,dtype='int32'),
+        acc_boosts=jnp.zeros((2,2), dtype='int32'))
     legal_action_mask: jax.Array = field(default_factory=lambda: jnp.ones((2, 15)))
     can_tera: jax.Array = field(default_factory=lambda: jnp.ones(2))
     # notably volatile status needs like wish, healing wish, and future sight things
