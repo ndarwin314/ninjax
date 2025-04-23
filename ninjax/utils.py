@@ -23,6 +23,7 @@ numerators = 2 * np.ones(13) + np.fmax(range_, 0)
 denominators = 2 * np.ones(13) - np.fmin(range_, 0)
 STAT_MULTIPLIER_LOOKUP = jnp.array(numerators / denominators)
 ACCURACY_MULTIPLIER_LOOKUP = jnp.array((1 + numerators) / (1 + denominators))
+TERRAIN_MULTIPLIER = 1.3
 
 TYPE_EFFECTIVENESS = jnp.array(
     [

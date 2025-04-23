@@ -12,10 +12,11 @@ import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
 import numpy as np
 
+from ninjax.pokemon import Pokemon
 from ninjax.side import BattleState, step_side_conditions, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type
 from ninjax.move import Move, MoveType
-from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier
+from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, TERRAIN_MULTIPLIER
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -158,6 +159,68 @@ def decode_action(action: int) -> (bool, int, bool):
 def conditional_mult_round(damage, mult, cond):
     return jnp.floor(damage * mult ** cond + 1 / 2)
 
+def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
+    power = move.base_power
+    is_grounded = 1 - attacker.is_floating
+    terrain = state.terrain.terrain
+    # grassy terrain
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.GRASS and terrain==TerrainEnum.GRASSY)
+    # psychic terrain
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.PSYCHIC and terrain==TerrainEnum.PSYCHIC)
+    # electric terrain
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.ELECTRIC and terrain==TerrainEnum.ELECTRIC)
+    return power
+
+def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
+    boosted_stats = state.boosted_stats
+    offensive_stat = boosted_stats[attacker_idx][move.offensive_stat]
+    defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
+    level = state.active.stat_table.level[attacker_idx]
+    base_damage = ((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2
+    return base_damage
+
+def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_idx, move: Move, base_damage):
+    # there is a specific order to the multipliers that i will preserve since rounding is done
+    # between every multiplication by a modifier
+    # at some point we can see if it makes any difference for speed to not do it this way
+    attacker = state.active[attacker_idx]
+    defender = state.active[1-attacker_idx]
+
+    # sun modifier
+    is_sun = state.weather.weather == WeatherEnum.SUN
+    base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_sun, move.type == Type.FIRE))
+    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_sun, move.type == Type.WATER))
+    # rain modifier
+    is_rain = state.weather.weather == WeatherEnum.RAIN
+    base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_rain, move.type == Type.WATER))
+    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
+
+    key, one, two = random.split(key, num=3)
+    # crit multiplier
+    crit_chance = 1 / 24
+    is_crit = random.uniform(one) < crit_chance
+    crit_multiplier = 1.5
+    # damage roll, idc about preserving the in game RNG generation
+    base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
+    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
+    base_damage = conditional_mult_round(base_damage, damage_roll, 1)
+    # stab multiplier
+    is_tera_boosted = jnp.logical_and(attacker.is_terastallized, attacker.tera_type == move.type)
+    is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
+    is_stab = jnp.logical_and(jnp.any(attacker.type_list == move.type), is_tera_boosted)
+    stab_multiplier = 1.5 + 0.5 * is_matching_tera
+    # add adaptability check
+    base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
+    # Type effectiveness, when we get around to implementing observations
+    # it should include does not affect, not very effective, or super effective
+    effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
+    base_damage = conditional_mult_round(base_damage, effectiveness, 1)
+    # burn
+    is_burned = attacker.status == Status.BURN
+    is_physical = move.move_type == MoveType.PHYSICAL
+    base_damage = conditional_mult_round(base_damage, 0.5, is_burned and is_physical)
+    return base_damage
+
 
 def step_move(
     key: chex.PRNGKey,
@@ -182,64 +245,21 @@ def step_move(
     attacker = active[player_idx]
     defender = active[1 - player_idx]
     move = attacker.moves[index]
+
     # do tera stuff
     can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
+
     # base power modifications, technician, tera, terrain etc
-    power = move.base_power
-    is_grounded = 1 - attacker.is_floating
-    terrain_boost = 1.3
-    # grassy terrain
-    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.GRASS))
-    # psychic terrain
-    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.PSYCHIC))
-    # electric terrain
-    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.ELECTRIC))
-    # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
-    # TODO i put a sum here to make jax stop complaining even though this should always be a scalar
-    offset = 3 * move.move_type == MoveType.SPECIAL
-    boosted_stats = state.boosted_stats
-    offensive_stat = boosted_stats[player_idx][1 + offset]
-    defensive_stat = boosted_stats[1-player_idx][2 + offset]
-    base_damage = base_damage_compute(attacker.stat_table.level, offensive_stat, defensive_stat, power)
+    power = compute_base_power(state, attacker, move)
+
+    # base damage pre multipliers
+    base_damage = compute_base_damage(state, move, player_idx, power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
-    damage = base_damage
-    # sun modifier
-    is_sun = state.weather.weather==WeatherEnum.SUN
-    damage = conditional_mult_round(damage, 1.5, jnp.logical_and(is_sun, move.type==Type.FIRE))
-    damage = conditional_mult_round(damage, 0.5, jnp.logical_and(is_sun, move.type == Type.WATER))
-    # rain modifier
-    is_rain = state.weather.weather==WeatherEnum.RAIN
-    damage = conditional_mult_round(damage, 1.5, jnp.logical_and(is_rain, move.type==Type.WATER))
-    damage = conditional_mult_round(damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
-
-    key, one, two = random.split(key, num=3)
-    # crit multiplier
-    crit_chance = 1 / 24
-    is_crit = random.uniform(one) < crit_chance
-    crit_multiplier = 1.5
-    # damage roll, idc about preserving the in game RNG generation
-    damage = conditional_mult_round(damage, crit_multiplier, is_crit)
-    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
-    damage = conditional_mult_round(damage, damage_roll, 1)
-    # stab multiplier
-    is_tera_boosted = jnp.logical_and(active.is_terastallized, active.tera_type==move.type)
-    is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list==active.tera_type))
-    is_stab = jnp.logical_and(jnp.any(attacker.type_list==move.type), is_tera_boosted)
-    stab_multiplier = 1.5 + 0.5 * is_matching_tera
-    # add adaptability check
-    damage = conditional_mult_round(damage, stab_multiplier, is_stab)
-    # Type effectiveness, when we get around to implementing observations
-    # it should include does not affect, not very effective, or super effective
-    effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    damage = conditional_mult_round(damage, effectiveness, 1)
-    # burn
-    is_burned = attacker.status==Status.BURN
-    is_physical = move.move_type==MoveType.PHYSICAL
-    damage = conditional_mult_round(damage, 0.5, is_burned and is_physical)
+    damage = compute_damage_multipliers(state, key, player_idx, move, base_damage)
 
     # dealing damage
     damage = damage.astype(int)

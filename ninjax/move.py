@@ -21,6 +21,8 @@ class Move(DataclassArray):
     base_power: IntArray['*batch_shape 1']
     accuracy: FloatArray['*batch_shape 1']
     priority: IntArray['*batch_shape 1']
+    offensive_stat: IntArray['*batch_shape 1']
+    defensive_stat: IntArray['*batch_shape 1']
 
 
 
