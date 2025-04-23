@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ninjax.side import BattleState, step_side_conditions, swap_out, take_damage_percent, take_damage_value
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type
 from ninjax.move import Move, MoveType
 from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier
 
@@ -185,18 +185,37 @@ def step_move(
     # do tera stuff
     can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
+    # base power modifications, technician, tera, terrain etc
+    power = move.base_power
+    is_grounded = 1 - attacker.is_floating
+    terrain_boost = 1.3
+    # grassy terrain
+    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.GRASS))
+    # psychic terrain
+    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.PSYCHIC))
+    # electric terrain
+    power = conditional_mult_round(power, 1.3, jnp.logical_and(is_grounded, move.type==Type.ELECTRIC))
     # some moves will deviate this, examples psyshock/strike, secret sword, photon geyser, body press
     # TODO i put a sum here to make jax stop complaining even though this should always be a scalar
-    test = 3 * move.move_type == MoveType.SPECIAL
+    offset = 3 * move.move_type == MoveType.SPECIAL
     boosted_stats = state.boosted_stats
-    offensive_stat = boosted_stats[player_idx][1 + test]
-    defensive_stat = boosted_stats[1-player_idx][2 + test]
-    base_damage = base_damage_compute(attacker.stat_table.level, offensive_stat, defensive_stat, move.base_power)
+    offensive_stat = boosted_stats[player_idx][1 + offset]
+    defensive_stat = boosted_stats[1-player_idx][2 + offset]
+    base_damage = base_damage_compute(attacker.stat_table.level, offensive_stat, defensive_stat, power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
     damage = base_damage
+    # sun modifier
+    is_sun = state.weather.weather==WeatherEnum.SUN
+    damage = conditional_mult_round(damage, 1.5, jnp.logical_and(is_sun, move.type==Type.FIRE))
+    damage = conditional_mult_round(damage, 0.5, jnp.logical_and(is_sun, move.type == Type.WATER))
+    # rain modifier
+    is_rain = state.weather.weather==WeatherEnum.RAIN
+    damage = conditional_mult_round(damage, 1.5, jnp.logical_and(is_rain, move.type==Type.WATER))
+    damage = conditional_mult_round(damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
+
     key, one, two = random.split(key, num=3)
     # crit multiplier
     crit_chance = 1 / 24
@@ -207,15 +226,23 @@ def step_move(
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
     damage = conditional_mult_round(damage, damage_roll, 1)
     # stab multiplier
-    is_stab = np.any(attacker.type_list==move.type)
-    stab_multiplier = 1.5
+    is_tera_boosted = jnp.logical_and(active.is_terastallized, active.tera_type==move.type)
+    is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list==active.tera_type))
+    is_stab = jnp.logical_and(jnp.any(attacker.type_list==move.type), is_tera_boosted)
+    stab_multiplier = 1.5 + 0.5 * is_matching_tera
+    # add adaptability check
     damage = conditional_mult_round(damage, stab_multiplier, is_stab)
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
     effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    damage = conditional_mult_round(damage, effectiveness, 1).astype(int)
+    damage = conditional_mult_round(damage, effectiveness, 1)
+    # burn
+    is_burned = attacker.status==Status.BURN
+    is_physical = move.move_type==MoveType.PHYSICAL
+    damage = conditional_mult_round(damage, 0.5, is_burned and is_physical)
 
     # dealing damage
+    damage = damage.astype(int)
     state = take_damage_value(state, 1 - player_idx, damage)
 
     return key, state

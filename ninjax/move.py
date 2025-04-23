@@ -12,9 +12,11 @@ from ninjax.enum_types import MoveType, Type
 @dca.dataclass_array(cast_dtype=True, broadcast=True)
 class Move(DataclassArray):
     #name: IntArray['*batch_shape']
+    # e.g. special, physical, status
     move_type: IntArray['*batch_shape 1']
     max_pp: IntArray['*batch_shape 1']
     current_pp: IntArray['*batch_shape 1']
+    # e.g. fire, water
     type: IntArray['*batch_shape 1']
     base_power: IntArray['*batch_shape 1']
     accuracy: FloatArray['*batch_shape 1']
