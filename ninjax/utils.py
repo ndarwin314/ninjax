@@ -5,8 +5,15 @@ from functools import partial
 import chex
 from flax import struct
 import jax
+from jaxlib.xla_extension import ArrayImpl
 import jax.numpy as jnp
 import numpy as np
+
+# i deserve to be tried at the hague for this line of code
+# dataclass_array checks if field have a hash as a proxy for being immutable
+# so i'm adding a dummy hash function to it here to avoid it throwing errors
+# I'm good at programming
+ArrayImpl.__hash__ = lambda : 0
 
 Array = jax.Array
 increase_mult = 1.1
@@ -39,11 +46,9 @@ TYPE_EFFECTIVENESS = jnp.array(
         [1, 1, 1/2, 1/2, 1/2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1/2, 2],
         [1, 1, 1/2, 1, 1, 1, 1, 2, 1/2, 1, 1, 1, 1, 1, 1, 2, 2, 1/2, 1]])
 
-@jax.jit
 def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array:
     return jnp.prod(TYPE_EFFECTIVENESS[attacking_type][defending_types])
 
-@jax.jit
 def calculate_stats(level: Array, nature: "Nature", base_stats: Array, ivs: Array, evs: Array):
     # initial part of compute
     stats: Array = jnp.floor_divide((2 * base_stats + jnp.floor_divide(evs, 4) + ivs) * level, 100) + 5 + jnp.array([1, 0, 0, 0, 0, 0]) * (level + 5)
@@ -56,7 +61,7 @@ def calculate_stats(level: Array, nature: "Nature", base_stats: Array, ivs: Arra
     return stats
 
 # computes damage before any multiplicative modifiers
-@jax.jit
+
 def base_damage_compute(
         attacker_level: int,
         attack_stat: int,
@@ -64,9 +69,6 @@ def base_damage_compute(
         base_power: int):
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
 
-@partial(jax.jit, static_argnums=2)
-def static_len_array_access(array, index, length):
-    return jax.lax.switch(index, [lambda: array[i] for i in range(length)])
 
 
 

@@ -81,11 +81,12 @@ class BattleState(DataclassArray):
 
     @property
     def active(self) -> Pokemon:
-        return self.team[self.active_index]
+        flattened_idx = (jnp.reshape(self.active_index, (2,)))
+        return self.team[[0,1], flattened_idx]
 
     @property
     def boosted_stats(self):
-        return self.active.stats * STAT_MULTIPLIER_LOOKUP[self.boosts.normal_boosts]
+        return jnp.floor(self.active.stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
 
     @property
     def accuracy_boosts(self):
@@ -93,7 +94,7 @@ class BattleState(DataclassArray):
 
     @property
     def current_hp(self):
-        return self.active.stat_table.current_hp
+        return self.active.current_hp
 
     def legal_switch_mask(self):
         # TODO: replace list comprehension with some kind of jax control flow
@@ -114,7 +115,7 @@ def add_boosts(state: BattleState, side_idx, idxs, vals) -> BattleState:
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
 
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
-    new_team = state[side_idx].team.replace_row(state[side_idx].active_index, new_mon)
+    new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
     return state.replace(team=new_team)
 
 def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
@@ -177,7 +178,7 @@ def swap_out(
     state = set_status(state, side_idx, status_ * no_status * is_poison_immune * is_not_flying)
 
     #check if switch in is still alive
-    active_hp = state[side_idx].active.stat_table.current_hp[side_idx]
+    active_hp = state[side_idx].active.current_hp[side_idx]
     is_alive = active_hp != 0
     active = state.active[side_idx].replace(is_alive=is_alive)
     state = update_active(state, side_idx, active)
@@ -200,10 +201,9 @@ def step_side_conditions(
     return key, state
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array) -> BattleState:
-    defending_side = state[defender_idx]
-    active = defending_side.active
+    active = state.active[defender_idx]
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
-    new_health = jax.lax.clamp(0, (active.stat_table.current_hp-damage), active.max_hp)
+    new_health = jax.lax.clamp(0, (active.current_hp[defender_idx]-damage), active.max_hp)
     # check to make sure we don't accidentally revive a pokemon
     alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
     active = active.replace(current_hp=new_health, is_alive=alive)

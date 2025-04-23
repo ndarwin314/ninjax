@@ -38,7 +38,7 @@ class StatBoosts(DataclassArray):
         super().__post_init__()
         # use __setattr__ manually instead of attribute assignment since the class is frozen
         object.__setattr__(self, "normal_boosts", jnp.clip(self.normal_boosts, -6, 6))
-        object.__setattr__(self, "acc_boosts", jnp.clip(self.normal_boosts, -6, 6))
+        object.__setattr__(self, "acc_boosts", jnp.clip(self.acc_boosts, -6, 6))
 
     def replace_row(self, idx: int, new_boosts: 'StatBoosts'):
         normal_boosts = self.normal_boosts.at[idx].set(new_boosts.normal_boosts)
@@ -59,7 +59,6 @@ class StatTable(DataclassArray):
     evs: IntArray['*batch_size 6'] = field(default_factory=lambda: 84*jnp.ones(6, dtype=int32))
     # this seems to be the cleanest way to implement these since they need fancy initialization
     stats: IntArray['*batch_size 6'] = field(init=False, default=None)
-    current_hp: IntArray['*batch_size 1'] = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         # make sure to call the super function, you fool, you absolute buffoon
@@ -69,16 +68,14 @@ class StatTable(DataclassArray):
         # self.stats = calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs))
         # self.current_hp = self.stats[0]
         object.__setattr__(self, 'stats', calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs))
-        object.__setattr__(self, 'current_hp', self.stats[...,0])
 
     def row_update(self, idx: int, new_stats: 'StatTable'):
         level = self.level.at[idx].set(new_stats.level)
         ivs = self.ivs.at[idx].set(new_stats.ivs)
         evs = self.evs.at[idx].set(new_stats.evs)
-        stats = self.stats.at[idx].set(new_stats.stats)
-        current_hp = self.current_hp.at[idx].set(new_stats.current_hp)
         nature = self.nature.row_update(idx, new_stats.nature)
-        return self.replace(level=level, nature=nature, ivs=ivs, evs=evs, stats=stats, current_hp=current_hp)
+        # so this is a problem because we calculate the current_hp in the post_init which runs even when we call replace
+        return self.replace(level=level, nature=nature, ivs=ivs, evs=evs)
 
 
 

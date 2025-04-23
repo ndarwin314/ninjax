@@ -28,7 +28,9 @@ class Pokemon(DataclassArray):
     status: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     #ability: IntArray['*batch_size'] = jnp.int32([0])
     #item: IntArray['*batch_size'] = jnp.int32([0])
-    stat_table: StatTable = field(default_factory=StatTable)
+    stat_table: StatTable = StatTable()
+    # this is a hack. we
+    current_hp: IntArray['*batch_size 1'] = stat_table.stats[...,0].reshape(1)
     # add stats conditions and volatile status conditions
 
     def replace_row(self, idx: int, new_pokemon: "Pokemon"):
@@ -44,11 +46,13 @@ class Pokemon(DataclassArray):
         gender = self.gender.at[idx].set(new_pokemon.gender)
         is_terastallized = self.is_terastallized.at[idx].set(new_pokemon.is_terastallized)
         status = self.status.at[idx].set(new_pokemon.status)
-        stat_table = status.at[idx].set(new_pokemon.stat_table)
-        return self.replace(
-            type=type, is_alive=is_alive, gender=gender, is_terastallized=is_terastallized, status=status,
-            stat_table=stat_table
+        stat_table = self.stat_table.row_update(idx, new_pokemon.stat_table)
+        current_hp = self.current_hp.at[idx].set(new_pokemon.current_hp)
+        new_obj = self.replace(
+            type_list=type, is_alive=is_alive, gender=gender, is_terastallized=is_terastallized, status=status,
+            stat_table=stat_table, current_hp=current_hp
         )
+        return new_obj
 
 
 
@@ -89,9 +93,6 @@ class Pokemon(DataclassArray):
         # add check for goggles
         return self.is_type(Type.GRASS)
 
-    @property
-    def current_hp(self):
-        return self.stat_table.current_hp
 
 
 

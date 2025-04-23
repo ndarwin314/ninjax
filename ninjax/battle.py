@@ -15,7 +15,7 @@ import numpy as np
 from ninjax.side import BattleState, step_side_conditions, swap_out, take_damage_percent, take_damage_value
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType
 from ninjax.move import Move, MoveType
-from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, static_len_array_access
+from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -127,7 +127,7 @@ def switch_move_step(
     # TODO: ugggghhhhhh, run it back if not bad, return the correct stuff
 
 
-@jit
+
 def action_order(
     state: BattleState,
     actions: (int, int),
@@ -158,7 +158,7 @@ def decode_action(action: int) -> (bool, int, bool):
 def conditional_mult_round(damage, mult, cond):
     return jnp.floor(damage * mult ** cond + 1 / 2)
 
-@partial(jit, static_argnums=2)
+
 def step_move(
     key: chex.PRNGKey,
     state: BattleState,
@@ -231,7 +231,7 @@ def step_switch(
     # TODO: add an opponent switched field somewhere for stakeout + analytic
     return key, swap_out(state, player_index, index)
 
-@jit
+
 def step_action(
     key: chex.PRNGKey,
     state: BattleState,
