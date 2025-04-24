@@ -2,7 +2,6 @@ from typing import Union, Tuple, Dict, Any
 from collections import namedtuple
 from dataclasses import field
 
-import chex
 import jax.lax
 from dataclass_array import DataclassArray
 from dataclass_array.typing import FloatArray, IntArray, BoolArray
@@ -12,8 +11,8 @@ import jax.numpy as jnp
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type, AbilityEnum
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier, conditional_mult_round
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -123,101 +122,6 @@ def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     return state
 
 
-# TODO: at some point probably factor out part of this into like
-# just swapping out to implement baton pass idk
-def swap_out(
-    state: BattleState,
-    side_idx,
-    new_active: int
-) -> (chex.PRNGKey, BattleState):
-    # swaps the active pokemon and does appropriate things like
-    # 1. clearing volatile statuses
-    # 2. resting boosts
-    # 3. probably stuff im forgetting
-    # 4. ahhh palafin, ahhh regenerator
-
-    # clear boosts and volatile status from active pokemon, maybe add baton pass check here?
-    state = clear_volatile_status(clear_boosts(state, side_idx), side_idx)
-
-    # update active pokemon index
-    # this update could be saved since we need an update later but idk if it will matter
-    active = state.active_index.at[side_idx].set(new_active)
-    toxic_counter = state.toxic_counter.at[side_idx].set(0)
-    state = state.replace(active=active, toxic_counter=toxic_counter)
-
-    # hazards
-    active = state[side_idx].team[new_active]
-    is_not_flying = 1 - active.is_floating
-    is_not_hazard_immune = 1 - active.is_hazard_immune
-    no_status = active.status != Status.NONE
-    is_poison = active.is_type(Type.POISON)
-    is_poison_immune = jnp.any(active.type_list == Type.STEEL)
-    # stealth rocks
-    state = take_damage_percent(
-        state,
-        side_idx,
-        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side_idx, active.type_list) / 8
-    )
-
-    # spikes
-    state = take_damage_percent(
-        state, side_idx,
-        (state[side_idx].spikes != 0) / (10 - 2 * state[side_idx].spikes) * is_not_flying
-    )
-
-    # sticky webs
-    state = add_boosts(state, side_idx, StatEnum.SPEED, -1 * is_not_flying * state[side_idx].sticky_webs)
-
-    # toxic spikes
-    # only remove is poison type and not floating
-    toxic_spikes = state[side_idx].toxic_spikes * (1 - jnp.logical_and(is_poison, is_not_flying))
-    toxic_spikes = state.toxic_spikes.at[side_idx].set(toxic_spikes)
-    state = state.replace(toxic_spikes=toxic_spikes)
-    # this returns 0, 5, 6 for 0, 1, 2
-    status_ = (7 - state[side_idx].toxic_spikes) * (state[side_idx].toxic_spikes != 0)
-    state = set_status(state, side_idx, status_ * no_status * is_poison_immune * is_not_flying)
-
-    #check if switch in is still alive
-    active_hp = state[side_idx].active.current_hp[side_idx]
-    is_alive = active_hp != 0
-    active = state.active[side_idx].replace(is_alive=is_alive)
-    state = update_active(state, side_idx, active)
-    return state
 
 
-
-def step_side_conditions(
-    key: chex.PRNGKey,
-    state: BattleState,
-) -> (chex.PRNGKey, BattleState):
-    toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
-    state.replace(
-        reflect=jnp.maximum(state.reflect - 1, 0),
-        light_screen=jnp.maximum(state.light_screen - 1, 0),
-        aurora_veil=jnp.maximum(state.aurora_veil - 1, 0),
-        tailwind=jnp.maximum(state.tailwind - 1, 0),
-        toxic_counter=toxic_counter
-    )
-    return key, state
-
-def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array) -> BattleState:
-    active = state.active[defender_idx]
-    # TODO: there are some effects that trigger based on damage taken, like mirror coat
-    new_health = jax.lax.clamp(0, (active.current_hp[defender_idx]-damage), active.max_hp)
-    # check to make sure we don't accidentally revive a pokemon
-    alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
-    active = active.replace(current_hp=new_health, is_alive=alive)
-    # this keeps active the same if current_hp!=0 and sets field as empty otherwise
-    # there are some other conditions that should trigger emptying field like eject button
-    # idk if that should be handled here or elsewhere
-    return update_active(state, defender_idx, active)
-
-def take_damage_percent(side: BattleState, defender_idx , percent: chex.Array) -> BattleState:
-    damage = jnp.round(side.active.max_hp * percent).astype(int)
-    return take_damage_value(side, defender_idx, damage)
-
-def set_status(state: BattleState, side_idx, status: Status):
-    active = state[side_idx].active
-    active = active.replace(status=status)
-    return update_active(state, side_idx, active)
 

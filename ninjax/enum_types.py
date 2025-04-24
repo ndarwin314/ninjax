@@ -1,6 +1,10 @@
+from collections import namedtuple
 from enum import IntEnum, auto
 
 import jax.numpy as jnp
+
+Weather = namedtuple("Weather", ["weather", "duration"])
+Terrain = namedtuple("Terrain", ["terrain", "duration"])
 
 class Type(IntEnum):
     NONE = 0
@@ -68,3 +72,26 @@ class TurnType(IntEnum):
     STANDARD = 0
     SWITCH_MOVE = 1
     END_SWITCH = 2
+
+class AbilityEnum(IntEnum):
+    STENCH = auto() # need to implement flinching first
+    DRIZZLE = auto() # done
+    DROUGHT = auto() # done
+    SAND_STREAM = auto() # done
+    SNOW_WARNING = auto() # done
+    SPEED_BOOST = auto()
+    BATTLE_ARMOR = auto() # done
+    STURDY = auto() # done
+    DAMP = auto()
+    ADAPTABILITY = auto() # done
+    LIMBER = auto()
+    SAND_VEIL = auto()
+    STATIC = auto()
+    VOLT_ABSORB = auto()
+    WATER_ABSORB = auto()
+    FLASH_FIRE = auto()
+    STORM_DRAIN = auto()
+    EARTH_EATER = auto()
+    LIGHTNING_ROD = auto()
+    SAP_SIPPER = auto()
+

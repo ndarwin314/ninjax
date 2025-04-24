@@ -1,25 +1,20 @@
 from typing import Union, Tuple, Dict, Any, Optional
 from collections import namedtuple
-from functools import partial
 
 import chex
 import jax.lax
-import dataclass_array as dca
 from flax import struct
 from jax import lax, random, jit
 from gymnax.environments import environment
 import gymnax.environments.spaces as spaces
 import jax.numpy as jnp
-import numpy as np
 
-from ninjax.pokemon import Pokemon
-from ninjax.side import BattleState, step_side_conditions, swap_out, take_damage_percent, take_damage_value
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type
+
+from ninjax.side import BattleState, update_active
+from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain
 from ninjax.move import Move, MoveType
-from ninjax.utils import base_damage_compute, calculate_effectiveness_multiplier, TERRAIN_MULTIPLIER
-
-Weather = namedtuple("Weather", ["weather", "duration"])
-Terrain = namedtuple("Terrain", ["terrain", "duration"])
+from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
+                               do_stat_boost_from_move, do_status_move, do_flash_fire_from_move)
 
 
 Binary = (0,1)
@@ -155,73 +150,6 @@ def decode_action(action: int) -> (bool, int, bool):
     is_no_op = action==15
     return is_move_action, index, is_tera, is_no_op
 
-
-def conditional_mult_round(damage, mult, cond):
-    return jnp.floor(damage * mult ** cond + 1 / 2)
-
-def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
-    power = move.base_power
-    is_grounded = 1 - attacker.is_floating
-    terrain = state.terrain.terrain
-    # grassy terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.GRASS and terrain==TerrainEnum.GRASSY)
-    # psychic terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.PSYCHIC and terrain==TerrainEnum.PSYCHIC)
-    # electric terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.ELECTRIC and terrain==TerrainEnum.ELECTRIC)
-    return power
-
-def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
-    boosted_stats = state.boosted_stats
-    offensive_stat = boosted_stats[attacker_idx][move.offensive_stat]
-    defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
-    level = state.active.stat_table.level[attacker_idx]
-    base_damage = ((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2
-    return base_damage
-
-def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_idx, move: Move, base_damage):
-    # there is a specific order to the multipliers that i will preserve since rounding is done
-    # between every multiplication by a modifier
-    # at some point we can see if it makes any difference for speed to not do it this way
-    attacker = state.active[attacker_idx]
-    defender = state.active[1-attacker_idx]
-
-    # sun modifier
-    is_sun = state.weather.weather == WeatherEnum.SUN
-    base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_sun, move.type == Type.FIRE))
-    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_sun, move.type == Type.WATER))
-    # rain modifier
-    is_rain = state.weather.weather == WeatherEnum.RAIN
-    base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_rain, move.type == Type.WATER))
-    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
-
-    key, one, two = random.split(key, num=3)
-    # crit multiplier
-    crit_chance = 1 / 24
-    is_crit = random.uniform(one) < crit_chance
-    crit_multiplier = 1.5
-    # damage roll, idc about preserving the in game RNG generation
-    base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
-    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
-    base_damage = conditional_mult_round(base_damage, damage_roll, 1)
-    # stab multiplier
-    is_tera_boosted = jnp.logical_and(attacker.is_terastallized, attacker.tera_type == move.type)
-    is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
-    is_stab = jnp.logical_and(jnp.any(attacker.type_list == move.type), is_tera_boosted)
-    stab_multiplier = 1.5 + 0.5 * is_matching_tera
-    # add adaptability check
-    base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
-    # Type effectiveness, when we get around to implementing observations
-    # it should include does not affect, not very effective, or super effective
-    effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    base_damage = conditional_mult_round(base_damage, effectiveness, 1)
-    # burn
-    is_burned = attacker.status == Status.BURN
-    is_physical = move.move_type == MoveType.PHYSICAL
-    base_damage = conditional_mult_round(base_damage, 0.5, is_burned and is_physical)
-    return base_damage
-
-
 def step_move(
     key: chex.PRNGKey,
     state: BattleState,
@@ -235,11 +163,8 @@ def step_move(
 
     # TODO: stuff to add
     # 1. glaive rush mult
-    # 2. burn mult
     # 3. unaware for both
     # 4. guts/facade
-    # 5. weather
-    # 6. tera + adaptability stab modifiers
     # 7. various crit damage and rate multipliers
     active = state.active
     attacker = active[player_idx]
@@ -249,23 +174,28 @@ def step_move(
     # do tera stuff
     can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
+    state = update_active(state, player_idx, attacker)
 
-    # base power modifications, technician, tera, terrain etc
-    power = compute_base_power(state, attacker, move)
+    # decide branch to execute based on ability immunities
+    ability = defender.ability
+    branches = [do_move_damage,
+                do_status_move,
+                do_stat_boost_from_move,
+                do_flash_fire_from_move,
+                do_healing_from_move]
+    is_flash_fire = ability==AbilityEnum.FLASH_FIRE and move.type==Type.FIRE
+    is_spa_boost = (ability==AbilityEnum.STORM_DRAIN and move.type==Type.WATER or
+                    ability==AbilityEnum.LIGHTNING_ROD and move.type==Type.ELECTRIC)
+    is_attack_boost = ability==AbilityEnum.SAP_SIPPER and move.type==Type.GRASS
+    is_heal = (ability==AbilityEnum.WATER_ABSORB and move.type==Type.WATER or
+               ability==AbilityEnum.VOLT_ABSORB and move.type==Type.ELECTRIC or
+               ability==AbilityEnum.EARTH_EATER and move.type==Type.GROUND)
+    is_status = move.move_type==MoveType.STATUS * (1-(is_flash_fire or is_spa_boost or is_attack_boost or is_heal))
+    # this feels really hacky way to compute this but :shrug:
+    branch_index = is_status + (is_spa_boost or is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
 
-    # base damage pre multipliers
-    base_damage = compute_base_damage(state, move, player_idx, power)
-
-    # there is a specific order to the multipliers that i will preserve since rounding is done
-    # between every multiplication by a modifier
-    # at some point we can see if it makes any difference for speed to not do it this way
-    damage = compute_damage_multipliers(state, key, player_idx, move, base_damage)
-
-    # dealing damage
-    damage = damage.astype(int)
-    state = take_damage_value(state, 1 - player_idx, damage)
-
-    return key, state
+    # i think using a switch means we skip evaluating the branches we don't need
+    return jax.lax.switch(branch_index, branches, state, key, player_idx, move, 1 + 3*is_spa_boost)
 
 
 def step_switch(
@@ -290,39 +220,6 @@ def step_action(
     # i think this is the best way to implement this conditional in jax
     lax.cond(is_move_action, step_move, step_switch, key, state, player_index, index, is_tera)
     return key, state
-
-
-def end_turn_damage(state: BattleState) -> BattleState:
-    # TODO: the order of all these updates is probably incorrect
-    # i think it should be like sand, sand, grass, grass
-    # whereas this is currently sand, grass, sand grass,
-    # and order should also depend on speed
-    # that being said idk if that is high priority
-    # find something for gen 9 https://www.smogon.com/forums/threads/sword-shield-battle-mechanics-research.3655528/page-64#post-9244179
-    # also another wrinkle is that effects take effect based on speed order
-    # i.e it would go sand fast, sand slow, grass fast, grass slow
-    # this matters a lot in vgc but usually less in singles
-    # it also matters for determining winner if the last pokemon for both players faints on the same turn
-    active = state.active
-    idx = jnp.array([0,1])
-    is_floating = active.is_floating
-    is_sand_immune = active.is_sand_immune
-
-    # sand damage
-    sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
-    take_damage_percent(state, idx, sand_damage)
-
-    # grassy terrain healing
-    grass_healing = (is_floating - 1) / 16 * state.terrain.terrain == TerrainEnum.GRASSY
-    take_damage_percent(state, idx, grass_healing)
-
-    # status damage
-    # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
-    status_damage = (1 / 8 * (active.status==Status.POISON) +
-                     1 / 16 * (active.status==Status.BURN) +
-                     state.toxic_counter / 16 * (active.status==Status.TOXIC))
-    state = take_damage_percent(state, idx, status_damage)
-    return state
 
 def step_field(
     key: chex.PRNGKey,

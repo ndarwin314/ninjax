@@ -23,6 +23,7 @@ class Move(DataclassArray):
     priority: IntArray['*batch_shape 1']
     offensive_stat: IntArray['*batch_shape 1']
     defensive_stat: IntArray['*batch_shape 1']
+    crit_stage: IntArray['*batch_shape 1']
 
 
 

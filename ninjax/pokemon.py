@@ -12,7 +12,6 @@ from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum, Type, Status
 from dataclass_array import DataclassArray, dataclass_array
 from dataclass_array.typing import FloatArray, IntArray, BoolArray
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP
 
 @dataclass_array(broadcast=True, cast_list=True)
 class Pokemon(DataclassArray):
@@ -26,7 +25,7 @@ class Pokemon(DataclassArray):
     gender: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
     is_terastallized: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
     status: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    #ability: IntArray['*batch_size'] = jnp.int32([0])
+    ability: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     #item: IntArray['*batch_size'] = jnp.int32([0])
     stat_table: StatTable = StatTable()
     # this is a hack. we
@@ -53,9 +52,6 @@ class Pokemon(DataclassArray):
             stat_table=stat_table, current_hp=current_hp
         )
         return new_obj
-
-
-
 
     @property
     def stats(self):

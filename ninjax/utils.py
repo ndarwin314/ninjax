@@ -24,6 +24,7 @@ denominators = 2 * np.ones(13) - np.fmin(range_, 0)
 STAT_MULTIPLIER_LOOKUP = jnp.array(numerators / denominators)
 ACCURACY_MULTIPLIER_LOOKUP = jnp.array((1 + numerators) / (1 + denominators))
 TERRAIN_MULTIPLIER = 1.3
+CRIT_STAGES = jnp.array([1/24, 1/8, 1,2, 1, 1])
 
 TYPE_EFFECTIVENESS = jnp.array(
     [
@@ -69,6 +70,9 @@ def base_damage_compute(
         defence_stat: int,
         base_power: int):
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
+
+def conditional_mult_round(damage, mult, cond):
+    return jnp.floor(damage * mult ** cond + 1 / 2)
 
 
 
