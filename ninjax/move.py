@@ -25,6 +25,14 @@ class Move(DataclassArray):
     defensive_stat: IntArray['*batch_shape 1']
     crit_stage: IntArray['*batch_shape 1']
 
+    def reduce_pp(self, index, increment):
+        return self.replace(current_pp=self.current_pp.at[index].subtract(increment))
+
+    def set_pp(self, index, value):
+        return self.replace(current_pp=self.current_pp.at[index].set(value))
+
+
+
 
 
 

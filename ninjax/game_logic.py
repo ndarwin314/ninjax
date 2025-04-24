@@ -276,6 +276,12 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     # decrement pp
     # theoretically the legal action mask should prevent us from using the move if its at 0 so we dont need to clip
     move = move.replace(current_pp=move.current_pp-1)
+    active = state.active[attacker_index]
+    new_pp = active.moves.current_pp.at[move_index].subtract(1)
+    new_moves = active.moves.replace(current_pp=new_pp)
+    active = active.replace(moves=new_moves)
+    state = update_active(state, attacker_index, active)
+
 
     # check if move hits
     key, subkey = random.split(key)

@@ -32,7 +32,7 @@ class Pokemon(DataclassArray):
     current_hp: IntArray['*batch_size 1'] = stat_table.stats[...,0].reshape(1)
     # add stats conditions and volatile status conditions
 
-    def replace_row(self, idx: int, new_pokemon: "Pokemon"):
+    def replace_row(self, idx, new_pokemon: "Pokemon"):
         # unfortunately this is literally the best way i can think of to do this
         # it saves ugliness everywhere else
         # with the cost of needing to update all fields manually like this
@@ -45,11 +45,13 @@ class Pokemon(DataclassArray):
         gender = self.gender.at[idx].set(new_pokemon.gender)
         is_terastallized = self.is_terastallized.at[idx].set(new_pokemon.is_terastallized)
         status = self.status.at[idx].set(new_pokemon.status)
+        ability = self.ability.at[idx].set(new_pokemon.ability)
         stat_table = self.stat_table.row_update(idx, new_pokemon.stat_table)
         current_hp = self.current_hp.at[idx].set(new_pokemon.current_hp)
+        moves = self.moves.set_pp(idx, new_pokemon.moves.current_pp)
         new_obj = self.replace(
             type_list=type, is_alive=is_alive, gender=gender, is_terastallized=is_terastallized, status=status,
-            stat_table=stat_table, current_hp=current_hp
+            stat_table=stat_table, current_hp=current_hp, ability=ability, moves=moves
         )
         return new_obj
 
