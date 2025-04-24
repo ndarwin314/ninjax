@@ -85,13 +85,18 @@ class AbilityEnum(IntEnum):
     DAMP = auto()
     ADAPTABILITY = auto() # done
     LIMBER = auto()
-    SAND_VEIL = auto()
+    SAND_VEIL = auto() # done
+    SNOW_CLOAK = auto() # done
     STATIC = auto()
-    VOLT_ABSORB = auto()
-    WATER_ABSORB = auto()
-    FLASH_FIRE = auto()
-    STORM_DRAIN = auto()
-    EARTH_EATER = auto()
-    LIGHTNING_ROD = auto()
-    SAP_SIPPER = auto()
+    VOLT_ABSORB = auto() # done
+    WATER_ABSORB = auto() # done
+    FLASH_FIRE = auto() # done
+    STORM_DRAIN = auto() # done
+    EARTH_EATER = auto() # done
+    LIGHTNING_ROD = auto() # done
+    SAP_SIPPER = auto() # done
+    OBLIVIOUS = auto()
+    CLOUD_NINE = auto()
+    COMPOUND_EYES = auto() # done
+    NO_GUARD = auto() # done
 

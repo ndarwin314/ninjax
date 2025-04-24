@@ -25,6 +25,8 @@ STAT_MULTIPLIER_LOOKUP = jnp.array(numerators / denominators)
 ACCURACY_MULTIPLIER_LOOKUP = jnp.array((1 + numerators) / (1 + denominators))
 TERRAIN_MULTIPLIER = 1.3
 CRIT_STAGES = jnp.array([1/24, 1/8, 1,2, 1, 1])
+COMPOUND_EYES_MULTIPLIER = 5325/4096
+WEATHER_VEIL_MODIFIER = 3277/4096
 
 TYPE_EFFECTIVENESS = jnp.array(
     [
@@ -72,7 +74,10 @@ def base_damage_compute(
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
 
 def conditional_mult_round(damage, mult, cond):
-    return jnp.floor(damage * mult ** cond + 1 / 2)
+    return jnp.floor(conditional_mult(damage, mult, cond) + 0.5)
+
+def conditional_mult(value, mult, cond):
+    return value * jnp.power(mult, cond)
 
 
 

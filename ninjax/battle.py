@@ -14,7 +14,8 @@ from ninjax.side import BattleState, update_active
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain
 from ninjax.move import Move, MoveType
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
-                               do_stat_boost_from_move, do_status_move, do_flash_fire_from_move)
+                               do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
+                               move_used)
 
 
 Binary = (0,1)
@@ -54,7 +55,6 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         actions: (int, int),
         params: BattleParams,
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        # the fun part :))))
         act1, act2 = actions
         # TODO: stupid action order code probably needs to be rewritten to be more jax-y
         first, second = action_order(state, actions)
@@ -108,7 +108,7 @@ def switch_move_step(
     key: chex.PRNGKey,
     state: BattleState,
     actions: (int, int)
-):
+) -> (chex.PRNGKey, BattleState):
     bad = True
     mask = jnp.ones((2, 15))
     for i in range(2):
@@ -155,7 +155,7 @@ def step_move(
     state: BattleState,
     player_idx: int,
     index: int,
-    is_tera: bool):
+    is_tera: bool) -> (chex.PRNGKey, BattleState):
     # this, or something this calls is probably going to be the most complex function
     # for now im just going to implement a simplistic version
     # TODO: add the tera part of move
@@ -166,36 +166,18 @@ def step_move(
     # 3. unaware for both
     # 4. guts/facade
     # 7. various crit damage and rate multipliers
-    active = state.active
-    attacker = active[player_idx]
-    defender = active[1 - player_idx]
-    move = attacker.moves[index]
+    attacker = state.active[player_idx]
 
     # do tera stuff
     can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
     attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
     state = update_active(state, player_idx, attacker)
 
-    # decide branch to execute based on ability immunities
-    ability = defender.ability
-    branches = [do_move_damage,
-                do_status_move,
-                do_stat_boost_from_move,
-                do_flash_fire_from_move,
-                do_healing_from_move]
-    is_flash_fire = ability==AbilityEnum.FLASH_FIRE and move.type==Type.FIRE
-    is_spa_boost = (ability==AbilityEnum.STORM_DRAIN and move.type==Type.WATER or
-                    ability==AbilityEnum.LIGHTNING_ROD and move.type==Type.ELECTRIC)
-    is_attack_boost = ability==AbilityEnum.SAP_SIPPER and move.type==Type.GRASS
-    is_heal = (ability==AbilityEnum.WATER_ABSORB and move.type==Type.WATER or
-               ability==AbilityEnum.VOLT_ABSORB and move.type==Type.ELECTRIC or
-               ability==AbilityEnum.EARTH_EATER and move.type==Type.GROUND)
-    is_status = move.move_type==MoveType.STATUS * (1-(is_flash_fire or is_spa_boost or is_attack_boost or is_heal))
-    # this feels really hacky way to compute this but :shrug:
-    branch_index = is_status + (is_spa_boost or is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
+    # add check for if move happens because of flinch, sleep, paralysis, etc here
+    is_interrupted = False
+    key, state = jax.lax.cond(is_interrupted, move_interrupted, move_used, key, state, player_idx, index)
 
-    # i think using a switch means we skip evaluating the branches we don't need
-    return jax.lax.switch(branch_index, branches, state, key, player_idx, move, 1 + 3*is_spa_boost)
+    return key, state
 
 
 def step_switch(
@@ -203,10 +185,11 @@ def step_switch(
     state: BattleState,
     player_index: int,
     index: int,
-    is_tera: bool):
+    is_tera: bool
+) -> (chex.PRNGKey, BattleState):
     # switch needs to access the battle state because opponent switching triggers annoying things
     # TODO: add an opponent switched field somewhere for stakeout + analytic
-    return key, swap_out(state, player_index, index)
+    return swap_out(state, player_index, index), key
 
 
 def step_action(

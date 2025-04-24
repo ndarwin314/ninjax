@@ -2,13 +2,14 @@ import jax
 import jax.random as random
 import jax.numpy as jnp
 import chex
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
 from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
-from ninjax.utils import conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES, calculate_effectiveness_multiplier
+from ninjax.utils import (conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,
+                          calculate_effectiveness_multiplier, COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER)
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array ,is_attack_damage) -> BattleState:
@@ -25,9 +26,9 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array 
     # idk if that should be handled here or elsewhere
     return update_active(state, defender_idx, active)
 
-def take_damage_percent(side: BattleState, defender_idx , percent: chex.Array) -> BattleState:
-    damage = jnp.round(side.active.max_hp * percent).astype(int)
-    return take_damage_value(side, defender_idx, damage, False)
+def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
+    damage = jnp.round(state.active.max_hp * percent).astype(int)
+    return take_damage_value(state, defender_idx, damage, False)
 
 def set_status(state: BattleState, side_idx, status: Status):
     active = state[side_idx].active
@@ -98,7 +99,7 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     base_damage = conditional_mult_round(base_damage, 0.5, is_burned and is_physical)
     return base_damage
 
-def do_move_damage(state: BattleState, key: chex.PRNGKey, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     attacker = state.active[player_idx]
 
     # base power modifications, technician, tera, terrain etc
@@ -118,23 +119,23 @@ def do_move_damage(state: BattleState, key: chex.PRNGKey, player_idx, move: Move
 
     return key, state
 
-def do_status_move(state: BattleState, key: chex.PRNGKey, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     # this is gonna be a pain
-    return state, key
+    return key, state
 
 # this is for when water absorb or volt absorb is triggered
-def do_healing_from_move(state: BattleState, key: chex.PRNGKey, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     state = take_damage_percent(state, 1-player_idx, -1/4)
-    return state, key
+    return key,state
 
-def do_stat_boost_from_move(state: BattleState, key: chex.PRNGKey, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     state = add_boosts(state, 1-player_idx, stat_index, 1)
-    return state, key
+    return key, state
 
 
-def do_flash_fire_from_move(state: BattleState, key: chex.PRNGKey, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     # TODO: i dont want to do volatile status
-    return state, key
+    return key, state
 
 def end_turn_damage(state: BattleState) -> BattleState:
     # TODO: the order of all these updates is probably incorrect
@@ -174,7 +175,7 @@ def swap_out(
     state: BattleState,
     side_idx,
     new_active: int
-) -> (chex.PRNGKey, BattleState):
+) -> BattleState:
     # swaps the active pokemon and does appropriate things like
     # 1. clearing volatile statuses
     # 2. resting boosts
@@ -201,7 +202,7 @@ def swap_out(
     state = take_damage_percent(
         state,
         side_idx,
-        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, side_idx, active.type_list) / 8
+        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8
     )
 
     # spikes
@@ -259,3 +260,73 @@ def step_side_conditions(
         toxic_counter=toxic_counter
     )
     return key, state
+
+
+
+def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+    # TODO: eventually we will need to figure out we handle observations and include it here
+    return key, state
+
+def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+    move = state.active[attacker_index].moves[move_index]
+
+    # decrement pp
+    # theoretically the legal action mask should prevent us from using the move if its at 0 so we dont need to clip
+    move = move.replace(current_pp=move.current_pp-1)
+
+    # check if move hits
+    key, subkey = random.split(key)
+    r = random.uniform(subkey)
+    active = state.active
+    defender_ability = active[1 - attacker_index].ability
+    attacker_ability = active[attacker_index].ability
+    weather = state.weather.weather
+    accuracy = (move.accuracy *
+                ACCURACY_MULTIPLIER_LOOKUP[6 + state.boosts.acc_boosts[attacker_index, 0]] *
+                ACCURACY_MULTIPLIER_LOOKUP[6 - state.boosts.acc_boosts[1 - attacker_index, 1]])
+    veil_active = ((defender_ability==AbilityEnum.SAND_VEIL and weather==WeatherEnum.SANDSTORM) or
+                   (defender_ability==AbilityEnum.SNOW_CLOAK and weather==WeatherEnum.SNOW))
+    conditions = jnp.array(
+        [attacker_ability==AbilityEnum.COMPOUND_EYES,
+         veil_active])
+    modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER])
+    accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
+    no_guard_active = defender_ability==AbilityEnum.NO_GUARD or attacker_ability==AbilityEnum.NO_GUARD
+    accuracy = jnp.clip(accuracy, no_guard_active, 1)
+
+    # choose function based on if move hits
+    return jax.lax.cond(r <= accuracy, move_hits, move_misses, key, state, attacker_index, move_index)
+
+
+
+
+def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+    # decide branch to execute based on ability immunities
+    defender = state.active[1 - attacker_index]
+    move = state.active[attacker_index].moves[move_index]
+    ability = defender.ability
+    branches = [do_move_damage,
+                do_status_move,
+                do_stat_boost_from_move,
+                do_flash_fire_from_move,
+                do_healing_from_move]
+    is_flash_fire = ability == AbilityEnum.FLASH_FIRE and move.type == Type.FIRE
+    is_spa_boost = (ability == AbilityEnum.STORM_DRAIN and move.type == Type.WATER or
+                    ability == AbilityEnum.LIGHTNING_ROD and move.type == Type.ELECTRIC)
+    is_attack_boost = ability == AbilityEnum.SAP_SIPPER and move.type == Type.GRASS
+    is_heal = (ability == AbilityEnum.WATER_ABSORB and move.type == Type.WATER or
+               ability == AbilityEnum.VOLT_ABSORB and move.type == Type.ELECTRIC or
+               ability == AbilityEnum.EARTH_EATER and move.type == Type.GROUND)
+    is_status = move.move_type == MoveType.STATUS * (1 - (is_flash_fire or is_spa_boost or is_attack_boost or is_heal))
+    # this feels really hacky way to compute this but :shrug:
+    branch_index = is_status + (is_spa_boost or is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
+
+    # i think using a switch means we skip evaluating the branches we don't need
+    # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
+    return jax.lax.switch(branch_index, branches, key, state, attacker_index, move, 1 + 3 * is_spa_boost)
+
+def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+    return key, state
+
+
+
