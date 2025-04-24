@@ -50,6 +50,15 @@ TYPE_EFFECTIVENESS = jnp.array(
         [1, 1, 1/2, 1/2, 1/2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1/2, 2],
         [1, 1, 1/2, 1, 1, 1, 1, 2, 1/2, 1, 1, 1, 1, 1, 1, 2, 2, 1/2, 1]])
 
+def triple_and(a, b, c):
+    return jnp.logical_and(jnp.logical_and(a, b), c)
+
+def triple_or(a, b, c):
+    return jnp.logical_or(jnp.logical_or(a, b), c)
+
+def quad_or(a, b, c, d):
+    return jnp.logical_or(a, jnp.logical_and(jnp.logical_and(b, c), d))
+
 def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array:
     return jnp.prod(TYPE_EFFECTIVENESS[attacking_type][defending_types])
 

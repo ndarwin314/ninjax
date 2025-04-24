@@ -103,7 +103,7 @@ class BattleState(DataclassArray):
 # TODO: these all need to be rewritten i think
 def set_boosts(state: BattleState, side_idx, new_boosts):
     new_boosts = state.boosts.replace_row(side_idx, new_boosts)
-    return state.replace(stat_boosts=new_boosts)
+    return state.replace(boosts=new_boosts)
 
 def clear_boosts(state: BattleState, side_idx) -> BattleState:
     return set_boosts(state, side_idx, StatBoosts())

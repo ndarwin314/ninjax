@@ -8,8 +8,9 @@ from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnu
 from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
-from ninjax.utils import (conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,
-                          calculate_effectiveness_multiplier, COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER)
+from ninjax.utils import (
+    conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
+    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or)
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array ,is_attack_damage) -> BattleState:
@@ -17,7 +18,7 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array 
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     health_full = active.current_hp==active.max_hp
     is_sturdy = active.ability==AbilityEnum.STURDY
-    new_health = jax.lax.clamp(0, (active.current_hp[defender_idx]-damage), active.max_hp - health_full*is_sturdy*is_attack_damage)
+    new_health = jax.lax.clamp(0, (active.current_hp-damage), active.max_hp - health_full*is_sturdy*is_attack_damage)
     # check to make sure we don't accidentally revive a pokemon
     alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
     active = active.replace(current_hp=new_health, is_alive=alive)
@@ -27,7 +28,7 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array 
     return update_active(state, defender_idx, active)
 
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
-    damage = jnp.round(state.active.max_hp * percent).astype(int)
+    damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
     return take_damage_value(state, defender_idx, damage, False)
 
 def set_status(state: BattleState, side_idx, status: Status):
@@ -40,11 +41,11 @@ def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     is_grounded = 1 - attacker.is_floating
     terrain = state.terrain.terrain
     # grassy terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.GRASS and terrain==TerrainEnum.GRASSY)
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.GRASS, terrain==TerrainEnum.GRASSY))
     # psychic terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.PSYCHIC and terrain==TerrainEnum.PSYCHIC)
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.PSYCHIC, terrain==TerrainEnum.PSYCHIC))
     # electric terrain
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, is_grounded and move.type == Type.ELECTRIC and terrain==TerrainEnum.ELECTRIC)
+    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.ELECTRIC, terrain==TerrainEnum.ELECTRIC))
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
@@ -83,11 +84,13 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     base_damage = conditional_mult_round(base_damage, damage_roll, 1)
     # stab multiplier
     # TODO: this logic can probably be simplified
-    is_tera_boosted = attacker.is_terastallized and attacker.tera_type == move.type
-    is_matching_tera = is_tera_boosted and jnp.any(attacker.type_list == attacker.tera_type)
-    is_stab = jnp.any(attacker.type_list == move.type) or is_tera_boosted
+    is_tera_boosted = jnp.logical_and(attacker.is_terastallized, attacker.tera_type == move.type)
+    is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
+    is_stab = jnp.logical_or(jnp.any(attacker.type_list == move.type), is_tera_boosted)
     is_adaptability_boosted = attacker.ability==AbilityEnum.ADAPTABILITY * is_stab
-    stab_multiplier = 1.5 + 0.5 * (is_matching_tera or is_adaptability_boosted) + 0.25 * (is_matching_tera and is_adaptability_boosted)
+    stab_multiplier = (1.5 +
+                       0.5 * jnp.logical_or(is_matching_tera, is_adaptability_boosted) +
+                       0.25 * jnp.logical_and(is_matching_tera, is_adaptability_boosted))
     base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
@@ -96,7 +99,7 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
-    base_damage = conditional_mult_round(base_damage, 0.5, is_burned and is_physical)
+    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_burned, is_physical))
     return base_damage
 
 def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
@@ -284,20 +287,21 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     accuracy = (move.accuracy *
                 ACCURACY_MULTIPLIER_LOOKUP[6 + state.boosts.acc_boosts[attacker_index, 0]] *
                 ACCURACY_MULTIPLIER_LOOKUP[6 - state.boosts.acc_boosts[1 - attacker_index, 1]])
-    veil_active = ((defender_ability==AbilityEnum.SAND_VEIL and weather==WeatherEnum.SANDSTORM) or
-                   (defender_ability==AbilityEnum.SNOW_CLOAK and weather==WeatherEnum.SNOW))
+    veil_active = jnp.logical_or(
+        jnp.logical_and(defender_ability==AbilityEnum.SAND_VEIL, weather==WeatherEnum.SANDSTORM),
+        jnp.logical_and(defender_ability==AbilityEnum.SNOW_CLOAK, weather==WeatherEnum.SNOW))
     conditions = jnp.array(
-        [attacker_ability==AbilityEnum.COMPOUND_EYES,
+        [jnp.equal(attacker_ability,AbilityEnum.COMPOUND_EYES),
          veil_active])
     modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER])
     accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
-    no_guard_active = defender_ability==AbilityEnum.NO_GUARD or attacker_ability==AbilityEnum.NO_GUARD
+    no_guard_active = jnp.logical_or(
+        jnp.equal(defender_ability, AbilityEnum.NO_GUARD),
+        jnp.equal(attacker_ability, AbilityEnum.NO_GUARD))
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
 
     # choose function based on if move hits
-    return jax.lax.cond(r <= accuracy, move_hits, move_misses, key, state, attacker_index, move_index)
-
-
+    return jax.lax.cond(jnp.less_equal(r, accuracy)[0], move_hits, move_misses, key, state, attacker_index, move_index)
 
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
@@ -310,20 +314,23 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
                 do_stat_boost_from_move,
                 do_flash_fire_from_move,
                 do_healing_from_move]
-    is_flash_fire = ability == AbilityEnum.FLASH_FIRE and move.type == Type.FIRE
-    is_spa_boost = (ability == AbilityEnum.STORM_DRAIN and move.type == Type.WATER or
-                    ability == AbilityEnum.LIGHTNING_ROD and move.type == Type.ELECTRIC)
-    is_attack_boost = ability == AbilityEnum.SAP_SIPPER and move.type == Type.GRASS
-    is_heal = (ability == AbilityEnum.WATER_ABSORB and move.type == Type.WATER or
-               ability == AbilityEnum.VOLT_ABSORB and move.type == Type.ELECTRIC or
-               ability == AbilityEnum.EARTH_EATER and move.type == Type.GROUND)
-    is_status = move.move_type == MoveType.STATUS * (1 - (is_flash_fire or is_spa_boost or is_attack_boost or is_heal))
+    is_flash_fire = jnp.logical_and(ability==AbilityEnum.FLASH_FIRE, move.type==Type.FIRE)
+    is_spa_boost = jnp.logical_or(
+        jnp.logical_and(AbilityEnum.STORM_DRAIN==ability, Type.WATER==move.type),
+        jnp.logical_and(ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC))
+    is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
+    is_heal = jnp.logical_or(
+        jnp.logical_or(
+            jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
+            jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC)),
+            jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND))
+    is_status = move.move_type == MoveType.STATUS * (1 - quad_or(is_flash_fire, is_spa_boost, is_attack_boost, is_heal))
     # this feels really hacky way to compute this but :shrug:
-    branch_index = is_status + (is_spa_boost or is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
+    branch_index = is_status + jnp.logical_or(is_spa_boost, is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
 
     # i think using a switch means we skip evaluating the branches we don't need
     # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
-    return jax.lax.switch(branch_index, branches, key, state, attacker_index, move, 1 + 3 * is_spa_boost)
+    return jax.lax.switch(branch_index[0], branches, key, state, attacker_index, move, 1 + 3 * is_spa_boost)
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
     return key, state

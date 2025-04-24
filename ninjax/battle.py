@@ -176,7 +176,6 @@ def step_move(
     # add check for if move happens because of flinch, sleep, paralysis, etc here
     is_interrupted = False
     key, state = jax.lax.cond(is_interrupted, move_interrupted, move_used, key, state, player_idx, index)
-
     return key, state
 
 

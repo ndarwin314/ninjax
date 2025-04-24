@@ -6,7 +6,13 @@ import jax.numpy as jnp
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
 
-class Type(IntEnum):
+class JaxEnum(IntEnum):
+    def __eq__(self, other):
+        return jnp.equal(self, other)
+    def __hash__(self):
+        return self.value
+
+class Type(JaxEnum):
     NONE = 0
     NORMAL = auto()
     FIRE = auto()
@@ -28,12 +34,12 @@ class Type(IntEnum):
     FAIRY = auto()
 
 
-class MoveType(IntEnum):
+class MoveType(JaxEnum):
     PHYSICAL = 0
     SPECIAL = 1
     STATUS = 2
 
-class StatEnum(IntEnum):
+class StatEnum(JaxEnum):
     HP = 0
     ATTACK = 1
     DEFENSE = 2
@@ -41,25 +47,25 @@ class StatEnum(IntEnum):
     SPECIAL_DEFENSE = 4
     SPEED = 5
 
-class AccuracyEnum(IntEnum):
+class AccuracyEnum(JaxEnum):
     ACCURACY = 0
     EVASION = 1
 
-class WeatherEnum(IntEnum):
+class WeatherEnum(JaxEnum):
     NONE = 0
     RAIN = 1
     SUN = 2
     SANDSTORM = 3
     SNOW = 4
 
-class TerrainEnum(IntEnum):
+class TerrainEnum(JaxEnum):
     NONE = 0
     ELECTRIC = 1
     GRASSY = 2
     PSYCHIC = 3
     MISTY = 4
 
-class Status(IntEnum):
+class Status(JaxEnum):
     NONE = 0
     BURN = 1
     PARALYZE = 2
@@ -68,12 +74,12 @@ class Status(IntEnum):
     POISON = 5
     TOXIC = 6
 
-class TurnType(IntEnum):
+class TurnType(JaxEnum):
     STANDARD = 0
     SWITCH_MOVE = 1
     END_SWITCH = 2
 
-class AbilityEnum(IntEnum):
+class AbilityEnum(JaxEnum):
     STENCH = auto() # need to implement flinching first
     DRIZZLE = auto() # done
     DROUGHT = auto() # done

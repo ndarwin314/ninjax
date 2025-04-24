@@ -57,17 +57,6 @@ class StatTable(DataclassArray):
     base_stats: IntArray['*batch_size 6'] = field(default_factory=lambda: 100 * jnp.ones(6, dtype=int32))
     ivs: IntArray['*batch_size 6'] = field(default_factory=lambda: 31*jnp.ones(6, dtype=int32))
     evs: IntArray['*batch_size 6'] = field(default_factory=lambda: 84*jnp.ones(6, dtype=int32))
-    # this seems to be the cleanest way to implement these since they need fancy initialization
-    stats: IntArray['*batch_size 6'] = field(init=False, default=None)
-
-    def __post_init__(self) -> None:
-        # make sure to call the super function, you fool, you absolute buffoon
-        super().__post_init__()
-        # use __setattr__ manually instead of attribute assignment since the class is frozen
-        # is equivalent to the following code
-        # self.stats = calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs))
-        # self.current_hp = self.stats[0]
-        object.__setattr__(self, 'stats', calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs))
 
     def row_update(self, idx: int, new_stats: 'StatTable'):
         level = self.level.at[idx].set(new_stats.level)
@@ -76,6 +65,10 @@ class StatTable(DataclassArray):
         nature = self.nature.row_update(idx, new_stats.nature)
         # so this is a problem because we calculate the current_hp in the post_init which runs even when we call replace
         return self.replace(level=level, nature=nature, ivs=ivs, evs=evs)
+
+    @property
+    def stats(self):
+        return calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs)
 
 
 
