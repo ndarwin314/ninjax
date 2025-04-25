@@ -60,7 +60,8 @@ def quad_or(a, b, c, d):
     return jnp.logical_or(a, jnp.logical_and(jnp.logical_and(b, c), d))
 
 def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array:
-    return jnp.prod(TYPE_EFFECTIVENESS[attacking_type][defending_types])
+    temp = TYPE_EFFECTIVENESS[attacking_type, defending_types]
+    return jnp.prod(temp)
 
 def calculate_stats(level: Array, nature: "Nature", base_stats: Array, ivs: Array, evs: Array):
     # initial part of compute

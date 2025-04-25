@@ -7,7 +7,7 @@ import dataclass_array as dca
 from ninjax.battle import Battle, BattleState, BattleParams, step_move
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import Type, MoveType
-from ninjax.game_logic import move_used
+from ninjax.game_logic import move_used, do_move_damage
 from ninjax.move import Move
 from ninjax.stats import StatTable, Nature, StatBoosts
 from ninjax.side import BattleState
@@ -17,7 +17,7 @@ from ninjax.side import BattleState
 def battle_state():
     jax.config.update("jax_traceback_filtering", "off")
 
-    type_list = jnp.array([1, 2])
+    type_list = jnp.array([Type.FIRE, Type.ROCK])
     moves = Move(
         move_type=jnp.zeros((4, 1)),
         max_pp=8 * jnp.ones((4, 1)),
@@ -35,7 +35,7 @@ def battle_state():
     mons = dca.stack([mon for _ in range(6)])
     mons = dca.stack([mons, mons])
     state = BattleState(team=mons)
-    key = random.key(0)
+    key = random.key(5)
     battle = Battle()
     params = BattleParams()
     return key, state
@@ -102,8 +102,37 @@ class TestStats:
 
         mon = Pokemon(type_list=type_list, moves=moves)
         mons = dca.stack([mon for _ in range(6)])
-        mons = dca.stack([mons, mons])
+        bad = Pokemon(type_list=jnp.array((0,0)), moves=moves)
+        bads = dca.stack([mon for _ in range(6)])
+        mons = dca.stack([bads, mons])
         boosts = StatBoosts(normal_boosts=stage*jnp.ones((2,6), dtype=int))
         state = BattleState(team=mons, boosts=boosts)
         boosted_stats = state.boosted_stats[0]
         assert boosted_stats[1]==stat
+
+class TestDamage:
+    @pytest.mark.parametrize(
+        "type, health",
+        [(Type.GHOST, 293),
+         (Type.FIGHTING, 224),
+         (Type.GROUND, 86),
+         (Type.FLYING, 328),
+         (Type.FIRE, 345)]
+    )
+    def test_damage_no_modifiers(self, battle_state, type, health):
+        key, state = battle_state
+        move = Move(
+            move_type=jnp.zeros((1,)),
+            max_pp=8 * jnp.ones((1,)),
+            current_pp=8 * jnp.ones((1,)),
+            type=Type.GHOST * jnp.ones((1,)),
+            base_power=80 * jnp.ones((1,)),
+            accuracy=jnp.ones((1,)),
+            priority=jnp.zeros((1,)),
+            offensive_stat=jnp.ones((1,)),
+            defensive_stat=4 * jnp.ones((1,)),
+            crit_stage=jnp.zeros((1,))
+        )
+        key, state = do_move_damage(key, state, 0, move, 0)
+        assert state.active[1].current_hp[0]==293
+

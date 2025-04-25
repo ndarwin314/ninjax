@@ -75,7 +75,7 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     key, one, two = random.split(key, num=3)
     # crit multiplier
     # battle armor prevents crits
-    crit_chance = CRIT_STAGES[move.crit_stage] * defender.ability != AbilityEnum.BATTLE_ARMOR
+    crit_chance = CRIT_STAGES[move.crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
     is_crit = random.uniform(one) < crit_chance
     crit_multiplier = 1.5
     # damage roll, idc about preserving the in game RNG generation
