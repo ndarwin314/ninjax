@@ -87,7 +87,7 @@ class AbilityEnum(JaxEnum):
     SNOW_WARNING = auto() # done
     SPEED_BOOST = auto()
     BATTLE_ARMOR = auto() # done
-    STURDY = auto() # done
+    STURDY = auto() # donepy
     DAMP = auto()
     ADAPTABILITY = auto() # done
     LIMBER = auto()
@@ -105,4 +105,12 @@ class AbilityEnum(JaxEnum):
     CLOUD_NINE = auto()
     COMPOUND_EYES = auto() # done
     NO_GUARD = auto() # done
-
+    INSOMNIA = auto()
+    COLOR_CHANGE = auto()
+    IMMUNITY = auto()
+    SHIELD_DUST = auto()
+    OWN_TEMPO = auto()
+    SUCTION_CUPS = auto()
+    INTIMIDATE = auto()
+    SHADOW_TAG = auto()
+    ROUGH_SKIN = auto()

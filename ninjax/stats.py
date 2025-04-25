@@ -1,17 +1,11 @@
-from typing import Union, Tuple, Dict, Any
-from collections import namedtuple
 from dataclasses import field
 import dataclass_array as dca
 
 
-import chex
-from flax import struct
 import jax
 import jax.numpy as jnp
-import numpy as np
 from dataclass_array import DataclassArray
 from dataclass_array.typing import FloatArray, IntArray
-from flax.core import broadcast
 
 from ninjax.enum_types import StatEnum
 from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
@@ -19,6 +13,7 @@ from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
 Array = jax.Array
 int32 = jnp.int32
 
+@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
 class Nature(DataclassArray):
     increased: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([1]))
     decreased: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([1]))
@@ -28,7 +23,7 @@ class Nature(DataclassArray):
         decreased = self.decreased.at[idx].set(new_nature.decreased)
         return self.replace(increased=increased, decreased=decreased)
 
-
+@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
 class StatBoosts(DataclassArray):
     normal_boosts: IntArray['*batch_size 6'] = field(default_factory=lambda: jnp.zeros(6, dtype=int32))
     acc_boosts: IntArray['*batch_size 2'] = field(default_factory=lambda: jnp.zeros(2, dtype=int32))
@@ -50,7 +45,7 @@ class StatBoosts(DataclassArray):
         acc_boosts = self.acc_boosts + other.acc_boosts
         return StatBoosts(normal_boosts=normal_boosts, acc_boosts=acc_boosts)
 
-@dca.dataclass_array(cast_dtype=True, broadcast=True)
+@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
 class StatTable(DataclassArray):
     level: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([100]))
     nature: Nature = Nature()
