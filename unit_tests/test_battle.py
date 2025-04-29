@@ -6,12 +6,35 @@ import dataclass_array as dca
 
 from ninjax.battle import Battle, BattleState, BattleParams, step_move
 from ninjax.pokemon import Pokemon
-from ninjax.enum_types import Type, MoveType
+from ninjax.enum_types import Type, MoveType, Status, AbilityEnum
 from ninjax.game_logic import move_used, do_move_damage
 from ninjax.move import Move
 from ninjax.stats import StatTable, Nature, StatBoosts
 from ninjax.side import BattleState
 
+
+@pytest.fixture
+def neutral_type():
+    type_list = jnp.array([0,0])
+    moves = Move(
+        move_type=jnp.zeros((4, 1)),
+        max_pp=8 * jnp.ones((4, 1)),
+        current_pp=8 * jnp.ones((4, 1)),
+        type=jnp.ones((4, 1)),
+        base_power=80 * jnp.ones((4, 1)),
+        accuracy=jnp.ones((4, 1)),
+        priority=jnp.zeros((4, 1)),
+        offensive_stat=jnp.ones((4, 1)),
+        defensive_stat=4 * jnp.ones((4, 1)),
+        crit_stage=jnp.zeros((4, 1))
+    )
+
+    mon = Pokemon(type_list=type_list, moves=moves)
+    mons = dca.stack([mon for _ in range(6)])
+    mons = dca.stack([mons, mons])
+    state = BattleState(team=mons)
+    key = random.key(5)
+    return key, state
 
 @pytest.fixture
 def battle_state():
@@ -33,7 +56,9 @@ def battle_state():
 
     mon = Pokemon(type_list=type_list, moves=moves)
     mons = dca.stack([mon for _ in range(6)])
-    mons = dca.stack([mons, mons])
+    bad = Pokemon(type_list=jnp.array((Type.GRASS, 0)), moves=moves)
+    bads = dca.stack([bad for _ in range(6)])
+    mons = dca.stack([bads, mons])
     state = BattleState(team=mons)
     key = random.key(5)
     battle = Battle()
@@ -102,9 +127,6 @@ class TestStats:
 
         mon = Pokemon(type_list=type_list, moves=moves)
         mons = dca.stack([mon for _ in range(6)])
-        bad = Pokemon(type_list=jnp.array((0,0)), moves=moves)
-        bads = dca.stack([mon for _ in range(6)])
-        mons = dca.stack([bads, mons])
         boosts = StatBoosts(normal_boosts=stage*jnp.ones((2,6), dtype=int))
         state = BattleState(team=mons, boosts=boosts)
         boosted_stats = state.boosted_stats[0]
@@ -112,20 +134,20 @@ class TestStats:
 
 class TestDamage:
     @pytest.mark.parametrize(
-        "type, health",
+        "type_, health",
         [(Type.GHOST, 293),
          (Type.FIGHTING, 224),
          (Type.GROUND, 86),
          (Type.FLYING, 328),
          (Type.FIRE, 345)]
     )
-    def test_damage_no_modifiers(self, battle_state, type, health):
+    def test_damage_no_modifiers(self, battle_state, type_, health):
         key, state = battle_state
         move = Move(
-            move_type=jnp.zeros((1,)),
+            move_type= jnp.zeros((1,)),
             max_pp=8 * jnp.ones((1,)),
             current_pp=8 * jnp.ones((1,)),
-            type=Type.GHOST * jnp.ones((1,)),
+            type=type_ * jnp.ones((1,)),
             base_power=80 * jnp.ones((1,)),
             accuracy=jnp.ones((1,)),
             priority=jnp.zeros((1,)),
@@ -134,5 +156,60 @@ class TestDamage:
             crit_stage=jnp.zeros((1,))
         )
         key, state = do_move_damage(key, state, 0, move, 0)
-        assert state.active[1].current_hp[0]==293
+        assert state.active[1].current_hp[0]==health
+
+
+    def test_damage_stab(self, battle_state):
+        key, state = battle_state
+        move = Move(
+            move_type=jnp.zeros((1,)),
+            max_pp=8 * jnp.ones((1,)),
+            current_pp=8 * jnp.ones((1,)),
+            type=Type.GRASS * jnp.ones((1,)),
+            base_power=80 * jnp.ones((1,)),
+            accuracy=jnp.ones((1,)),
+            priority=jnp.zeros((1,)),
+            offensive_stat=jnp.ones((1,)),
+            defensive_stat=4 * jnp.ones((1,)),
+            crit_stage=jnp.zeros((1,))
+        )
+        key, state = do_move_damage(key, state, 0, move, 0)
+        assert state.active[1].current_hp[0] == 259
+
+
+    def test_burn_halve_physical(self, neutral_type):
+        key, state = neutral_type
+        teams = state.team.replace(status=Status.BURN*jnp.ones((1,)))
+        state = state.replace(team=teams)
+        key, state = do_move_damage(key, state, 0, state.active[0].moves[0], 0)
+        assert state.active[1].current_hp[0] == 328
+
+    @pytest.mark.parametrize(
+        "is_physical, is_guts, damage",
+        [(0, 0, 293),
+         (1, 0, 328),
+         (0, 1, 293),
+         (1, 1, 260)]
+    )
+    def test_burn(self, neutral_type, is_physical, is_guts, damage):
+        key, state = neutral_type
+        teams = state.team.replace(
+            status=Status.BURN*jnp.ones((1,)),
+            ability=is_guts*AbilityEnum.GUTS*jnp.ones((1,)))
+        state = state.replace(team=teams)
+        move = Move(
+            move_type=(1-is_physical) * jnp.ones((1,)),
+            max_pp=8 * jnp.ones((1,)),
+            current_pp=8 * jnp.ones((1,)),
+            type=jnp.ones((1,)),
+            base_power=80 * jnp.ones((1,)),
+            accuracy=jnp.ones((1,)),
+            priority=jnp.zeros((1,)),
+            offensive_stat=(1+3*(1-is_physical))*jnp.ones((1,)),
+            defensive_stat=(2+3*(1-is_physical)) * jnp.ones((1,)),
+            crit_stage=jnp.zeros((1,))
+        )
+        key, state = do_move_damage(key, state, 0, move, 0)
+        assert state.active[1].current_hp[0] == damage
+
 

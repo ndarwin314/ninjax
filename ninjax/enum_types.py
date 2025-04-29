@@ -114,3 +114,4 @@ class AbilityEnum(JaxEnum):
     INTIMIDATE = auto()
     SHADOW_TAG = auto()
     ROUGH_SKIN = auto()
+    GUTS = auto()

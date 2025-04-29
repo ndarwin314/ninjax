@@ -84,9 +84,12 @@ def base_damage_compute(
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
 
 def conditional_mult_round(damage, mult, cond):
-    return jnp.floor(conditional_mult(damage, mult, cond) + 0.5)
+    # fix correctly rounds down at .5 for all values rather than banker's rounding
+    return jnp.fix(conditional_mult(damage, mult, cond))
 
 def conditional_mult(value, mult, cond):
+    # TODO, there is a buggy thing happening where multiplying a (2,1) array by a (2,) makes a (2,2) instead of (2,1)
+    # this doesnt seem correct to me but i guess its how jax broadcasts so figure out how to deal with that
     return value * jnp.power(mult, cond)
 
 

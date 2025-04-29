@@ -1,19 +1,15 @@
-from typing import Union, Tuple, Dict, Any
 from dataclasses import field
-import dataclass_array as dca
+from dataclass_array import DataclassArray, dataclass_array
+from dataclass_array.typing import IntArray, BoolArray
 
-import chex
-from flax import struct
-import jax
 import jax.numpy as jnp
 
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
-from ninjax.enum_types import StatEnum, Type, Status
-from dataclass_array import DataclassArray, dataclass_array
-from dataclass_array.typing import FloatArray, IntArray, BoolArray
+from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum
+from ninjax.utils import conditional_mult_round
 
-@dataclass_array(broadcast=True, cast_list=True)
+@dataclass_array(broadcast=True, cast_list=True, cast_dtype=True)
 class Pokemon(DataclassArray):
     type_list: IntArray['*batch_size 2']
     moves: Move['*batch_size 4']

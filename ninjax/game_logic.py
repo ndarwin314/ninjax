@@ -53,7 +53,7 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     offensive_stat = boosted_stats[attacker_idx][move.offensive_stat]
     defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
     level = state.active.stat_table.level[attacker_idx]
-    base_damage = ((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2
+    base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
     return base_damage
 
 def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_idx, move: Move, base_damage):
@@ -88,9 +88,10 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
     is_stab = jnp.logical_or(jnp.any(attacker.type_list == move.type), is_tera_boosted)
     is_adaptability_boosted = attacker.ability==AbilityEnum.ADAPTABILITY * is_stab
-    stab_multiplier = (1.5 +
-                       0.5 * jnp.logical_or(is_matching_tera, is_adaptability_boosted) +
-                       0.25 * jnp.logical_and(is_matching_tera, is_adaptability_boosted))
+    stab_multiplier = (
+            1.5 +
+            0.5 * jnp.logical_or(is_matching_tera, is_adaptability_boosted) +
+            0.25 * jnp.logical_and(is_matching_tera, is_adaptability_boosted))
     base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
@@ -99,7 +100,8 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
-    base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_burned, is_physical))
+    is_guts = attacker.ability == AbilityEnum.GUTS
+    base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
     return base_damage
 
 def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):

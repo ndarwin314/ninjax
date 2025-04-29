@@ -85,7 +85,14 @@ class BattleState(DataclassArray):
 
     @property
     def boosted_stats(self):
-        return jnp.floor(self.active.stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
+        active = self.active
+        stats = self.active.stats
+        # squeeze removes dimensions with length 1 which makes this broadcast correctly
+        # its probably going to be helpful to use this in other places
+        is_guts = jnp.logical_and(active.ability==AbilityEnum.GUTS, active.status==Status.BURN).squeeze()
+        temp = conditional_mult_round(stats[...,StatEnum.ATTACK], 1.5, is_guts)
+        stats = stats.at[..., StatEnum.ATTACK].set(temp)
+        return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
 
     @property
     def accuracy_boosts(self):
