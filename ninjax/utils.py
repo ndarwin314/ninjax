@@ -60,6 +60,9 @@ def triple_or(a, b, c):
 def quad_or(a, b, c, d):
     return jnp.logical_or(a, jnp.logical_and(jnp.logical_and(b, c), d))
 
+def in_range(lb, value, ub):
+    return jnp.logical_and(jnp.less(lb, value), jnp.less_equal(value, ub))
+
 def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array:
     temp = TYPE_EFFECTIVENESS[attacking_type, defending_types]
     return jnp.prod(temp)

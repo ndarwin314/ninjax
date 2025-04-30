@@ -18,14 +18,13 @@ Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
 
 
-@struct.dataclass
-class VolatileStatus:
+class VolatileStatus(DataclassArray):
     confused: bool = False
     # TODO this is gonna suck, make sure everything has default values
     def replace_row(self, idx: int, new_status: 'VolatileStatus'):
         return self
 
-@dca.dataclass_array(broadcast=True)
+@dca.dataclass_array(broadcast=True, cast_dtype=True)
 class BattleState(DataclassArray):
     team: Pokemon['*batch_size 6']
     # figure out how to represent no pokemon on field, maybe active_index=-1?
@@ -43,8 +42,8 @@ class BattleState(DataclassArray):
     boosts: StatBoosts = StatBoosts(
         normal_boosts=jnp.zeros((2, 6) ,dtype='int32'),
         acc_boosts=jnp.zeros((2,2), dtype='int32'))
-    legal_action_mask: jax.Array = field(default_factory=lambda: jnp.ones((2, 15)))
-    can_tera: jax.Array = field(default_factory=lambda: jnp.ones(2))
+    legal_action_mask: BoolArray['*batch_size 15'] = field(default_factory=lambda: jnp.ones((2, 15)))
+    can_tera: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.ones(1))
     # notably volatile status needs like wish, healing wish, and future sight things
     # but those are lowish priority
     volatile_status: VolatileStatus = field(default_factory=VolatileStatus) # TODO
@@ -80,7 +79,7 @@ class BattleState(DataclassArray):
 
     @property
     def active(self) -> Pokemon:
-        flattened_idx = (jnp.reshape(self.active_index, (2,)))
+        flattened_idx = jnp.squeeze(self.active_index)
         return self.team[[0,1], flattened_idx]
 
     @property

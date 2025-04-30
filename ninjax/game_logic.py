@@ -10,7 +10,9 @@ from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
-    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE)
+    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
+    in_range
+)
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array ,is_attack_damage) -> BattleState:
@@ -36,17 +38,17 @@ def status_helper(active, status: Status):
     return active
 
 def set_status(state: BattleState, side_idx, status: Status):
-    active = state[side_idx].active
+    active = state.active[side_idx]
     already_statused = active.status != Status.NONE
     is_immune = (
-        jnp.logical_or(status==Status.POISON, status==Status.TOXIC) * active.is_poison_immune +
-        status==Status.PARALYZE * active.is_paralyze_immune +
-        status==Status.BURN * active.is_burn_immune +
-        status==Status.FREEZE * active.is_freeze_immune +
-        status==Status.SLEEP + active.is_sleep_immune
+        jnp.logical_and(jnp.logical_or(status==Status.POISON, status==Status.TOXIC), active.is_poison_immune) +
+        jnp.logical_and(status==Status.PARALYZE, active.is_paralyze_immune) +
+        jnp.logical_and(status==Status.BURN, active.is_burn_immune) +
+        jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune) +
+        jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune)
     )
     active = jax.lax.cond(
-        triple_or(already_statused, is_immune, status==Status.NONE),
+        triple_or(already_statused, is_immune, status==Status.NONE)[0],
         lambda a, s: a,
         status_helper, active, status)
     return update_active(state, side_idx, active)
@@ -72,7 +74,9 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     return base_damage
 
 def effect_spore_status(r):
-    return (r < 0.09) * Status.POISON + (0.09 <= r < 0.19) * Status.PARALYZE + (0.19 <= r < 0.3) * Status.SLEEP
+    return (jnp.less(r, 0.09) * Status.POISON +
+            in_range(0.09, r, 0.19) * Status.PARALYZE +
+            in_range(0.19, r, 0.3) * Status.SLEEP)
 
 
 def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRNGKey, BattleState):
@@ -86,7 +90,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
     is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-defender.is_powder_immune)
     r = random.uniform(sub_key)
-    triggered = r < 0.3
+    triggered = jnp.less_equal(r, 0.3)
     status = (effect_spore_status(r) * is_effect_spore + is_flame * Status.BURN + is_static * Status.PARALYZE) * triggered
     state = set_status(state, attacker_idx, status)
     return key, state
@@ -139,7 +143,8 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     is_guts = attacker.ability == AbilityEnum.GUTS
 
     # do on contact effects
-    key, state = jax.lax.cond(move.makes_contact, do_contact, lambda k, s, a, m: (k,s ), key, state, attacker_idx)
+    makes_contact = move.makes_contact
+    key, state = jax.lax.cond(makes_contact[0], do_contact, lambda k, s, a: (k, s), key, state, attacker_idx)
 
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
     return key, base_damage

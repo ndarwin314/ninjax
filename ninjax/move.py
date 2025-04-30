@@ -24,7 +24,7 @@ class Move(DataclassArray):
     offensive_stat: IntArray['*batch_shape 1']
     defensive_stat: IntArray['*batch_shape 1']
     crit_stage: IntArray['*batch_shape 1']
-    makes_contact: BoolArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([1]))
+    makes_contact: BoolArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([0]))
 
     def reduce_pp(self, index, increment):
         return self.replace(current_pp=self.current_pp.at[index].subtract(increment))
