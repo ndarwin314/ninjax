@@ -5,7 +5,7 @@ import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts
+from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
@@ -83,16 +83,31 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     active = state.active
     defender = active[1-attacker_idx]
     attacker = active[attacker_idx]
+    key, def_key, attack_key = random.split(key, 2)
+
+    # defender triggers
     is_rough_skin = defender.ability == AbilityEnum.ROUGH_SKIN
     state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin)
-    key, sub_key = random.split(key, 2)
     is_static = defender.ability==AbilityEnum.STATIC
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
+    is_point = defender.ability==AbilityEnum.POISON_POINT
     is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-defender.is_powder_immune)
-    r = random.uniform(sub_key)
+    r = random.uniform(def_key)
     triggered = jnp.less_equal(r, 0.3)
-    status = (effect_spore_status(r) * is_effect_spore + is_flame * Status.BURN + is_static * Status.PARALYZE) * triggered
+    status = (effect_spore_status(r) * is_effect_spore +
+              is_flame * Status.BURN +
+              is_static * Status.PARALYZE +
+              is_point * Status.POISON) * triggered
     state = set_status(state, attacker_idx, status)
+
+    # attacker triggers
+    is_poison_touch = attacker.ability==AbilityEnum.POISON_TOUCH
+    is_toxic_chain = attacker.ability==AbilityEnum.TOXIC_CHAIN
+    r = random.uniform(attack_key)
+    triggered = jnp.less_equal(r, 0.3)
+    status = (is_poison_touch * Status.POISON +
+              is_toxic_chain * Status.TOXIC) * triggered
+    state = set_status(state, 1-attacker_idx, status)
     return key, state
 
 def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, base_damage) -> (chex.PRNGKey, BattleState):
@@ -205,11 +220,25 @@ def end_turn_damage(state: BattleState) -> BattleState:
 
     # sand damage
     sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
-    take_damage_percent(state, idx, sand_damage)
+    state = take_damage_percent(state, idx, sand_damage)
+
+    # rain abilities
+    rain_healing = (active.ability==AbilityEnum.RAIN_DISH + 2 * (active.ability==AbilityEnum.DRY_SKIN)) / 16 * state.weather.weather == WeatherEnum.RAIN
+    # why is this one an int but the others arent
+    state = take_damage_percent(state, idx, -rain_healing)
+
+    # sun abilities
+    sun_damage = (active.ability==AbilityEnum.DRY_SKIN + active.ability==AbilityEnum.SOLAR_POWER) / 8 *state.weather.weather == WeatherEnum.SUN
+    state = take_damage_percent(state, idx, sun_damage)
+
+    # snow abilities
+    snow_healing = active.ability==AbilityEnum.ICE_BODY / 16 *state.weather.weather == WeatherEnum.SNOW
+    state = take_damage_percent(state, idx, -snow_healing)
+
 
     # grassy terrain healing
     grass_healing = (is_floating - 1) / 16 * state.terrain.terrain == TerrainEnum.GRASSY
-    take_damage_percent(state, idx, grass_healing)
+    state = take_damage_percent(state, idx, grass_healing)
 
     # status damage
     # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
@@ -262,7 +291,7 @@ def swap_out(
     )
 
     # sticky webs
-    state = add_boosts(state, side_idx, StatEnum.SPEED, -1 * is_not_flying * state[side_idx].sticky_webs)
+    state = reduce_boosts(state, side_idx, StatEnum.SPEED, 1 * is_not_flying * state[side_idx].sticky_webs)
 
     # toxic spikes
     # only remove is poison type and not floating
@@ -303,8 +332,10 @@ def swap_is_alive(
     state = state.replace(weather=Weather(new_weather, new_duration))
 
     # intimidate
+    # TODO: probably should make this a conditional for when we need to implement observations
+    # can make conditional_stat_reduce or something that only adds observation if condition
     is_intimidate = active.ability == AbilityEnum.INTIMIDATE
-    state = add_boosts(state, 1-side_idx, StatEnum.ATTACK, -1*is_intimidate)
+    state = reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, is_intimidate)
     return state
 
 
@@ -384,11 +415,12 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         jnp.logical_and(AbilityEnum.STORM_DRAIN==ability, Type.WATER==move.type),
         jnp.logical_and(ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC))
     is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
-    is_heal = jnp.logical_or(
-        jnp.logical_or(
-            jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
-            jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC)),
-            jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND))
+    is_heal = quad_or(
+        jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
+        jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC),
+        jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND),
+        jnp.logical_and(ability == AbilityEnum.DRY_SKIN, move.type == Type.WATER)
+    )
     is_status = move.move_type == MoveType.STATUS * (1 - quad_or(is_flash_fire, is_spa_boost, is_attack_boost, is_heal))
     # this feels really hacky way to compute this but :shrug:
     branch_index = is_status + jnp.logical_or(is_spa_boost, is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4

@@ -92,11 +92,17 @@ class AbilityEnum(JaxEnum):
     DAMP = auto()
     ADAPTABILITY = auto() # done
     LIMBER = auto() # done
+    MAGMA_ARMOR = auto() # done
+    WATER_VEIL = auto()
     SAND_VEIL = auto() # done
     SNOW_CLOAK = auto() # done
     STATIC = auto() # done
     FLAME_BODY = auto() # done
+    POISON_POINT = auto() # done
     EFFECT_SPORE = auto() # done
+    POISON_TOUCH = auto()
+    TOXIC_CHAIN = auto()
+
     VOLT_ABSORB = auto() # done
     WATER_ABSORB = auto() # done
     FLASH_FIRE = auto() # done
@@ -120,4 +126,23 @@ class AbilityEnum(JaxEnum):
     GUTS = auto() # done
     LEVITATE = auto() # done
     MAGIC_GUARD = auto() # implemented hazard immunity
-    OVERCOAT = auto() # done)
+    OVERCOAT = auto() # done
+    CLEAR_BODY = auto() # i think
+    NATURAL_CURE = auto()
+    SERENE_GRACE = auto()
+    SWIFT_SWIM = auto() # done
+    CHLOROPHYLL = auto() # done
+    SLUSH_RUSH = auto() # done
+    SAND_RUSH = auto() # done
+    TRACE = auto()
+    HUGE_POWER = auto() # done
+    PURE_POWER = HUGE_POWER
+    INNER_FOCUS = auto()
+    MAGNET_PULL = auto()
+    SOUNDPROOF = auto() # done
+    RAIN_DISH = auto() # done
+    DRY_SKIN = auto() # need increased damage from being hit by fire move
+    SOLAR_POWER = auto() # need to do power increase
+    ICE_BODY = auto() # done
+
+

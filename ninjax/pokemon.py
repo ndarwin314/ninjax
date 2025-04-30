@@ -88,11 +88,11 @@ class Pokemon(DataclassArray):
 
     @property
     def is_burn_immune(self):
-        return self.is_type(Type.FIRE)
+        return jnp.logical_or(self.is_type(Type.FIRE), self.ability==AbilityEnum.WATER_VEIL)
 
     @property
     def is_freeze_immune(self):
-        return self.is_type(Type.ICE)
+        return jnp.logical_or(self.is_type(Type.ICE), self.ability==AbilityEnum.MAGMA_ARMOR)
 
     @property
     def is_sleep_immune(self):
@@ -104,6 +104,9 @@ class Pokemon(DataclassArray):
         # add check for goggles
         return jnp.logical_or(self.is_type(Type.GRASS), self.ability==AbilityEnum.OVERCOAT)
 
+    @property
+    def is_sound_immune(self):
+        return self.ability==AbilityEnum.SOUNDPROOF
 
 
 

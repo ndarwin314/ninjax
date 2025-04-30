@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type, AbilityEnum
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier, conditional_mult_round
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier, conditional_mult_round, quad_or
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -88,9 +88,38 @@ class BattleState(DataclassArray):
         stats = self.active.stats
         # squeeze removes dimensions with length 1 which makes this broadcast correctly
         # its probably going to be helpful to use this in other places
+
+        # guts check
         is_guts = jnp.logical_and(active.ability==AbilityEnum.GUTS, active.status==Status.BURN).squeeze()
         temp = conditional_mult_round(stats[...,StatEnum.ATTACK], 1.5, is_guts)
+        # huge power
+        is_huge_power = jnp.array(active.ability==AbilityEnum.HUGE_POWER).squeeze()
+        temp = conditional_mult_round(
+            temp,
+            2,
+            is_huge_power)
         stats = stats.at[..., StatEnum.ATTACK].set(temp)
+
+        # speed boosting weather abilities
+        is_chlorophyll  = jnp.logical_and(
+            active.ability==AbilityEnum.CHLOROPHYLL,
+            self.weather==WeatherEnum.SUN).squeeze()
+        is_swift_swim = jnp.logical_and(
+            active.ability == AbilityEnum.SWIFT_SWIM,
+            self.weather == WeatherEnum.RAIN).squeeze()
+        is_slush_rush = jnp.logical_and(
+            active.ability == AbilityEnum.SLUSH_RUSH,
+            self.weather == WeatherEnum.SNOW).squeeze()
+        is_sand_rush = jnp.logical_and(
+            active.ability == AbilityEnum.SAND_RUSH,
+            self.weather == WeatherEnum.SANDSTORM).squeeze()
+        temp = conditional_mult_round(
+            stats[..., StatEnum.SPEED],
+            2,
+            quad_or(is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim))
+        stats = stats.at[..., StatEnum.ATTACK].set(temp)
+
+
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
 
     @property
@@ -113,10 +142,14 @@ def set_boosts(state: BattleState, side_idx, new_boosts):
 def clear_boosts(state: BattleState, side_idx) -> BattleState:
     return set_boosts(state, side_idx, StatBoosts())
 
-def add_boosts(state: BattleState, side_idx, idxs, vals) -> BattleState:
+def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     new_boosts = state.boosts.normal_boosts[side_idx]
-    new_boosts = new_boosts.at[idxs].add(vals)
+    new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
+
+def reduce_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
+    not_clear_body = state.active.ability[side_idx]!=AbilityEnum.CLEAR_BODY
+    return add_boosts(state, side_idx, idx, -val * not_clear_body)
 
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
