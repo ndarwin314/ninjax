@@ -10,7 +10,7 @@ from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
-    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or)
+    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE)
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array ,is_attack_damage) -> BattleState:
@@ -31,9 +31,24 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -
     damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
     return take_damage_value(state, defender_idx, damage, False)
 
+def status_helper(active, status: Status):
+    active = active.replace(status=status)
+    return active
+
 def set_status(state: BattleState, side_idx, status: Status):
     active = state[side_idx].active
-    active = active.replace(status=status)
+    already_statused = active.status != Status.NONE
+    is_immune = (
+        jnp.logical_or(status==Status.POISON, status==Status.TOXIC) * active.is_poison_immune +
+        status==Status.PARALYZE * active.is_paralyze_immune +
+        status==Status.BURN * active.is_burn_immune +
+        status==Status.FREEZE * active.is_freeze_immune +
+        status==Status.SLEEP + active.is_sleep_immune
+    )
+    active = jax.lax.cond(
+        triple_or(already_statused, is_immune, status==Status.NONE),
+        lambda a, s: a,
+        status_helper, active, status)
     return update_active(state, side_idx, active)
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
@@ -56,7 +71,27 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
     return base_damage
 
-def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_idx, move: Move, base_damage):
+def effect_spore_status(r):
+    return (r < 0.09) * Status.POISON + (0.09 <= r < 0.19) * Status.PARALYZE + (0.19 <= r < 0.3) * Status.SLEEP
+
+
+def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRNGKey, BattleState):
+    active = state.active
+    defender = active[1-attacker_idx]
+    attacker = active[attacker_idx]
+    is_rough_skin = defender.ability == AbilityEnum.ROUGH_SKIN
+    state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin)
+    key, sub_key = random.split(key, 2)
+    is_static = defender.ability==AbilityEnum.STATIC
+    is_flame = defender.ability==AbilityEnum.FLAME_BODY
+    is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-defender.is_powder_immune)
+    r = random.uniform(sub_key)
+    triggered = r < 0.3
+    status = (effect_spore_status(r) * is_effect_spore + is_flame * Status.BURN + is_static * Status.PARALYZE) * triggered
+    state = set_status(state, attacker_idx, status)
+    return key, state
+
+def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, base_damage) -> (chex.PRNGKey, BattleState):
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
@@ -96,13 +131,18 @@ def compute_damage_multipliers(state: BattleState, key: chex.PRNGKey, attacker_i
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
     effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    base_damage = conditional_mult_round(base_damage, effectiveness, 1)
+    is_levitate = defender.ability==AbilityEnum.LEVITATE
+    base_damage = jnp.fix(base_damage * effectiveness) * (1-jnp.logical_and(is_levitate, move.type==Type.GROUND))
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
     is_guts = attacker.ability == AbilityEnum.GUTS
+
+    # do on contact effects
+    key, state = jax.lax.cond(move.makes_contact, do_contact, lambda k, s, a, m: (k,s ), key, state, attacker_idx)
+
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
-    return base_damage
+    return key, base_damage
 
 def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     attacker = state.active[player_idx]
@@ -116,7 +156,7 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
-    damage = compute_damage_multipliers(state, key, player_idx, move, base_damage)
+    key, damage = compute_damage_multipliers(key, state, player_idx, move, base_damage)
 
     # dealing damage
     damage = damage.astype(int)
@@ -232,22 +272,34 @@ def swap_out(
     active_hp = state[side_idx].active.current_hp[side_idx]
     is_alive = active_hp != 0
 
+    state = jax.lax.cond(is_alive, swap_is_alive, lambda a, b: a, state, side_idx)
+
+
+    active = state.active[side_idx].replace(is_alive=is_alive)
+    state = update_active(state, side_idx, active)
+    return state
+
+def swap_is_alive(
+    state: BattleState,
+    side_idx) -> BattleState:
+    active = state.active[side_idx]
+
     # activate weather abilities if target is alive
     # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
     current_weather = state.weather.weather
     new_weather = (active.ability==AbilityEnum.DROUGHT * WeatherEnum.SUN +
                    active.ability==AbilityEnum.DRIZZLE * WeatherEnum.RAIN +
                    active.ability==AbilityEnum.SAND_STREAM * WeatherEnum.SANDSTORM +
-                   active.ability==AbilityEnum.SNOW_WARNING * WeatherEnum.SNOW) * is_alive
+                   active.ability==AbilityEnum.SNOW_WARNING * WeatherEnum.SNOW)
     new_weather = current_weather * new_weather==WeatherEnum.NONE + new_weather
     matching_weather = current_weather==new_weather
     # TODO: add item check for the weather stones
     new_duration = 5 * (1 - matching_weather) + state.weather.duration * matching_weather
     state = state.replace(weather=Weather(new_weather, new_duration))
 
-
-    active = state.active[side_idx].replace(is_alive=is_alive)
-    state = update_active(state, side_idx, active)
+    # intimidate
+    is_intimidate = active.ability == AbilityEnum.INTIMIDATE
+    state = add_boosts(state, 1-side_idx, StatEnum.ATTACK, -1*is_intimidate)
     return state
 
 

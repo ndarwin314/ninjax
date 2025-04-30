@@ -1,11 +1,11 @@
-from typing import Union, Tuple, Dict, Any
+from dataclasses import field
 
 from chex import Array
 from flax import struct
 import jax.numpy as jnp
 from dataclass_array import DataclassArray
 import dataclass_array as dca
-from dataclass_array.typing import FloatArray, IntArray
+from dataclass_array.typing import FloatArray, IntArray, BoolArray
 
 from ninjax.enum_types import MoveType, Type
 
@@ -24,6 +24,7 @@ class Move(DataclassArray):
     offensive_stat: IntArray['*batch_shape 1']
     defensive_stat: IntArray['*batch_shape 1']
     crit_stage: IntArray['*batch_shape 1']
+    makes_contact: BoolArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([1]))
 
     def reduce_pp(self, index, increment):
         return self.replace(current_pp=self.current_pp.at[index].subtract(increment))

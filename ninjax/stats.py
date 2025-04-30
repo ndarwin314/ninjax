@@ -58,7 +58,6 @@ class StatTable(DataclassArray):
         ivs = self.ivs.at[idx].set(new_stats.ivs)
         evs = self.evs.at[idx].set(new_stats.evs)
         nature = self.nature.row_update(idx, new_stats.nature)
-        # so this is a problem because we calculate the current_hp in the post_init which runs even when we call replace
         return self.replace(level=level, nature=nature, ivs=ivs, evs=evs)
 
     @property

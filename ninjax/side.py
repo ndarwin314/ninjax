@@ -107,7 +107,6 @@ class BattleState(DataclassArray):
         return [self.team[j].is_alive * (j != self.active_index) for j in range(6)]
 
 
-# TODO: these all need to be rewritten i think
 def set_boosts(state: BattleState, side_idx, new_boosts):
     new_boosts = state.boosts.replace_row(side_idx, new_boosts)
     return state.replace(boosts=new_boosts)

@@ -177,13 +177,6 @@ class TestDamage:
         assert state.active[1].current_hp[0] == 259
 
 
-    def test_burn_halve_physical(self, neutral_type):
-        key, state = neutral_type
-        teams = state.team.replace(status=Status.BURN*jnp.ones((1,)))
-        state = state.replace(team=teams)
-        key, state = do_move_damage(key, state, 0, state.active[0].moves[0], 0)
-        assert state.active[1].current_hp[0] == 328
-
     @pytest.mark.parametrize(
         "is_physical, is_guts, damage",
         [(0, 0, 293),

@@ -80,6 +80,7 @@ class TurnType(JaxEnum):
     END_SWITCH = 2
 
 class AbilityEnum(JaxEnum):
+    NONE = 0
     STENCH = auto() # need to implement flinching first
     DRIZZLE = auto() # done
     DROUGHT = auto() # done
@@ -87,13 +88,15 @@ class AbilityEnum(JaxEnum):
     SNOW_WARNING = auto() # done
     SPEED_BOOST = auto()
     BATTLE_ARMOR = auto() # done
-    STURDY = auto() # donepy
+    STURDY = auto() # done
     DAMP = auto()
     ADAPTABILITY = auto() # done
-    LIMBER = auto()
+    LIMBER = auto() # done
     SAND_VEIL = auto() # done
     SNOW_CLOAK = auto() # done
-    STATIC = auto()
+    STATIC = auto() # done
+    FLAME_BODY = auto() # done
+    EFFECT_SPORE = auto() # done
     VOLT_ABSORB = auto() # done
     WATER_ABSORB = auto() # done
     FLASH_FIRE = auto() # done
@@ -105,13 +108,16 @@ class AbilityEnum(JaxEnum):
     CLOUD_NINE = auto()
     COMPOUND_EYES = auto() # done
     NO_GUARD = auto() # done
-    INSOMNIA = auto()
+    INSOMNIA = auto() # done
     COLOR_CHANGE = auto()
-    IMMUNITY = auto()
+    IMMUNITY = auto() # done
     SHIELD_DUST = auto()
     OWN_TEMPO = auto()
     SUCTION_CUPS = auto()
-    INTIMIDATE = auto()
+    INTIMIDATE = auto() # added not tested
     SHADOW_TAG = auto()
     ROUGH_SKIN = auto()
-    GUTS = auto()
+    GUTS = auto() # done
+    LEVITATE = auto() # done
+    MAGIC_GUARD = auto() # implemented hazard immunity
+    OVERCOAT = auto() # done)

@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum
-from ninjax.utils import conditional_mult_round
+from ninjax.utils import triple_or
 
 @dataclass_array(broadcast=True, cast_list=True, cast_dtype=True)
 class Pokemon(DataclassArray):
@@ -66,26 +66,43 @@ class Pokemon(DataclassArray):
 
     @property
     def is_floating(self):
-        # TODO: add checks for levitate and balloon
-        return self.is_type(Type.FLYING)
+        # TODO: add check for balloon
+        return jnp.logical_or(self.is_type(Type.FLYING), self.ability==AbilityEnum.LEVITATE)
 
     @property
     def is_hazard_immune(self):
         # check for boots
-        return False
+        return self.ability == AbilityEnum.MAGIC_GUARD
 
     @property
     def is_sand_immune(self):
-        return jnp.logical_or(self.is_type(Type.STEEL), jnp.logical_or(Type.GROUND, Type.ROCK))
+        return triple_or(self.is_type(Type.STEEL), Type.GROUND, Type.ROCK)
 
     @property
     def is_poison_immune(self):
-        return jnp.logical_or(self.is_type(Type.POISON), self.is_type(Type.STEEL))
+        return triple_or(self.is_type(Type.POISON), self.is_type(Type.STEEL), self.ability==AbilityEnum.IMMUNITY)
+
+    @property
+    def is_paralyze_immune(self):
+        return jnp.logical_or(self.is_type(Type.ELECTRIC), self.ability==AbilityEnum.LIMBER)
+
+    @property
+    def is_burn_immune(self):
+        return self.is_type(Type.FIRE)
+
+    @property
+    def is_freeze_immune(self):
+        return self.is_type(Type.ICE)
+
+    @property
+    def is_sleep_immune(self):
+        return self.ability==AbilityEnum.INSOMNIA
+
 
     @property
     def is_powder_immune(self):
         # add check for goggles
-        return self.is_type(Type.GRASS)
+        return jnp.logical_or(self.is_type(Type.GRASS), self.ability==AbilityEnum.OVERCOAT)
 
 
 

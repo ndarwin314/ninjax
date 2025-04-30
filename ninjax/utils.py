@@ -27,6 +27,7 @@ TERRAIN_MULTIPLIER = 1.3
 CRIT_STAGES = jnp.array([1/24, 1/8, 1,2, 1, 1])
 COMPOUND_EYES_MULTIPLIER = 5325/4096
 WEATHER_VEIL_MODIFIER = 3277/4096
+ROUGH_SKIN_DAMAGE = 1/8
 
 TYPE_EFFECTIVENESS = jnp.array(
     [
@@ -86,6 +87,7 @@ def base_damage_compute(
 def conditional_mult_round(damage, mult, cond):
     # fix correctly rounds down at .5 for all values rather than banker's rounding
     return jnp.fix(conditional_mult(damage, mult, cond))
+
 
 def conditional_mult(value, mult, cond):
     # TODO, there is a buggy thing happening where multiplying a (2,1) array by a (2,) makes a (2,2) instead of (2,1)
