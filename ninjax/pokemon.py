@@ -98,7 +98,6 @@ class Pokemon(DataclassArray):
     def is_sleep_immune(self):
         return self.ability==AbilityEnum.INSOMNIA
 
-
     @property
     def is_powder_immune(self):
         # add check for goggles
@@ -107,6 +106,10 @@ class Pokemon(DataclassArray):
     @property
     def is_sound_immune(self):
         return self.ability==AbilityEnum.SOUNDPROOF
+
+    @property
+    def has_status(self):
+        return self.status!=Status.NONE
 
 
 

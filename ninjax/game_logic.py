@@ -5,13 +5,13 @@ import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts
+from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts, conditional_add_boosts
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range
+    in_range, IRON_FIST, TOUGH_CLAWS
 )
 
 
@@ -55,6 +55,10 @@ def set_status(state: BattleState, side_idx, status: Status):
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = move.base_power
+    #technician
+    power = conditional_mult(power, 1.5, jnp.less_equal(power, 60))
+    #TODO: tera boost
+
     is_grounded = 1 - attacker.is_floating
     terrain = state.terrain.terrain
     # grassy terrain
@@ -63,6 +67,12 @@ def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.PSYCHIC, terrain==TerrainEnum.PSYCHIC))
     # electric terrain
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.ELECTRIC, terrain==TerrainEnum.ELECTRIC))
+
+    # iron fist
+    power = conditional_mult_round(power, IRON_FIST, move.punching)
+
+    # tough claws
+    power = conditional_mult_round(power, TOUGH_CLAWS, move.contact)
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
@@ -83,7 +93,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     active = state.active
     defender = active[1-attacker_idx]
     attacker = active[attacker_idx]
-    key, def_key, attack_key = random.split(key, 2)
+    key, def_key, attack_key = random.split(key, 3)
 
     # defender triggers
     is_rough_skin = defender.ability == AbilityEnum.ROUGH_SKIN
@@ -131,7 +141,8 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     # battle armor prevents crits
     crit_chance = CRIT_STAGES[move.crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
     is_crit = random.uniform(one) < crit_chance
-    crit_multiplier = 1.5
+    state = conditional_add_boosts(state, 1-attacker_idx, defender.ability==AbilityEnum.ANGER_POINT, StatEnum.ATTACK, 13)
+    crit_multiplier = 1.5 + 0.75 * attacker.ability==AbilityEnum.SNIPER
     # damage roll, idc about preserving the in game RNG generation
     base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
@@ -156,12 +167,12 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
     is_guts = attacker.ability == AbilityEnum.GUTS
+    base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
 
     # do on contact effects
-    makes_contact = move.makes_contact
+    makes_contact = move.contact
     key, state = jax.lax.cond(makes_contact[0], do_contact, lambda k, s, a: (k, s), key, state, attacker_idx)
 
-    base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
     return key, base_damage
 
 def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
@@ -415,19 +426,21 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         jnp.logical_and(AbilityEnum.STORM_DRAIN==ability, Type.WATER==move.type),
         jnp.logical_and(ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC))
     is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
+    is_speed_boost = jnp.logical_and(ability==AbilityEnum.MOTOR_DRIVE, move.type==Type.ELECTRIC)
     is_heal = quad_or(
         jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
         jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC),
         jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND),
         jnp.logical_and(ability == AbilityEnum.DRY_SKIN, move.type == Type.WATER)
     )
-    is_status = move.move_type == MoveType.STATUS * (1 - quad_or(is_flash_fire, is_spa_boost, is_attack_boost, is_heal))
+    is_stat_boost = triple_or(is_speed_boost, is_attack_boost, is_spa_boost)
+    is_status = move.move_type == MoveType.STATUS * (1 - triple_or(is_flash_fire, is_stat_boost, is_heal))
     # this feels really hacky way to compute this but :shrug:
-    branch_index = is_status + jnp.logical_or(is_spa_boost, is_attack_boost) * 2 + is_flash_fire * 3 + is_heal * 4
+    branch_index = is_status + is_stat_boost * 2 + is_flash_fire * 3 + is_heal * 4
 
     # i think using a switch means we skip evaluating the branches we don't need
     # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
-    return jax.lax.switch(branch_index[0], branches, key, state, attacker_index, move, 1 + 3 * is_spa_boost)
+    return jax.lax.switch(branch_index[0], branches, key, state, attacker_index, move, is_attack_boost + 4 * is_spa_boost + 6*is_speed_boost)
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
     return key, state

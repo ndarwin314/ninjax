@@ -1,5 +1,5 @@
 from collections import namedtuple
-from enum import IntEnum, auto
+from enum import IntEnum, auto, IntFlag
 
 import jax.numpy as jnp
 
@@ -79,6 +79,15 @@ class TurnType(JaxEnum):
     SWITCH_MOVE = 1
     END_SWITCH = 2
 
+class MoveFlags(IntFlag):
+    CONTACT = auto()
+    PUNCHING = auto()
+
+    def __eq__(self, other):
+        return jnp.equal(self, other)
+    def __hash__(self):
+        return self.value
+
 class AbilityEnum(JaxEnum):
     NONE = 0
     STENCH = auto() # need to implement flinching first
@@ -88,6 +97,7 @@ class AbilityEnum(JaxEnum):
     SNOW_WARNING = auto() # done
     SPEED_BOOST = auto()
     BATTLE_ARMOR = auto() # done
+    SHELL_ARMOR = BATTLE_ARMOR
     STURDY = auto() # done
     DAMP = auto()
     ADAPTABILITY = auto() # done
@@ -102,7 +112,6 @@ class AbilityEnum(JaxEnum):
     EFFECT_SPORE = auto() # done
     POISON_TOUCH = auto()
     TOXIC_CHAIN = auto()
-
     VOLT_ABSORB = auto() # done
     WATER_ABSORB = auto() # done
     FLASH_FIRE = auto() # done
@@ -112,9 +121,11 @@ class AbilityEnum(JaxEnum):
     SAP_SIPPER = auto() # done
     OBLIVIOUS = auto()
     CLOUD_NINE = auto()
+    AIR_LOCK = auto()
     COMPOUND_EYES = auto() # done
     NO_GUARD = auto() # done
     INSOMNIA = auto() # done
+    VITAL_SPIRIT = INSOMNIA
     COLOR_CHANGE = auto()
     IMMUNITY = auto() # done
     SHIELD_DUST = auto()
@@ -128,6 +139,8 @@ class AbilityEnum(JaxEnum):
     MAGIC_GUARD = auto() # implemented hazard immunity
     OVERCOAT = auto() # done
     CLEAR_BODY = auto() # i think
+    WHITE_SMOKE = CLEAR_BODY
+    FULL_METAL_BODY = CLEAR_BODY
     NATURAL_CURE = auto()
     SERENE_GRACE = auto()
     SWIFT_SWIM = auto() # done
@@ -144,5 +157,44 @@ class AbilityEnum(JaxEnum):
     DRY_SKIN = auto() # need increased damage from being hit by fire move
     SOLAR_POWER = auto() # need to do power increase
     ICE_BODY = auto() # done
+    PRESSURE = auto()
+    THICK_FAT = auto()
+    EARLY_BIRD = auto()
+    RUN_AWAY = auto()
+    KEEN_EYE = auto()
+    HYPER_CUTTER = auto()
+    PICKUP = auto()
+    TRUANT = auto()
+    HUSTLE = auto()
+    CUTE_CHARM = auto()
+    PLUS = auto()
+    MINUS = PLUS
+    FORECAST = auto()
+    STICKY_HOLD = auto()
+    SHED_SKIN = auto()
+    MARVEL_SCALE = auto() # done
+    LIQUID_OOZE = auto()
+    OVERGROW = auto()
+    BLAZE = auto()
+    TORRENT = auto()
+    SWARM = auto()
+    ROCK_HEAD = auto()
+    ARENA_TRAP = auto()
+    TANGLED_FEET = auto()
+    MOTOR_DRIVE = auto()
+    RIVALRY = auto()
+    STEAD_FST = auto()
+    GLUTTONY = auto()
+    ANGER_POINT = auto() # done
+    DOWNLOAD = auto()
+    IRON_FIST = auto() # done
+    TOUGH_CLAWS = auto() #done
+    POISON_HEAL = auto()
+    SKILL_LINK = auto()
+    HYDRATION = auto()
+    QUICK_FEET = auto() # done
+    NORMALIZE = auto()
+    SNIPER = auto() # done
+    TECHNICIAN = auto()
 
 

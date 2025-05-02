@@ -101,23 +101,32 @@ class BattleState(DataclassArray):
         stats = stats.at[..., StatEnum.ATTACK].set(temp)
 
         # speed boosting weather abilities
+        weather = self.weather.weather
         is_chlorophyll  = jnp.logical_and(
             active.ability==AbilityEnum.CHLOROPHYLL,
-            self.weather==WeatherEnum.SUN).squeeze()
+            weather==WeatherEnum.SUN).squeeze()
         is_swift_swim = jnp.logical_and(
             active.ability == AbilityEnum.SWIFT_SWIM,
-            self.weather == WeatherEnum.RAIN).squeeze()
+            weather == WeatherEnum.RAIN).squeeze()
         is_slush_rush = jnp.logical_and(
             active.ability == AbilityEnum.SLUSH_RUSH,
-            self.weather == WeatherEnum.SNOW).squeeze()
+            weather == WeatherEnum.SNOW).squeeze()
         is_sand_rush = jnp.logical_and(
             active.ability == AbilityEnum.SAND_RUSH,
-            self.weather == WeatherEnum.SANDSTORM).squeeze()
+            weather == WeatherEnum.SANDSTORM).squeeze()
         temp = conditional_mult_round(
             stats[..., StatEnum.SPEED],
             2,
             quad_or(is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim))
-        stats = stats.at[..., StatEnum.ATTACK].set(temp)
+        # quick feet
+        temp = conditional_mult_round(temp, 1.5, jnp.logical_and(active.ability==AbilityEnum.QUICK_FEET, active.status!=Status.NONE))
+
+        stats = stats.at[..., StatEnum.SPEED].set(temp)
+
+        # marvel scale
+        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_DEFENSE], 1.5,
+                                      jnp.logical_and(active.ability==AbilityEnum.MARVEL_SCALE, active.has_status))
+        stats = stats.at[..., StatEnum.SPECIAL_DEFENSE].set(temp)
 
 
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
@@ -150,6 +159,12 @@ def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
 def reduce_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     not_clear_body = state.active.ability[side_idx]!=AbilityEnum.CLEAR_BODY
     return add_boosts(state, side_idx, idx, -val * not_clear_body)
+
+def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
+    return jax.lax.cond(cond, set_boosts, lambda s, b, i: s, state, side_idx, new_boosts)
+
+def conditional_add_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
+    return jax.lax.cond(cond, add_boosts, lambda s, i, d, v: s, state, side_idx, idx, val)
 
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
