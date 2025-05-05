@@ -25,6 +25,7 @@ class Move(DataclassArray):
     defensive_stat: IntArray['*batch_shape 1']
     crit_stage: IntArray['*batch_shape 1']
     move_flags: IntArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([0]))
+    recoil_percent: FloatArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([0]))
 
     def reduce_pp(self, index, increment):
         return self.replace(current_pp=self.current_pp.at[index].subtract(increment))
@@ -39,6 +40,10 @@ class Move(DataclassArray):
     @property
     def punching(self):
         return self.move_flags & MoveFlags.PUNCHING == MoveFlags.PUNCHING
+
+    @property
+    def recoil(self):
+        return self.recoil_percent != 0
 
 
 

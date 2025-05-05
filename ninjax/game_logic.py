@@ -11,7 +11,7 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS
 )
 
 
@@ -55,6 +55,7 @@ def set_status(state: BattleState, side_idx, status: Status):
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = move.base_power
+
     #technician
     power = conditional_mult(power, 1.5, jnp.less_equal(power, 60))
     #TODO: tera boost
@@ -68,17 +69,31 @@ def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     # electric terrain
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.ELECTRIC, terrain==TerrainEnum.ELECTRIC))
 
+    ability = attacker.ability
     # iron fist
-    power = conditional_mult_round(power, IRON_FIST, move.punching)
-
+    power = conditional_mult_round(power, IRON_FIST, jnp.logical_and(move.punching, ability==AbilityEnum.IRON_FIST))
     # tough claws
-    power = conditional_mult_round(power, TOUGH_CLAWS, move.contact)
+    power = conditional_mult_round(power, TOUGH_CLAWS, jnp.logical_and(move.contact, ability==AbilityEnum.TOUGH_CLAWS))
+    # reckless
+    power = conditional_mult_round(power, RECKLESS, jnp.logical_and(move.recoil, ability==AbilityEnum.RECKLESS))
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
+    attacker = state.active[attacker_idx]
     boosted_stats = state.boosted_stats
     offensive_stat = boosted_stats[attacker_idx][move.offensive_stat]
     defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
+    # TODO: add ruin abilities
+    # we need some additional conditional stat changes here
+    # for example, guts always effects attack when its active but overgrow boosts attack only for grass moves when its active
+    type_ = move.type
+    ability = attacker.ability
+    is_overgrow = triple_and(type_==Type.GRASS, attacker.hp_less_than(one_third), ability==AbilityEnum.OVERGROW)
+    is_blaze = triple_and(type_==Type.FIRE, attacker.hp_less_than(one_third), ability==AbilityEnum.BLAZE)
+    is_torrent = triple_and(type_==Type.WATER, attacker.hp_less_than(one_third), ability==AbilityEnum.TORRENT)
+    is_swarm = triple_and(type_==Type.BUG, attacker.hp_less_than(one_third), ability==AbilityEnum.SWARM)
+    offensive_stat = conditional_mult_round(offensive_stat, 1.5, quad_or(is_swarm, is_torrent, is_blaze, is_overgrow))
+
     level = state.active.stat_table.level[attacker_idx]
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
     return base_damage
@@ -140,6 +155,7 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     # crit multiplier
     # battle armor prevents crits
     crit_chance = CRIT_STAGES[move.crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
+    crit_chance = crit_chance + attacker.ability==AbilityEnum.SUPER_LUCK
     is_crit = random.uniform(one) < crit_chance
     state = conditional_add_boosts(state, 1-attacker_idx, defender.ability==AbilityEnum.ANGER_POINT, StatEnum.ATTACK, 13)
     crit_multiplier = 1.5 + 0.75 * attacker.ability==AbilityEnum.SNIPER
@@ -162,7 +178,12 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     # it should include does not affect, not very effective, or super effective
     effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
     is_levitate = defender.ability==AbilityEnum.LEVITATE
-    base_damage = jnp.fix(base_damage * effectiveness) * (1-jnp.logical_and(is_levitate, move.type==Type.GROUND))
+    effectiveness = effectiveness * 1-jnp.logical_and(is_levitate, move.type==Type.GROUND)
+    is_tinted_lens = jnp.logical_and(jnp.less_equal(effectiveness, 1), attacker.ability==AbilityEnum.TINTED_LENS)
+    is_filter = jnp.logical_and(jnp.greater_equal(effectiveness, 1), defender.ability==AbilityEnum.FILTER)
+    effectiveness = conditional_mult(effectiveness, 2, is_tinted_lens)
+    effectiveness = conditional_mult(effectiveness, 3/4, is_filter)
+    base_damage = jnp.fix(base_damage * effectiveness)
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
@@ -188,12 +209,19 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
     key, damage = compute_damage_multipliers(key, state, player_idx, move, base_damage)
-
     # dealing damage
     damage = damage.astype(int)
     state = take_damage_value(state, 1 - player_idx, damage, True)
+    state = jax.lax.cond(
+        move.recoil*attacker.ability!=AbilityEnum.ROCK_HEAD,
+        do_recoil, lambda s, p, d: s,
+        state, player_idx, jnp.fix(damage*move.recoil_percent))
 
     return key, state
+
+def do_recoil(state: BattleState, player_idx: int, damage) -> BattleState:
+    state = take_damage_value(state, player_idx, damage, False)
+    return state
 
 def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     # this is gonna be a pain

@@ -18,6 +18,8 @@ ArrayImpl.__hash__ = lambda : 0
 Array = jax.Array
 increase_mult = 1.1
 one_point_three = 5325/4096
+one_point_three_exact = 1.3
+one_third = 1/3
 
 
 range_ = np.array(range(-6, 7))
@@ -25,13 +27,14 @@ numerators = 2 * np.ones(13) + np.fmax(range_, 0)
 denominators = 2 * np.ones(13) - np.fmin(range_, 0)
 STAT_MULTIPLIER_LOOKUP = jnp.array(numerators / denominators)
 ACCURACY_MULTIPLIER_LOOKUP = jnp.array((1 + numerators) / (1 + denominators))
-TERRAIN_MULTIPLIER = 1.3
+TERRAIN_MULTIPLIER = one_point_three_exact
 CRIT_STAGES = jnp.array([1/24, 1/8, 1,2, 1, 1])
 COMPOUND_EYES_MULTIPLIER = one_point_three
 TOUGH_CLAWS = one_point_three
 WEATHER_VEIL_MODIFIER = 3277/4096
 ROUGH_SKIN_DAMAGE = 1/8
 IRON_FIST = 1.2
+RECKLESS = 1.2
 
 TYPE_EFFECTIVENESS = jnp.array(
     [

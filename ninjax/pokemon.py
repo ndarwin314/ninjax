@@ -60,6 +60,13 @@ class Pokemon(DataclassArray):
         # TODO: idk if this works long term but im doing this as a hack right now
         return self.stat_table.stats[...,0]
 
+    @property
+    def hp_percent(self):
+        return self.current_hp / self.max_hp
+
+    def hp_less_than(self, percent):
+        return jnp.less_equal(self.hp_percent, percent)
+
     # TODO: this method doesnt seem to work properly for stacked pokemon
     def is_type(self, t: Type):
         return jnp.any(self.type_list==t)

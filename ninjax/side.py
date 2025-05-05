@@ -85,48 +85,63 @@ class BattleState(DataclassArray):
     @property
     def boosted_stats(self):
         active = self.active
+        ability = active.ability
+        status = active.status
         stats = self.active.stats
         # squeeze removes dimensions with length 1 which makes this broadcast correctly
         # its probably going to be helpful to use this in other places
 
         # guts check
-        is_guts = jnp.logical_and(active.ability==AbilityEnum.GUTS, active.status==Status.BURN).squeeze()
+        is_guts = jnp.logical_and(ability==AbilityEnum.GUTS, status==Status.BURN).squeeze()
         temp = conditional_mult_round(stats[...,StatEnum.ATTACK], 1.5, is_guts)
         # huge power
-        is_huge_power = jnp.array(active.ability==AbilityEnum.HUGE_POWER).squeeze()
+        is_huge_power = jnp.array(ability==AbilityEnum.HUGE_POWER).squeeze()
         temp = conditional_mult_round(
             temp,
             2,
             is_huge_power)
+        # defeatist
+        is_defeatist = jnp.logical_and(ability==AbilityEnum.DEFEATIST, active.hp_less_than(0.5)).squeeze()
+        temp = conditional_mult_round(temp, 0.5, is_defeatist)
         stats = stats.at[..., StatEnum.ATTACK].set(temp)
+
+        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_ATTACK], 0.5, is_defeatist)
+        stats = stats.at[..., StatEnum.SPECIAL_ATTACK].set(temp)
+
+        # marvel scale
+        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_DEFENSE], 1.5,
+                                      jnp.logical_and(ability==AbilityEnum.MARVEL_SCALE, active.has_status).squeeze())
+        stats = stats.at[..., StatEnum.SPECIAL_DEFENSE].set(temp)
+
 
         # speed boosting weather abilities
         weather = self.weather.weather
         is_chlorophyll  = jnp.logical_and(
-            active.ability==AbilityEnum.CHLOROPHYLL,
+            ability==AbilityEnum.CHLOROPHYLL,
             weather==WeatherEnum.SUN).squeeze()
         is_swift_swim = jnp.logical_and(
-            active.ability == AbilityEnum.SWIFT_SWIM,
+            ability == AbilityEnum.SWIFT_SWIM,
             weather == WeatherEnum.RAIN).squeeze()
         is_slush_rush = jnp.logical_and(
-            active.ability == AbilityEnum.SLUSH_RUSH,
+            ability == AbilityEnum.SLUSH_RUSH,
             weather == WeatherEnum.SNOW).squeeze()
         is_sand_rush = jnp.logical_and(
-            active.ability == AbilityEnum.SAND_RUSH,
+            ability == AbilityEnum.SAND_RUSH,
             weather == WeatherEnum.SANDSTORM).squeeze()
         temp = conditional_mult_round(
             stats[..., StatEnum.SPEED],
             2,
             quad_or(is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim))
+
+        # paralyzed
+        is_paralyzed = status==Status.PARALYZE
         # quick feet
-        temp = conditional_mult_round(temp, 1.5, jnp.logical_and(active.ability==AbilityEnum.QUICK_FEET, active.status!=Status.NONE))
+        is_quick_feet = jnp.logical_and(ability==AbilityEnum.QUICK_FEET, active.has_status).squeeze()
+        temp = conditional_mult_round(temp, 1.5, is_quick_feet)
+        # apply paralyze speed drop if paralyzed and not quick feet
+        temp = conditional_mult_round(temp, 0.5, jnp.logical_and(is_paralyzed, 1-is_quick_feet))
 
         stats = stats.at[..., StatEnum.SPEED].set(temp)
-
-        # marvel scale
-        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_DEFENSE], 1.5,
-                                      jnp.logical_and(active.ability==AbilityEnum.MARVEL_SCALE, active.has_status))
-        stats = stats.at[..., StatEnum.SPECIAL_DEFENSE].set(temp)
 
 
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
@@ -152,6 +167,8 @@ def clear_boosts(state: BattleState, side_idx) -> BattleState:
     return set_boosts(state, side_idx, StatBoosts())
 
 def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
+    # contrary
+    val = val * (2 * state.active.ability!=AbilityEnum.CONTRARY-1)
     new_boosts = state.boosts.normal_boosts[side_idx]
     new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))

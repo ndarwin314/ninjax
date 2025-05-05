@@ -82,6 +82,7 @@ class TurnType(JaxEnum):
 class MoveFlags(IntFlag):
     CONTACT = auto()
     PUNCHING = auto()
+    SOUND = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
@@ -174,16 +175,16 @@ class AbilityEnum(JaxEnum):
     SHED_SKIN = auto()
     MARVEL_SCALE = auto() # done
     LIQUID_OOZE = auto()
-    OVERGROW = auto()
-    BLAZE = auto()
-    TORRENT = auto()
-    SWARM = auto()
-    ROCK_HEAD = auto()
+    OVERGROW = auto() # done
+    BLAZE = auto() # done
+    TORRENT = auto() # done
+    SWARM = auto() # done
+    ROCK_HEAD = auto() # done
     ARENA_TRAP = auto()
     TANGLED_FEET = auto()
-    MOTOR_DRIVE = auto()
+    MOTOR_DRIVE = auto() # done
     RIVALRY = auto()
-    STEAD_FST = auto()
+    STEADFAST = auto()
     GLUTTONY = auto()
     ANGER_POINT = auto() # done
     DOWNLOAD = auto()
@@ -195,6 +196,31 @@ class AbilityEnum(JaxEnum):
     QUICK_FEET = auto() # done
     NORMALIZE = auto()
     SNIPER = auto() # done
-    TECHNICIAN = auto()
+    TECHNICIAN = auto() # done
+    STALL = auto()
+    LEAF_GUARD = auto()
+    KLUTZ = auto()
+    MOLD_BREAKER = auto()
+    SUPER_LUCK = auto() # done
+    AFTERMATH = auto()
+    ANTICIPATION= auto()
+    FOREWARN = auto()
+    UNAWARE = auto()
+    TINTED_LENS = auto() # done
+    FILTER = auto() # done
+    SOLID_ROCK = FILTER
+    SLOW_START = auto()
+    SCRAPPY = auto()
+    HONEY_GATHER = NONE
+    FRISK = auto()
+    RECKLESS = auto() # done
+    MULTITYPE = auto()
+    FLOWER_GIFT = auto()
+    BAD_DREAMS = auto()
+    PICKPOCKET = auto()
+    CONTRARY = auto() # done
+    UNNERVE = auto()
+    DEFIANT = auto()
+    DEFEATIST = auto() # done
 
 
