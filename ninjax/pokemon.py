@@ -118,6 +118,10 @@ class Pokemon(DataclassArray):
     def has_status(self):
         return self.status!=Status.NONE
 
+    @property
+    def is_poisoned(self):
+        return jnp.logical_and(self.status==Status.POISON, self.status==Status.TOXIC)
+
 
 
 

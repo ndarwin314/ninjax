@@ -58,10 +58,30 @@ def set_status(state: BattleState, side_idx, status: Status):
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = move.base_power
+    ability = attacker.ability
+    #TODO: tera boost
 
     #technician
-    power = conditional_mult(power, 1.5, jnp.less_equal(power, 60))
-    #TODO: tera boost
+    is_technician = ability==AbilityEnum.TECHNICIAN
+    is_technician_boosted = jnp.logical_and(
+        is_technician,
+        jnp.less_equal(power, 60)
+    )
+    power = conditional_mult(power, 1.5, is_technician_boosted)
+    # toxic boost
+    is_toxic_boosted = triple_and(
+        ability==AbilityEnum.TOXIC_BOOST,
+        attacker.is_poisoned,
+        move.move_type==MoveType.PHYSICAL
+    )
+    power = conditional_mult(power, 1.5, is_toxic_boosted)
+    # flare boost
+    is_flare_boosted = triple_and(
+        ability==AbilityEnum.FLARE_BOOST,
+        attacker.status==Status.BURN,
+        move.move_type==MoveType.SPECIAL
+    )
+    power = conditional_mult(power, 1.5, is_flare_boosted)
 
     is_grounded = 1 - attacker.is_floating
     terrain = state.terrain.terrain
@@ -401,6 +421,23 @@ def step_side_conditions(
         tailwind=jnp.maximum(state.tailwind - 1, 0),
         toxic_counter=toxic_counter
     )
+    return key, state
+
+def step_moody(
+    key: chex.PRNGKey,
+    state: BattleState,
+) -> (chex.PRNGKey, BattleState):
+    # i think this needs to be a loop to make the random choices function work
+    abilities = state.active.ability
+    for i in range(2):
+        key, sub_key = random.split(key, 2)
+        key, state = conditional_add_boosts(
+            state,
+            i,
+            abilities[i]==AbilityEnum.MOODY,
+            1 + random.choice(sub_key, 5, (2,), replace=False),
+            (2, -1)
+        )
     return key, state
 
 

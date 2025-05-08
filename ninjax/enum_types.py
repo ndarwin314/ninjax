@@ -230,7 +230,10 @@ class AbilityEnum(JaxEnum):
     HEAVY_METAL = auto()
     LIGHT_METAL = auto()
     MULTISCALE = auto() # done
-    TOXIC_BOOST = auto()
-    FLARE_BOOST = auto()
+    TOXIC_BOOST = auto() # done
+    FLARE_BOOST = auto() # done
+    HARVEST = auto()
+    TELEPATHY = auto()
+    MOODY = auto()
 
 

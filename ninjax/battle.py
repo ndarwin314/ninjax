@@ -1,5 +1,4 @@
 from typing import Union, Tuple, Dict, Any, Optional
-from collections import namedtuple
 
 import chex
 import jax.lax
@@ -12,10 +11,9 @@ import jax.numpy as jnp
 
 from ninjax.side import BattleState, update_active
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain
-from ninjax.move import Move, MoveType
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
                                do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
-                               move_used)
+                               move_used, step_moody)
 
 
 Binary = (0,1)
@@ -217,6 +215,8 @@ def step_field(
 
     # weather, terrain, status, items (leftovers etc)
     state = end_turn_damage(state)
+
+    key, state = step_moody(key, state)
 
     state = state.replace(
         turn_number=state.turn_number + 1,
