@@ -1,7 +1,5 @@
 from dataclasses import field
 
-from chex import Array
-from flax import struct
 import jax.numpy as jnp
 from dataclass_array import DataclassArray
 import dataclass_array as dca

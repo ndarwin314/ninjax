@@ -410,23 +410,36 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     new_moves = active.moves.replace(current_pp=new_pp)
     active = active.replace(moves=new_moves)
     state = update_active(state, attacker_index, active)
+    attacker_ability = state.active[attacker_index].ability
+
+    # check for accuracy bypasses
+    storm_drain = jnp.logical_and(AbilityEnum.STORM_DRAIN == attacker_ability, Type.WATER == move.type)
+    lighting_rod = jnp.logical_and(attacker_ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC)
+    draw_in = jnp.logical_or(storm_drain, lighting_rod)
+    key, state = jax.lax.cond(
+        draw_in,
+        do_stat_boost_from_move, move_not_drawn_in,
+        key, state, attacker_index, move_index, StatEnum.SPECIAL_ATTACK
+    )
+    return key, state
 
 
-    # check if move hits
+def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move: Move, unused: int) -> (chex.PRNGKey, BattleState):
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     active = state.active
     defender_ability = active[1 - attacker_index].ability
     attacker_ability = active[attacker_index].ability
+
     weather = state.weather.weather
     accuracy = (move.accuracy *
                 ACCURACY_MULTIPLIER_LOOKUP[6 + state.boosts.acc_boosts[attacker_index, 0]] *
                 ACCURACY_MULTIPLIER_LOOKUP[6 - state.boosts.acc_boosts[1 - attacker_index, 1]])
     veil_active = jnp.logical_or(
-        jnp.logical_and(defender_ability==AbilityEnum.SAND_VEIL, weather==WeatherEnum.SANDSTORM),
-        jnp.logical_and(defender_ability==AbilityEnum.SNOW_CLOAK, weather==WeatherEnum.SNOW))
+        jnp.logical_and(defender_ability == AbilityEnum.SAND_VEIL, weather == WeatherEnum.SANDSTORM),
+        jnp.logical_and(defender_ability == AbilityEnum.SNOW_CLOAK, weather == WeatherEnum.SNOW))
     conditions = jnp.array(
-        [jnp.equal(attacker_ability,AbilityEnum.COMPOUND_EYES),
+        [jnp.equal(attacker_ability, AbilityEnum.COMPOUND_EYES),
          veil_active])
     modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER])
     accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
@@ -437,7 +450,6 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
     # choose function based on if move hits
     return jax.lax.cond(jnp.less_equal(r, accuracy)[0], move_hits, move_misses, key, state, attacker_index, move_index)
-
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
     # decide branch to execute based on ability immunities
