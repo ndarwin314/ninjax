@@ -22,11 +22,12 @@ class Pokemon(DataclassArray):
     is_terastallized: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
     status: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     ability: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
+    sleep_counter: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
     #item: IntArray['*batch_size'] = jnp.int32([0])
     stat_table: StatTable = StatTable()
-    # this is a hack. we
+    # this is a hack
     current_hp: IntArray['*batch_size 1'] = stat_table.stats[...,0].reshape(1)
-    # add stats conditions and volatile status conditions
+    # TODO add stats conditions and volatile status conditions
 
     def replace_row(self, idx, new_pokemon: "Pokemon"):
         # unfortunately this is literally the best way i can think of to do this

@@ -10,7 +10,8 @@ import jax.numpy as jnp
 
 
 from ninjax.side import BattleState, update_active
-from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain
+from ninjax.utils import triple_and
+from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
                                do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
                                move_used, step_moody)
@@ -168,11 +169,29 @@ def step_move(
 
     # do tera stuff
     can_tera = state.can_tera.at[player_idx].set(1 - is_tera)
-    attacker = attacker.replace(is_terastallized=jnp.bool([is_tera]))
-    state = update_active(state, player_idx, attacker)
 
+    # do sleep stuff
+    # more hacks to avoid branching
+    old_sleep_counter = attacker.sleep_counter
+    sleep_counter = jnp.maximum(0, old_sleep_counter - 1)
+    # if we aren't asleep, sleep counter is already 0, so the diff is 0
+    woken_up = jnp.logical_and(sleep_counter==0, old_sleep_counter-sleep_counter==1)
+    new_status = attacker.status * (1-woken_up)
+
+    attacker = attacker.replace(
+        status=new_status,
+        sleep_counter=sleep_counter,
+        is_terastallized=jnp.bool([is_tera]))
+
+    state = update_active(state, player_idx, attacker)
     # add check for if move happens because of flinch, sleep, paralysis, etc here
-    is_interrupted = False
+    key, sub_key = random.split(key, 2)
+    r = random.uniform(sub_key)
+    is_paralyzed = attacker.status==Status.PARALYZE
+    is_fully_paralyzed = jnp.logical_and(jnp.less_equal(r, 0.25), is_paralyzed)
+    is_sleeping = attacker.status==Status.SLEEP
+    is_flinched = False
+    is_interrupted = triple_and(is_flinched, is_sleeping, is_fully_paralyzed)
     key, state = jax.lax.cond(is_interrupted, move_interrupted, move_used, key, state, player_idx, index)
     return key, state
 

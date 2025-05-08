@@ -36,11 +36,14 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -
     damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
     return take_damage_value(state, defender_idx, damage, False)
 
-def status_helper(active, status: Status):
-    active = active.replace(status=status)
+def status_helper(key, active, status: Status):
+    key, sub_key = random.split(key, 2)
+    # makes sleep turns between 1 and 3 equally likely
+    turns = random.randint(sub_key, (1,), minval=2, maxval=5)[0]
+    active = active.replace(status=status, sleep_counter=turns*(status==Status.SLEEP))
     return active
 
-def set_status(state: BattleState, side_idx, status: Status):
+def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> (chex.PRNGKey, BattleState):
     active = state.active[side_idx]
     already_statused = active.status != Status.NONE
     is_immune = (
@@ -50,10 +53,10 @@ def set_status(state: BattleState, side_idx, status: Status):
         jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune) +
         jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune)
     )
-    active = jax.lax.cond(
+    key, active = jax.lax.cond(
         triple_or(already_statused, is_immune, status==Status.NONE)[0],
-        lambda a, s: a,
-        status_helper, active, status)
+        lambda k, a, s: (k, a),
+        status_helper, key, active, status)
     return update_active(state, side_idx, active)
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
