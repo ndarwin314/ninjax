@@ -189,7 +189,7 @@ class AbilityEnum(JaxEnum):
     ANGER_POINT = auto() # done
     DOWNLOAD = auto()
     IRON_FIST = auto() # done
-    TOUGH_CLAWS = auto() #done
+    TOUGH_CLAWS = auto() # done
     POISON_HEAL = auto()
     SKILL_LINK = auto()
     HYDRATION = auto()
@@ -218,9 +218,19 @@ class AbilityEnum(JaxEnum):
     FLOWER_GIFT = auto()
     BAD_DREAMS = auto()
     PICKPOCKET = auto()
+    SHEER_FORCE = auto()
     CONTRARY = auto() # done
     UNNERVE = auto()
-    DEFIANT = auto()
+    DEFIANT = auto() # partial, issue noted in side.reduce_boosts
     DEFEATIST = auto() # done
+    CURSED_BODY = auto()
+    HEALER = auto()
+    FRIEND_GUARD = auto()
+    WEAK_ARMOR = auto() # done
+    HEAVY_METAL = auto()
+    LIGHT_METAL = auto()
+    MULTISCALE = auto() # done
+    TOXIC_BOOST = auto()
+    FLARE_BOOST = auto()
 
 
