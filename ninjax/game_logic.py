@@ -15,11 +15,14 @@ from ninjax.utils import (
 )
 
 
-def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array ,is_attack_damage) -> BattleState:
+def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array, is_attack_damage) -> BattleState:
     active = state.active[defender_idx]
+    ability = active.ability
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
     health_full = active.current_hp==active.max_hp
-    is_sturdy = active.ability==AbilityEnum.STURDY
+    is_sturdy = ability==AbilityEnum.STURDY
+    is_multiscale = jnp.logical_and(health_full, ability==AbilityEnum.MULTISCALE)
+    damage = conditional_mult_round(damage, 0.5, is_multiscale)
     new_health = jax.lax.clamp(0, (active.current_hp-damage), active.max_hp - health_full*is_sturdy*is_attack_damage)
     # check to make sure we don't accidentally revive a pokemon
     alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
@@ -212,11 +215,18 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     # dealing damage
     damage = damage.astype(int)
     state = take_damage_value(state, 1 - player_idx, damage, True)
+    # recoil
     state = jax.lax.cond(
         move.recoil*attacker.ability!=AbilityEnum.ROCK_HEAD,
         do_recoil, lambda s, p, d: s,
         state, player_idx, jnp.fix(damage*move.recoil_percent))
-
+    # weak armor
+    state = conditional_add_boosts(
+        state,
+        1-player_idx,
+        state.active[player_idx].ability==AbilityEnum.WEAK_ARMOR,
+        (StatEnum.DEFENSE, StatEnum.SPEED), (-1, 2)
+    )
     return key, state
 
 def do_recoil(state: BattleState, player_idx: int, damage) -> BattleState:
