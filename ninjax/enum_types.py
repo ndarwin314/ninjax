@@ -235,5 +235,11 @@ class AbilityEnum(JaxEnum):
     HARVEST = auto()
     TELEPATHY = auto()
     MOODY = auto()
-
-
+    REGENERATOR = auto()
+    BIG_PECKS = auto()
+    WONDER_SKIN = auto()
+    ANALYTIC = auto()
+    ILLUSION = auto()
+    IMPOSTER = auto()
+    MOXIE = auto() # done
+    BEAST_BOOST = auto() # done

@@ -5,7 +5,8 @@ import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts, conditional_add_boosts
+from ninjax.side import (BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts,
+                         conditional_add_boosts, conditional_reduce_boosts)
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
@@ -16,21 +17,30 @@ from ninjax.utils import (
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array, is_attack_damage) -> BattleState:
-    active = state.active[defender_idx]
-    ability = active.ability
+    active = state.active
+    defender = active[defender_idx]
+    attacker = active[1-defender_idx]
     # TODO: there are some effects that trigger based on damage taken, like mirror coat
-    health_full = active.current_hp==active.max_hp
-    is_sturdy = ability==AbilityEnum.STURDY
-    is_multiscale = jnp.logical_and(health_full, ability==AbilityEnum.MULTISCALE)
+    health_full = defender.current_hp==defender.max_hp
+    is_sturdy = defender.ability==AbilityEnum.STURDY
+    is_multiscale = jnp.logical_and(health_full, defender.ability==AbilityEnum.MULTISCALE)
     damage = conditional_mult_round(damage, 0.5, is_multiscale)
-    new_health = jax.lax.clamp(0, (active.current_hp-damage), active.max_hp - health_full*is_sturdy*is_attack_damage)
+    new_health = jax.lax.clamp(0, (defender.current_hp-damage), defender.max_hp - health_full*is_sturdy*is_attack_damage)
     # check to make sure we don't accidentally revive a pokemon
-    alive = jnp.logical_and(jnp.bool([new_health != 0]), active.is_alive)
-    active = active.replace(current_hp=new_health, is_alive=alive)
+    alive = jnp.logical_and(jnp.bool([new_health != 0]), defender.is_alive)
+    defender = defender.replace(current_hp=new_health, is_alive=alive)
+
+    # run moxie or beast boost
+    is_moxie = attacker.ability==AbilityEnum.MOXIE
+    is_beast_boost = attacker.ability==AbilityEnum.BEAST_BOOST
+    index = (1+jnp.argmax(attacker.stats[1-defender_idx, 1:]))*is_beast_boost + is_moxie
+    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)
+    state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
+
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
-    return update_active(state, defender_idx, active)
+    return update_active(state, defender_idx, defender)
 
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
     damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
@@ -388,7 +398,9 @@ def swap_out(
 def swap_is_alive(
     state: BattleState,
     side_idx) -> BattleState:
-    active = state.active[side_idx]
+    active = state.active
+    attacker = active[side_idx]
+    defender_ability = active[1-side_idx].ability
 
     # activate weather abilities if target is alive
     # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
@@ -404,10 +416,15 @@ def swap_is_alive(
     state = state.replace(weather=Weather(new_weather, new_duration))
 
     # intimidate
-    # TODO: probably should make this a conditional for when we need to implement observations
-    # can make conditional_stat_reduce or something that only adds observation if condition
-    is_intimidate = active.ability == AbilityEnum.INTIMIDATE
-    state = reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, is_intimidate)
+    is_intimidate = attacker.ability == AbilityEnum.INTIMIDATE
+    is_intimidate_immune = quad_or(
+        defender_ability==AbilityEnum.OBLIVIOUS,
+        defender_ability==AbilityEnum.OWN_TEMPO,
+        defender_ability==AbilityEnum.INNER_FOCUS,
+        defender_ability==AbilityEnum.SCRAPPY,
+    )
+    intimidate_activated = jnp.logical_and(is_intimidate, 1-is_intimidate_immune)
+    state = conditional_reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, 1, intimidate_activated)
     return state
 
 
