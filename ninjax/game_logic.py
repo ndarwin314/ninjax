@@ -12,7 +12,7 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR
 )
 
 jax.config.update("jax_disable_jit", True)
@@ -495,10 +495,11 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     return key, state
 
 
-def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move: Move, unused: int) -> (chex.PRNGKey, BattleState):
+def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> (chex.PRNGKey, BattleState):
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     active = state.active
+    move = active[attacker_index].moves[move_index]
     defender_ability = active[1 - attacker_index].ability
     attacker_ability = active[attacker_index].ability
 
@@ -511,8 +512,9 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         jnp.logical_and(defender_ability == AbilityEnum.SNOW_CLOAK, weather == WeatherEnum.SNOW))
     conditions = jnp.array(
         [jnp.equal(attacker_ability, AbilityEnum.COMPOUND_EYES),
+         attacker_ability==AbilityEnum.VICTORY_STAR,
          veil_active])
-    modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER])
+    modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER, VICTORY_STAR])
     accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
     no_guard_active = jnp.logical_or(
         jnp.equal(defender_ability, AbilityEnum.NO_GUARD),

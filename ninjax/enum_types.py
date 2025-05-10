@@ -243,3 +243,13 @@ class AbilityEnum(JaxEnum):
     IMPOSTER = auto()
     MOXIE = auto() # done
     BEAST_BOOST = auto() # done
+    JUSTIFIED = auto()
+    RATTLED = auto()
+    MAGIC_BOUNCE = auto()
+    PRANKSTER = auto()
+    SAND_FORCE = auto()
+    IRON_BARBS = ROUGH_SKIN
+    ZEN_MODE = auto()
+    VICTORY_STAR = auto()
+    TURBOBLAZE = MOLD_BREAKER
+    TERAVOLT = TURBOBLAZE
