@@ -188,6 +188,9 @@ def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
 def conditional_add_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
     return jax.lax.cond(cond, add_boosts, lambda s, i, d, v: s, state, side_idx, idx, val)
 
+def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
+    return jax.lax.cond(cond, reduce_boosts, lambda s, i, d, v: s, state, side_idx, idx, val)
+
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
     return state.replace(team=new_team)

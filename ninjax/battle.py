@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 
 from ninjax.side import BattleState, update_active
-from ninjax.utils import triple_and
+from ninjax.utils import triple_and, triple_or
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
                                do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
@@ -191,8 +191,10 @@ def step_move(
     is_fully_paralyzed = jnp.logical_and(jnp.less_equal(r, 0.25), is_paralyzed)
     is_sleeping = attacker.status==Status.SLEEP
     is_flinched = False
-    is_interrupted = triple_and(is_flinched, is_sleeping, is_fully_paralyzed)
-    key, state = jax.lax.cond(is_interrupted, move_interrupted, move_used, key, state, player_idx, index)
+    is_interrupted = triple_or(is_flinched, is_sleeping, is_fully_paralyzed)
+    key, state = jax.lax.cond(
+        is_interrupted, move_interrupted, move_used,
+        key, state, player_idx, index)
     return key, state
 
 

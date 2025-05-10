@@ -235,5 +235,11 @@ class AbilityEnum(JaxEnum):
     HARVEST = auto()
     TELEPATHY = auto()
     MOODY = auto() # probably fine, to be correct we need to exclude stats that are already +6 or -6 but that seems hard
-
-
+    REGENERATOR = auto()
+    BIG_PECKS = auto()
+    WONDER_SKIN = auto()
+    ANALYTIC = auto()
+    ILLUSION = auto()
+    IMPOSTER = auto()
+    MOXIE = auto() # done
+    BEAST_BOOST = auto() # done
