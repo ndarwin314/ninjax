@@ -96,7 +96,7 @@ def base_damage_compute(
 
 def conditional_mult_round(damage, mult, cond):
     # fix correctly rounds down at .5 for all values rather than banker's rounding
-    return jnp.fix(conditional_mult(damage, mult, cond))
+    return jnp.fix(conditional_mult(damage, mult, cond)).astype(int)
 
 
 def conditional_mult(value, mult, cond):

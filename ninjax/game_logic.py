@@ -14,6 +14,8 @@ from ninjax.utils import (
     in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS
 )
 
+jax.config.update("jax_disable_jit", True)
+
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array, is_attack_damage) -> BattleState:
     active = state.active[defender_idx]
@@ -56,7 +58,8 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
     key, active = jax.lax.cond(
         triple_or(already_statused, is_immune, status==Status.NONE)[0],
         lambda k, a, s: (k, a),
-        status_helper, key, active, status)
+        status_helper,
+        key, active, status)
     return update_active(state, side_idx, active)
 
 def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
@@ -149,7 +152,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
               is_flame * Status.BURN +
               is_static * Status.PARALYZE +
               is_point * Status.POISON) * triggered
-    state = set_status(state, attacker_idx, status)
+    key, state = set_status(key, state, attacker_idx, status)
 
     # attacker triggers
     is_poison_touch = attacker.ability==AbilityEnum.POISON_TOUCH
@@ -158,7 +161,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     triggered = jnp.less_equal(r, 0.3)
     status = (is_poison_touch * Status.POISON +
               is_toxic_chain * Status.TOXIC) * triggered
-    state = set_status(state, 1-attacker_idx, status)
+    key, state = set_status(key, state, 1-attacker_idx, status)
     return key, state
 
 def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, base_damage) -> (chex.PRNGKey, BattleState):
@@ -180,11 +183,12 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     key, one, two = random.split(key, num=3)
     # crit multiplier
     # battle armor prevents crits
-    crit_chance = CRIT_STAGES[move.crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
-    crit_chance = crit_chance + attacker.ability==AbilityEnum.SUPER_LUCK
+    crit_stage = move.crit_stage+(attacker.ability==AbilityEnum.SUPER_LUCK)[0]
+    crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
     is_crit = random.uniform(one) < crit_chance
-    state = conditional_add_boosts(state, 1-attacker_idx, defender.ability==AbilityEnum.ANGER_POINT, StatEnum.ATTACK, 13)
-    crit_multiplier = 1.5 + 0.75 * attacker.ability==AbilityEnum.SNIPER
+    is_angry = jnp.logical_and(defender.ability==AbilityEnum.ANGER_POINT, is_crit)[0]
+    state = conditional_add_boosts(state, 1-attacker_idx, is_angry, StatEnum.ATTACK, 13)
+    crit_multiplier = 1.5 + 0.75 * (attacker.ability==AbilityEnum.SNIPER)[0]
     # damage roll, idc about preserving the in game RNG generation
     base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
@@ -194,7 +198,7 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     is_tera_boosted = jnp.logical_and(attacker.is_terastallized, attacker.tera_type == move.type)
     is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
     is_stab = jnp.logical_or(jnp.any(attacker.type_list == move.type), is_tera_boosted)
-    is_adaptability_boosted = attacker.ability==AbilityEnum.ADAPTABILITY * is_stab
+    is_adaptability_boosted = jnp.logical_and(attacker.ability==AbilityEnum.ADAPTABILITY, is_stab)
     stab_multiplier = (
             1.5 +
             0.5 * jnp.logical_or(is_matching_tera, is_adaptability_boosted) +
@@ -240,14 +244,14 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     state = take_damage_value(state, 1 - player_idx, damage, True)
     # recoil
     state = jax.lax.cond(
-        move.recoil*attacker.ability!=AbilityEnum.ROCK_HEAD,
+        jnp.logical_and(move.recoil, attacker.ability!=AbilityEnum.ROCK_HEAD)[0],
         do_recoil, lambda s, p, d: s,
         state, player_idx, jnp.fix(damage*move.recoil_percent))
     # weak armor
     state = conditional_add_boosts(
         state,
         1-player_idx,
-        state.active[player_idx].ability==AbilityEnum.WEAK_ARMOR,
+        (state.active[player_idx].ability==AbilityEnum.WEAK_ARMOR)[0],
         (StatEnum.DEFENSE, StatEnum.SPEED), (-1, 2)
     )
     return key, state

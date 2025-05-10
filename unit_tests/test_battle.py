@@ -7,7 +7,7 @@ import dataclass_array as dca
 from ninjax.battle import Battle, BattleState, BattleParams, step_move
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import Type, MoveType, Status, AbilityEnum
-from ninjax.game_logic import move_used, do_move_damage, do_contact
+from ninjax.game_logic import move_used, do_move_damage, do_contact, status_helper
 from ninjax.move import Move
 from ninjax.stats import StatTable, Nature, StatBoosts
 from ninjax.side import BattleState
@@ -65,6 +65,14 @@ def battle_state():
     battle = Battle()
     params = BattleParams()
     return key, state
+
+def test_contact(neutral_type):
+    key, state = neutral_type
+    do_contact(key, state, 0)
+
+def test_stat_helper(neutral_type):
+    key, state = neutral_type
+    status_helper(key, state.active[0], jnp.ones(1))
 
 class TestStats:
     @pytest.mark.parametrize(

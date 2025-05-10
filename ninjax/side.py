@@ -95,13 +95,13 @@ class BattleState(DataclassArray):
         is_guts = jnp.logical_and(ability==AbilityEnum.GUTS, status==Status.BURN).squeeze()
         temp = conditional_mult_round(stats[...,StatEnum.ATTACK], 1.5, is_guts)
         # huge power
-        is_huge_power = jnp.array(ability==AbilityEnum.HUGE_POWER).squeeze()
+        is_huge_power = (ability==AbilityEnum.HUGE_POWER).squeeze()
         temp = conditional_mult_round(
             temp,
             2,
             is_huge_power)
         # defeatist
-        is_defeatist = jnp.logical_and(ability==AbilityEnum.DEFEATIST, active.hp_less_than(0.5)).squeeze()
+        is_defeatist = jnp.logical_and((ability==AbilityEnum.DEFEATIST).squeeze(), active.hp_less_than(0.5))
         temp = conditional_mult_round(temp, 0.5, is_defeatist)
         stats = stats.at[..., StatEnum.ATTACK].set(temp)
 
@@ -134,7 +134,7 @@ class BattleState(DataclassArray):
             quad_or(is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim))
 
         # paralyzed
-        is_paralyzed = status==Status.PARALYZE
+        is_paralyzed = (status==Status.PARALYZE).squeeze()
         # quick feet
         is_quick_feet = jnp.logical_and(ability==AbilityEnum.QUICK_FEET, active.has_status).squeeze()
         temp = conditional_mult_round(temp, 1.5, is_quick_feet)
@@ -168,7 +168,7 @@ def clear_boosts(state: BattleState, side_idx) -> BattleState:
 
 def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     # contrary
-    val = val * (2 * state.active.ability!=AbilityEnum.CONTRARY-1)
+    val = val * (2 * (state.active.ability[side_idx]!=AbilityEnum.CONTRARY)[0]-1)
     new_boosts = state.boosts.normal_boosts[side_idx]
     new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))

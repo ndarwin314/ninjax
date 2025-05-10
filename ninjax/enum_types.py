@@ -234,6 +234,6 @@ class AbilityEnum(JaxEnum):
     FLARE_BOOST = auto() # done
     HARVEST = auto()
     TELEPATHY = auto()
-    MOODY = auto()
+    MOODY = auto() # probably fine, to be correct we need to exclude stats that are already +6 or -6 but that seems hard
 
 

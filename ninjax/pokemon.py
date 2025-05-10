@@ -63,7 +63,7 @@ class Pokemon(DataclassArray):
 
     @property
     def hp_percent(self):
-        return self.current_hp / self.max_hp
+        return self.current_hp.squeeze() / self.max_hp
 
     def hp_less_than(self, percent):
         return jnp.less_equal(self.hp_percent, percent)
