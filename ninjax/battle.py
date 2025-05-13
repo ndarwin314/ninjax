@@ -11,7 +11,7 @@ import jax.numpy as jnp
 
 from ninjax.side import BattleState, update_active
 from ninjax.utils import triple_and, triple_or
-from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status
+from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
                                do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
                                move_used, step_moody)
@@ -55,8 +55,25 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         params: BattleParams,
     ) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         act1, act2 = actions
-        # TODO: stupid action order code probably needs to be rewritten to be more jax-y
-        first, second = action_order(state, actions)
+        is_move, index, is_tera, is_no_op = decode_action(actions)
+        active = state.active
+        moves = active.moves[(0, 1), index]
+        is_gale_wings = triple_and(
+            moves.type==Type.FLYING,
+            active.ability==AbilityEnum.GALE_WINGS,
+            active.hp_percent==1
+        )
+        is_prankster = jnp.logical_and(
+            moves.move_type==MoveType.STATUS,
+            active.ability==AbilityEnum.PRANKSTER
+        )
+        is_triage = jnp.logical_and(
+            moves.healing,
+            active.ability==AbilityEnum.TRIAGE
+        )
+        priorities = moves.priority + is_triage + is_prankster + is_gale_wings
+        priorities = priorities * is_move + (1-is_move) * 7
+        first, second = action_order(key, state, priorities)
         key, state = step_action(key, state, act1, first)
         key, state = step_action(key, state, act2, second)
 
@@ -70,83 +87,44 @@ class Battle(environment.Environment[BattleState, BattleParams]):
     ) -> Tuple[chex.Array, BattleState]:
         pass
 
-def standard_turn_step(
-    key: chex.PRNGKey,
-    state: BattleState,
-    actions: (int, int)
-) -> Tuple[chex.Array, BattleState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-    act1, act2 = actions
-    first, second = action_order(state, actions)
-    key, state = step_action(key, state, act1, first)
-    # also check for like is flinched here, and check for sleep for both or something
-    key, state = jax.lax.cond(
-        second.active.is_alive,
-        step_action,
-        lambda k, s, a, _: (key, state), key, state, act2, second)
-
-    key, state = step_field(key, state)
-    # set legal action masks here
-    mask = jnp.zeros((2, 15))
-    alive = (state.sides[0].active.is_alive, state.sides[1].active.is_alive)
-    bad = jnp.zeros((2, 6))
-    for i in range(2):
-        bad = bad.at[i].set(state.sides[i].legal_switch_mask())
-    # make sure this broadcast works correctly
-    bad = bad * alive
-    mask = mask.at[:,8:14].set(bad)
-    # make sure this axis is the right way
-    mask = mask.at[:,15].set(1 - jnp.any(mask[:,8:14], axis=0))
-    state = state.replace(legal_action_mask=mask)
-
-    return jnp.array([0]), state, jnp.array([0]), jnp.array([0]), {}
-
-no_op_func = lambda k, s, a, b, c: (k, s)
-
-
-def switch_move_step(
-    key: chex.PRNGKey,
-    state: BattleState,
-    actions: (int, int)
-) -> (chex.PRNGKey, BattleState):
-    bad = True
-    mask = jnp.ones((2, 15))
-    for i in range(2):
-        # TODO: add assertions to verify action is legal
-        is_move_action, index, is_tera, is_no_op = decode_action(actions[i])
-        key, state = jax.lax.cond(is_no_op, no_op_func, step_switch, key, state, i, index, is_tera)
-        is_alive = state.sides[i].active.is_alive
-        mask = mask.at[i, 8:14].set(state.sides[i].legal_switch_mask())
-        bad = jnp.logical_or(bad, is_alive)
-    mask = mask.at[:, 0:8].mul(bad)
-    state = state.replace(legal_action_mask=mask)
-    # TODO: ugggghhhhhh, run it back if not bad, return the correct stuff
-
-
+def equal_priority(r, speeds, priorities):
+    first = jnp.argmax(speeds)
+    tie_val = jnp.less_equal(r, 0.5)
+    return jax.lax.select(speeds[0]!=speeds[1], jnp.array([first, 1-first]), jnp.array([tie_val, 1-tie_val]))
 
 def action_order(
+    key: chex.PRNGKey,
     state: BattleState,
-    actions: (int, int),
+    priorities: (int, int),
 ) -> (int, int):
     # for now im just going to go off speed stats of active pokemon
     # obviously this needs to account for priority brackets later
     # key and actions arent used now but they will be needed for
-    # 1. breaking ties
-    # 2. getting priority
-    speeds = state.boosted_stats[StatEnum.SPEED]
-    # priorities = []
-    first = speeds[0] < speeds[1]
-    return first + 0, 1 - first
+    key, sub_key = random.split(key, 2)
+    r = random.uniform(sub_key)
 
-def decode_action(action: int) -> (bool, int, bool):
-    # takes int in [0, 14) and returns a tuple of is_move, index, is_tera
+    priorities = jnp.array(priorities)
+    diff_priorities = priorities[0] != priorities[1]
+    speeds = state.boosted_stats[StatEnum.SPEED]
+    diff_speeds = speeds[0] != speeds[1]
+    first_prio = jnp.argmax(priorities)
+    first_speed = jnp.argmax(speeds)
+    tiebreak = jnp.less_equal(r, 0.5)
+    first = (first_prio * diff_priorities +
+             first_speed * jnp.logical_and(diff_speeds, 1-diff_priorities) +
+             tiebreak * jnp.logical_and(1-diff_priorities, 1-diff_speeds))
+    return first, 1-first
+
+def decode_action(action):
+    # takes int in [0, 15) and returns a tuple of is_move, index, is_tera
     # index is a move index in [0,4) if action is a move, and in [0,6) if its a switch
     # if is_move == False then the third index should be ignored
-    is_move_action = action < 8
+    is_move_action = jnp.less(action, 8)
     move_index = (action - 4) % 14
-    is_tera = action >= 4
+    is_tera = jnp.greater(action, 4)
     switch_index = action - 8
     index = move_index * is_move_action + switch_index * (1 - is_move_action)
-    is_no_op = action==15
+    is_no_op = jnp.equal(action, 15)
     return is_move_action, index, is_tera, is_no_op
 
 def step_move(

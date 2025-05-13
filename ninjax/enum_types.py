@@ -83,6 +83,9 @@ class MoveFlags(IntFlag):
     CONTACT = auto()
     PUNCHING = auto()
     SOUND = auto()
+    BULLET = auto()
+    LAUNCHER = auto()
+    HEALING = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
@@ -246,10 +249,25 @@ class AbilityEnum(JaxEnum):
     JUSTIFIED = auto()
     RATTLED = auto()
     MAGIC_BOUNCE = auto()
-    PRANKSTER = auto()
+    PRANKSTER = auto() # done
     SAND_FORCE = auto()
     IRON_BARBS = ROUGH_SKIN
     ZEN_MODE = auto()
     VICTORY_STAR = auto()
     TURBOBLAZE = MOLD_BREAKER
     TERAVOLT = TURBOBLAZE
+    AROMA_VEIL = auto()
+    FLOWER_VEIL = auto()
+    CHEEK_POUCH = auto()
+    PROTEAN = auto()
+    LIBERO = PROTEAN
+    FUR_COAT = auto()
+    MAGICIAN = auto()
+    BULLET_PROOF = auto()
+    COMPETITIVE = auto()
+    STRONG_JAW = auto()
+    REFRIGERATE = auto()
+    SWEET_VEIL = auto()
+    STANCE_CHANGE = auto()
+    GALE_WINGS = auto() # done
+    TRIAGE = auto() # done

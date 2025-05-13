@@ -37,11 +37,23 @@ class Move(DataclassArray):
 
     @property
     def punching(self):
-        return self.move_flags & MoveFlags.PUNCHING == MoveFlags.PUNCHING
+        return (self.move_flags & MoveFlags.PUNCHING) == MoveFlags.PUNCHING
 
     @property
     def recoil(self):
         return self.recoil_percent != 0
+
+    @property
+    def bullet(self):
+        return (self.move_flags @ MoveFlags.BULLET) == MoveFlags.BULLET
+
+    @property
+    def launcher(self):
+        return (self.move_flags @ MoveFlags.LAUNCHER) == MoveFlags.LAUNCHER
+
+    @property
+    def healing(self):
+        return (self.move_flags @ MoveFlags.HEALING) == MoveFlags.HEALING
 
 
 
