@@ -86,6 +86,7 @@ class MoveFlags(IntFlag):
     BULLET = auto()
     LAUNCHER = auto()
     HEALING = auto()
+    BITING = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
@@ -264,9 +265,13 @@ class AbilityEnum(JaxEnum):
     FUR_COAT = auto()
     MAGICIAN = auto()
     BULLET_PROOF = auto()
-    COMPETITIVE = auto()
-    STRONG_JAW = auto()
+    COMPETITIVE = auto() # done
+    STRONG_JAW = auto() # done
     REFRIGERATE = auto()
+    PIXILATE = auto()
+    AERILATE = auto()
+    GALVANIZE = auto()
+    LIQUID_VOICE = auto()
     SWEET_VEIL = auto()
     STANCE_CHANGE = auto()
     GALE_WINGS = auto() # done

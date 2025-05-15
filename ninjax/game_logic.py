@@ -115,6 +115,8 @@ def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = conditional_mult_round(power, TOUGH_CLAWS, jnp.logical_and(move.contact, ability==AbilityEnum.TOUGH_CLAWS))
     # reckless
     power = conditional_mult_round(power, RECKLESS, jnp.logical_and(move.recoil, ability==AbilityEnum.RECKLESS))
+    # strong jaw
+    power = conditional_mult_round(power, 1.5, jnp.logical_and(move.biting, ability==AbilityEnum.STRONG_JAW))
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
@@ -483,6 +485,27 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     state = update_active(state, attacker_index, active)
     attacker_ability = state.active[attacker_index].ability
 
+    # do modifications to the move
+    # check for -ate abilities that change move type
+    # also add ion deluge at some point
+    is_normal = move.type==Type.NORMAL
+    aerilate = jnp.logical_and(attacker_ability==AbilityEnum.AERILATE, is_normal)
+    refrigerate = jnp.logical_and(attacker_ability==AbilityEnum.REFRIGERATE, is_normal)
+    pixilate = jnp.logical_and(attacker_ability==AbilityEnum.PIXILATE, is_normal)
+    galvanize = jnp.logical_and(attacker_ability==AbilityEnum.GALVANIZE, is_normal)
+    normalize = attacker_ability==AbilityEnum.NORMALIZE
+    liquid_voice = jnp.logical_and(attacker_ability==AbilityEnum.LIQUID_VOICE, move.sound)
+    override_boost = jnp.logical_or(quad_or(aerilate, refrigerate, pixilate, galvanize), normalize)
+    new_type = (move.type * jnp.logical_or(override_boost, liquid_voice) +
+                aerilate * Type.FLYING +
+                refrigerate * Type.ICE +
+                pixilate * Type.FAIRY +
+                galvanize * Type.FAIRY +
+                liquid_voice * Type.WATER +
+                normalize * Type.NORMAL)
+    new_power = conditional_mult_round(move.base_power, 1.2, override_boost)
+    move = move.replace(base_power=new_power, type=new_type)
+
     # check for accuracy bypasses
     storm_drain = jnp.logical_and(AbilityEnum.STORM_DRAIN == attacker_ability, Type.WATER == move.type)
     lighting_rod = jnp.logical_and(attacker_ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC)
@@ -522,9 +545,13 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
 
     # choose function based on if move hits
-    return jax.lax.cond(jnp.less_equal(r, accuracy)[0], move_hits, move_misses, key, state, attacker_index, move_index)
+    return jax.lax.cond(
+        jnp.less_equal(r, accuracy)[0],
+        move_hits, move_misses,
+        key, state, attacker_index, move_index)
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+
     # decide branch to execute based on ability immunities
     defender = state.active[1 - attacker_index]
     move = state.active[attacker_index].moves[move_index]
@@ -553,7 +580,10 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
     # i think using a switch means we skip evaluating the branches we don't need
     # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
-    return jax.lax.switch(branch_index[0], branches, key, state, attacker_index, move, is_attack_boost + 4 * is_spa_boost + 6*is_speed_boost)
+    return jax.lax.switch(
+        branch_index[0],
+        branches,
+        key, state, attacker_index, move, is_attack_boost + 4 * is_spa_boost + 6*is_speed_boost)
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
     return key, state

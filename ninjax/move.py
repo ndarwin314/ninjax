@@ -40,6 +40,14 @@ class Move(DataclassArray):
         return (self.move_flags & MoveFlags.PUNCHING) == MoveFlags.PUNCHING
 
     @property
+    def biting(self):
+        return (self.move_flags & MoveFlags.BITING) == MoveFlags.BITING
+
+    @property
+    def sound(self):
+        return (self.move_flags & MoveFlags.SOUND) == MoveFlags.SOUND
+
+    @property
     def recoil(self):
         return self.recoil_percent != 0
 

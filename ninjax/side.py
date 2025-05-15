@@ -179,7 +179,15 @@ def reduce_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     # TODO: this doesn't account for the functionality of idx being an array
     # in which case it should apply len(idx) times but that is hard to implement in JAX
     is_defiant = ability[side_idx]==AbilityEnum.DEFIANT
-    jax.lax.cond(is_defiant, add_boosts, lambda b, s, i, v: s, state, side_idx, StatEnum.ATTACK, 2)
+    is_competitive = ability[side_idx]==AbilityEnum.COMPETITIVE
+    jax.lax.cond(is_defiant,
+                 add_boosts,
+                 lambda b, s, i, v: s,
+                 state, side_idx, StatEnum.ATTACK, 2)
+    jax.lax.cond(is_competitive,
+                 add_boosts,
+                 lambda b, s, i, v: s,
+                 state, side_idx, StatEnum.SPECIAL_ATTACK, 2)
     return add_boosts(state, side_idx, idx, -val * not_clear_body)
 
 def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
