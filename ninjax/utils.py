@@ -19,6 +19,7 @@ Array = jax.Array
 increase_mult = 1.1
 one_point_three = 5325/4096
 one_point_one = 4506/4096
+four_thirds = 5448/4096
 one_point_three_exact = 1.3
 one_third = 1/3
 
@@ -34,6 +35,8 @@ COMPOUND_EYES_MULTIPLIER = one_point_three
 VICTORY_STAR = one_point_one
 TOUGH_CLAWS = one_point_three
 WEATHER_VEIL_MODIFIER = 3277/4096
+FAIRY_AURA = four_thirds
+DARK_AURA = four_thirds
 ROUGH_SKIN_DAMAGE = 1/8
 IRON_FIST = 1.2
 RECKLESS = 1.2

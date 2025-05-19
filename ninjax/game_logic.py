@@ -12,7 +12,7 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds
 )
 
 jax.config.update("jax_disable_jit", True)
@@ -38,6 +38,10 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     index = (1+jnp.argmax(attacker.stats[1-defender_idx, 1:]))*is_beast_boost + is_moxie
     cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
+
+    # stamina
+    is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)
+    state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
 
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
@@ -72,10 +76,27 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         key, active, status)
     return update_active(state, side_idx, active)
 
-def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
+def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon, move: Move):
     power = move.base_power
     ability = attacker.ability
     #TODO: tera boost
+    # TODO at some point test if this can be optimized by putting all the values in arrays and doing one conditional mult round
+
+    # dark and fairy aura
+    # both of these  apply to both sides
+    fairy_aura = jnp.logical_and(move.type==Type.FAIRY,
+                                 jnp.logical_or(ability==AbilityEnum.FAIRY_AURA, defender.ability==AbilityEnum.FAIRY_AURA))
+    dark_aura = jnp.logical_and(move.type==Type.DARK,
+                                 jnp.logical_or(ability==AbilityEnum.DARK_AURA, defender.ability==AbilityEnum.DARK_AURA))
+    aura = jnp.logical_or(fairy_aura, dark_aura)
+    aura_break = jnp.logical_or(attacker.ability==AbilityEnum.AURA_BREAK, defender.ability==AbilityEnum.AURA_BREAK)
+
+    power = conditional_mult_round(power, four_thirds, jnp.logical_and(aura, 1-aura_break))
+    power = conditional_mult_round(power, 3/4, jnp.logical_and(aura, aura_break))
+
+    # water bubble
+    water_bubble = jnp.logical_and(ability==AbilityEnum.WATER_BUBBLE, move.type==Type.WATER)
+    power = conditional_mult_round(power, 2, water_bubble)
 
     #technician
     is_technician = ability==AbilityEnum.TECHNICIAN
@@ -117,6 +138,8 @@ def compute_base_power(state: BattleState, attacker: Pokemon, move: Move):
     power = conditional_mult_round(power, RECKLESS, jnp.logical_and(move.recoil, ability==AbilityEnum.RECKLESS))
     # strong jaw
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.biting, ability==AbilityEnum.STRONG_JAW))
+    # mega launcher
+    power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
@@ -133,7 +156,9 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     is_blaze = triple_and(type_==Type.FIRE, attacker.hp_less_than(one_third), ability==AbilityEnum.BLAZE)
     is_torrent = triple_and(type_==Type.WATER, attacker.hp_less_than(one_third), ability==AbilityEnum.TORRENT)
     is_swarm = triple_and(type_==Type.BUG, attacker.hp_less_than(one_third), ability==AbilityEnum.SWARM)
-    offensive_stat = conditional_mult_round(offensive_stat, 1.5, quad_or(is_swarm, is_torrent, is_blaze, is_overgrow))
+    is_steel_worker = jnp.logical_and(type_==Type.STEEL, ability==AbilityEnum.STEELWORKER)
+    offensive_stat = conditional_mult_round(offensive_stat, 1.5,
+                                            jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker]))
 
     level = state.active.stat_table.level[attacker_idx]
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
@@ -173,6 +198,10 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     triggered = jnp.less_equal(r, 0.3)
     status = (is_poison_touch * Status.POISON +
               is_toxic_chain * Status.TOXIC) * triggered
+
+    # gooey
+    state = conditional_reduce_boosts(state, attacker_idx, defender.ability==AbilityEnum.GOOEY, StatEnum.SPEED, 1)
+
     key, state = set_status(key, state, 1-attacker_idx, status)
     return key, state
 
@@ -240,9 +269,10 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
 
 def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
     attacker = state.active[player_idx]
+    defender = state.active[1-player_idx]
 
     # base power modifications, technician, tera, terrain etc
-    power = compute_base_power(state, attacker, move)
+    power = compute_base_power(state, attacker, defender, move)
 
     # base damage pre multipliers
     base_damage = compute_base_damage(state, move, player_idx, power)
@@ -253,6 +283,9 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     key, damage = compute_damage_multipliers(key, state, player_idx, move, base_damage)
     # dealing damage
     damage = damage.astype(int)
+    # bulbapedia says water bubble "halves damage" so here we are
+    water_bubble = jnp.logical_and(move.type==Type.FIRE, defender.ability==AbilityEnum.WATER_BUBBLE)
+    damage = conditional_mult_round(damage, 1/2, water_bubble)
     state = take_damage_value(state, 1 - player_idx, damage, True)
     # recoil
     state = jax.lax.cond(

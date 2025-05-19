@@ -96,7 +96,7 @@ class Pokemon(DataclassArray):
 
     @property
     def is_burn_immune(self):
-        return jnp.logical_or(self.is_type(Type.FIRE), self.ability==AbilityEnum.WATER_VEIL)
+        return triple_or(self.is_type(Type.FIRE), self.ability==AbilityEnum.WATER_VEIL, self.ability==AbilityEnum.WATER_BUBBLE)
 
     @property
     def is_freeze_immune(self):
