@@ -12,8 +12,7 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds
-)
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and)
 
 jax.config.update("jax_disable_jit", True)
 
@@ -27,7 +26,11 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     is_sturdy = defender.ability==AbilityEnum.STURDY
     is_multiscale = jnp.logical_and(health_full, defender.ability==AbilityEnum.MULTISCALE)
     damage = conditional_mult_round(damage, 0.5, is_multiscale)
-    new_health = jax.lax.clamp(0, (defender.current_hp-damage), defender.max_hp - health_full*is_sturdy*is_attack_damage)
+    old_health = defender.current_hp
+    over_half = jnp.greater_equal(old_health/defender.max_hp, 0.5)
+    new_health = jax.lax.clamp(0, old_health-damage, defender.max_hp - health_full*is_sturdy*is_attack_damage)
+    under_half = jnp.less(new_health/defender.max_hp, 0.5)
+
     # check to make sure we don't accidentally revive a pokemon
     alive = jnp.logical_and(jnp.bool([new_health != 0]), defender.is_alive)
     defender = defender.replace(current_hp=new_health, is_alive=alive)
@@ -42,6 +45,10 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     # stamina
     is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)
     state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
+
+    #berserk
+    is_berserk = quad_and(over_half, under_half, is_attack_damage, defender.ability == AbilityEnum.BERSERK)
+    state = conditional_add_boosts(state, defender_idx, jnp.logical_and(is_berserk, alive), StatEnum.SPECIAL_ATTACK, 1)
 
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
@@ -62,13 +69,15 @@ def status_helper(key, active, status: Status):
 def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> (chex.PRNGKey, BattleState):
     active = state.active[side_idx]
     already_statused = active.status != Status.NONE
-    is_immune = (
-        jnp.logical_and(jnp.logical_or(status==Status.POISON, status==Status.TOXIC), active.is_poison_immune) +
-        jnp.logical_and(status==Status.PARALYZE, active.is_paralyze_immune) +
-        jnp.logical_and(status==Status.BURN, active.is_burn_immune) +
-        jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune) +
-        jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune)
-    )
+    is_comatose =  active.ability==AbilityEnum.COMATOSE
+    is_immune = jnp.any(jnp.array([
+        jnp.logical_and(jnp.logical_or(status==Status.POISON, status==Status.TOXIC), active.is_poison_immune),
+        jnp.logical_and(status==Status.PARALYZE, active.is_paralyze_immune),
+        jnp.logical_and(status==Status.BURN, active.is_burn_immune),
+        jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune),
+        jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune),
+        is_comatose
+    ]))
     key, active = jax.lax.cond(
         triple_or(already_statused, is_immune, status==Status.NONE)[0],
         lambda k, a, s: (k, a),
@@ -224,7 +233,9 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     key, one, two = random.split(key, num=3)
     # crit multiplier
     # battle armor prevents crits
-    crit_stage = move.crit_stage+(attacker.ability==AbilityEnum.SUPER_LUCK)[0]
+    crit_stage = (move.crit_stage+
+                  (attacker.ability==AbilityEnum.SUPER_LUCK)[0] +
+                  3*jnp.logical_and(attacker.ability==AbilityEnum.MERCILESS, defender.is_poisoned))
     crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
     is_crit = random.uniform(one) < crit_chance
     is_angry = jnp.logical_and(defender.ability==AbilityEnum.ANGER_POINT, is_crit)[0]
@@ -262,7 +273,7 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
 
     # do on contact effects
-    makes_contact = move.contact
+    makes_contact = jnp.logical_and(move.contact,  attacker.ability!=AbilityEnum.LONG_REACH)
     key, state = jax.lax.cond(makes_contact[0], do_contact, lambda k, s, a: (k, s), key, state, attacker_idx)
 
     return key, base_damage

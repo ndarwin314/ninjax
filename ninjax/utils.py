@@ -30,7 +30,7 @@ denominators = 2 * np.ones(13) - np.fmin(range_, 0)
 STAT_MULTIPLIER_LOOKUP = jnp.array(numerators / denominators)
 ACCURACY_MULTIPLIER_LOOKUP = jnp.array((1 + numerators) / (1 + denominators))
 TERRAIN_MULTIPLIER = one_point_three_exact
-CRIT_STAGES = jnp.array([1/24, 1/8, 1,2, 1, 1])
+CRIT_STAGES = jnp.array([1/24, 1/8, 1/2, 1, 1, 1, 1, 1])
 COMPOUND_EYES_MULTIPLIER = one_point_three
 VICTORY_STAR = one_point_one
 TOUGH_CLAWS = one_point_three
@@ -70,7 +70,10 @@ def triple_or(a, b, c):
     return jnp.logical_or(jnp.logical_or(a, b), c)
 
 def quad_or(a, b, c, d):
-    return jnp.logical_or(a, jnp.logical_and(jnp.logical_and(b, c), d))
+    return jnp.logical_or(a, jnp.logical_or(jnp.logical_or(b, c), d))
+
+def quad_and(a, b, c, d):
+    return jnp.logical_and(a, jnp.logical_and(jnp.logical_and(b, c), d))
 
 def in_range(lb, value, ub):
     return jnp.logical_and(jnp.less(lb, value), jnp.less_equal(value, ub))

@@ -113,6 +113,11 @@ class BattleState(DataclassArray):
                                       jnp.logical_and(ability==AbilityEnum.MARVEL_SCALE, active.has_status).squeeze())
         stats = stats.at[..., StatEnum.SPECIAL_DEFENSE].set(temp)
 
+        # surge surfer
+        terrain = self.terrain.terrain
+        is_surge_surfer = jnp.logical_and(
+            ability==AbilityEnum.SURGE_SURFER,
+            terrain==TerrainEnum.ELECTRIC).squeeze()
 
         # speed boosting weather abilities
         weather = self.weather.weather
@@ -131,7 +136,8 @@ class BattleState(DataclassArray):
         temp = conditional_mult_round(
             stats[..., StatEnum.SPEED],
             2,
-            quad_or(is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim))
+            jnp.array([is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim, is_surge_surfer]))
+
 
         # paralyzed
         is_paralyzed = (status==Status.PARALYZE).squeeze()
