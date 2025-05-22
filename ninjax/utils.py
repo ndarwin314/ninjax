@@ -112,6 +112,12 @@ def conditional_mult(value, mult, cond):
     # this doesnt seem correct to me but i guess its how jax broadcasts so figure out how to deal with that
     return value * jnp.power(mult, cond)
 
+def conditional_mult_prod(value, mult, cond):
+    return value * jnp.prod(jnp.power(mult, cond))
+
+def conditional_mult_prod_round(damage, mult, cond):
+    # fix correctly rounds down at .5 for all values rather than banker's rounding
+    return jnp.fix(conditional_mult_prod(damage, mult, cond)).astype(int)
 
 
 

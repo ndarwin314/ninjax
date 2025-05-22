@@ -277,6 +277,7 @@ class AbilityEnum(JaxEnum):
     GALE_WINGS = auto() # done
     TRIAGE = auto() # done
     GOOEY = auto() # done
+    TANGLING_HAIR = GOOEY
     MEGA_LAUNCHER = auto() # done
     GRASS_PELT = auto()
     SYMBIOSIS = auto()
@@ -307,7 +308,16 @@ class AbilityEnum(JaxEnum):
     QUEENLY_MAJESTY = auto()
     DAZZLING = QUEENLY_MAJESTY
     ARMOR_TAIL = QUEENLY_MAJESTY
-    INNARDS_OUT = auto()
+    INNARDS_OUT = auto() # done
     DANCER = auto()
     BATTERY = auto()
-    FLUFFY = auto()
+    FLUFFY = auto() # done
+    SOUL_HEART = auto() # done, fine for singles but not doubles
+    RKS_SYSTEM = auto()
+    ELECTRIC_SURGE = auto()
+    PSYCHIC_SURGE = auto()
+    GRASSY_SURGE = auto()
+    MISTY_SURGE = auto()
+    SHADOW_SHIELD = MULTISCALE # TODO: THESE ARENT IDENTICAL BECAUSE THEY CANT BE SUPPRESSED
+    PRISM_ARMOR = SOLID_ROCK # IDK HOW WE WILL HANDLE ABILITY SUPPRESSION STUFF
+    NEUROFORCE = auto()

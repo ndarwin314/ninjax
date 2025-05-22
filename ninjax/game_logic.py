@@ -12,7 +12,7 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and)
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and, conditional_mult_prod_round, conditional_mult_prod)
 
 jax.config.update("jax_disable_jit", True)
 
@@ -36,13 +36,22 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     defender = defender.replace(current_hp=new_health, is_alive=alive)
 
     # run moxie or beast boost
+    is_soul_heart = attacker.ability==AbilityEnum.SOUL_HEART
     is_moxie = attacker.ability==AbilityEnum.MOXIE
     is_beast_boost = attacker.ability==AbilityEnum.BEAST_BOOST
     beast_boost_index = (1+jnp.argmax(attacker.stats))
-    index = beast_boost_index*is_beast_boost + is_moxie
+    index = beast_boost_index*is_beast_boost + is_moxie * StatEnum.ATTACK + is_soul_heart * StatEnum.SPECIAL_ATTACK
     # yeah idk why this needs double index thingy here
     cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0, 0]
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
+
+    # innards out
+    is_innards_out = triple_and(1-alive, defender.ability==AbilityEnum.INNARDS_OUT, is_attack_damage)[0]
+    state = jax.lax.cond(
+        is_innards_out[0],
+        take_damage_value, lambda b, i, d, c: b,
+        state, 1-defender_idx, old_health, False
+    )
 
     # stamina
     is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)[0, 0]
@@ -192,7 +201,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     key, def_key, attack_key = random.split(key, 3)
 
     # defender triggers
-    is_rough_skin = defender.ability == AbilityEnum.ROUGH_SKIN
+    is_rough_skin = (defender.ability == AbilityEnum.ROUGH_SKIN)[0]
     state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin)
     is_static = defender.ability==AbilityEnum.STATIC
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
@@ -270,8 +279,12 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
     effectiveness = effectiveness * 1-jnp.logical_and(is_levitate, move.type==Type.GROUND)
     is_tinted_lens = jnp.logical_and(jnp.less_equal(effectiveness, 1), attacker.ability==AbilityEnum.TINTED_LENS)
     is_filter = jnp.logical_and(jnp.greater_equal(effectiveness, 1), defender.ability==AbilityEnum.FILTER)
-    effectiveness = conditional_mult(effectiveness, 2, is_tinted_lens)
-    effectiveness = conditional_mult(effectiveness, 3/4, is_filter)
+    is_neuroforce = jnp.logical_and(jnp.greater_equal(effectiveness, 1), defender.ability==AbilityEnum.NEUROFORCE)
+    effectiveness = conditional_mult_prod(
+        effectiveness,
+        jnp.array([2, 3/4, 1.25]),
+        jnp.array([is_tinted_lens, is_filter, is_neuroforce]).squeeze()
+    )
     base_damage = jnp.fix(base_damage * effectiveness)
     # burn
     is_burned = attacker.status == Status.BURN
@@ -302,8 +315,17 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     # dealing damage
     damage = damage.astype(int)
     # bulbapedia says water bubble "halves damage" so here we are
-    water_bubble = jnp.logical_and(move.type==Type.FIRE, defender.ability==AbilityEnum.WATER_BUBBLE)
+    is_fire_move = move.type==Type.FIRE
+    water_bubble = jnp.logical_and(is_fire_move, defender.ability==AbilityEnum.WATER_BUBBLE)
     damage = conditional_mult_round(damage, 1/2, water_bubble)
+    # fluffy is the same
+    is_fluffy = defender.ability==AbilityEnum.FLUFFY
+    fluffy_increase = jnp.logical_and(is_fire_move, is_fluffy)
+    fluffy_decrease = jnp.logical_and(move.contact, is_fluffy)
+    damage = conditional_mult_prod_round(
+        damage,
+        jnp.array([2, 1/2]),
+        jnp.array([fluffy_increase, fluffy_decrease]).squeeze())
     state = take_damage_value(state, 1 - player_idx, damage, True)
     # recoil
     state = jax.lax.cond(
@@ -414,7 +436,6 @@ def swap_out(
     active = state[side_idx].team[new_active]
     is_not_flying = 1 - active.is_floating
     is_not_hazard_immune = 1 - active.is_hazard_immune
-    no_status = active.status != Status.NONE
     is_poison = active.is_type(Type.POISON)
     is_poison_immune = jnp.any(active.type_list == Type.STEEL)
     # stealth rocks
@@ -470,8 +491,19 @@ def swap_is_alive(
     new_weather = current_weather * new_weather==WeatherEnum.NONE + new_weather
     matching_weather = current_weather==new_weather
     # TODO: add item check for the weather stones
-    new_duration = 5 * (1 - matching_weather) + state.weather.duration * matching_weather
-    state = state.replace(weather=Weather(new_weather, new_duration))
+    new_duration_weather = 5 * (1 - matching_weather) + state.weather.duration * matching_weather
+
+    # terrain, same deal as weather
+    current_terrain = state.terrain.terrain
+    new_terrain = (active.ability==AbilityEnum.ELECTRIC_SURGE * TerrainEnum.ELECTRIC +
+                   active.ability==AbilityEnum.PSYCHIC_SURGE * TerrainEnum.PSYCHIC +
+                   active.ability==AbilityEnum.GRASSY_SURGE * TerrainEnum.GRASSY +
+                   active.ability==AbilityEnum.MISTY_SURGE * TerrainEnum.MISTY)
+    new_terrain = current_terrain *  new_terrain==TerrainEnum.NONE + new_terrain
+    matching_terrain = current_terrain==new_terrain
+    new_duration_terrain = 5 * (1 - matching_terrain) + state.terrain.duration * matching_terrain
+    state = state.replace(terrain=Terrain(new_terrain, new_duration_terrain),
+                          weather=Weather(new_weather, new_duration_weather))
 
     # intimidate
     is_intimidate = attacker.ability == AbilityEnum.INTIMIDATE
