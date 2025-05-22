@@ -6,3 +6,4 @@ chex>=0.1.86
 numpy>=2.0.1
 orjson>=3.10.7
 dataclass_array>=1.5.2
+pytest

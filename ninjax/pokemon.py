@@ -54,7 +54,7 @@ class Pokemon(DataclassArray):
 
     @property
     def stats(self):
-        return self.stat_table.stats
+        return self.stat_table.stats.squeeze()
 
     @property
     def max_hp(self):

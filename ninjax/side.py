@@ -133,10 +133,11 @@ class BattleState(DataclassArray):
         is_sand_rush = jnp.logical_and(
             ability == AbilityEnum.SAND_RUSH,
             weather == WeatherEnum.SANDSTORM).squeeze()
+        arr = jnp.array([is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim, is_surge_surfer])
         temp = conditional_mult_round(
             stats[..., StatEnum.SPEED],
             2,
-            jnp.array([is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim, is_surge_surfer]))
+            jnp.any(arr))
 
 
         # paralyzed

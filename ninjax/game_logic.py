@@ -28,7 +28,7 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     damage = conditional_mult_round(damage, 0.5, is_multiscale)
     old_health = defender.current_hp
     over_half = jnp.greater_equal(old_health/defender.max_hp, 0.5)
-    new_health = jax.lax.clamp(0, old_health-damage, defender.max_hp - health_full*is_sturdy*is_attack_damage)
+    new_health = jax.lax.clamp(0, old_health-damage, (defender.max_hp - health_full*is_sturdy*is_attack_damage)[0])
     under_half = jnp.less(new_health/defender.max_hp, 0.5)
 
     # check to make sure we don't accidentally revive a pokemon
@@ -38,17 +38,20 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     # run moxie or beast boost
     is_moxie = attacker.ability==AbilityEnum.MOXIE
     is_beast_boost = attacker.ability==AbilityEnum.BEAST_BOOST
-    index = (1+jnp.argmax(attacker.stats[1-defender_idx, 1:]))*is_beast_boost + is_moxie
-    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)
+    beast_boost_index = (1+jnp.argmax(attacker.stats))
+    index = beast_boost_index*is_beast_boost + is_moxie
+    # yeah idk why this needs double index thingy here
+    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0, 0]
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
 
     # stamina
-    is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)
+    is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)[0, 0]
     state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
 
     #berserk
     is_berserk = quad_and(over_half, under_half, is_attack_damage, defender.ability == AbilityEnum.BERSERK)
-    state = conditional_add_boosts(state, defender_idx, jnp.logical_and(is_berserk, alive), StatEnum.SPECIAL_ATTACK, 1)
+    is_berserk = jnp.logical_and(is_berserk, alive)[0, 0]
+    state = conditional_add_boosts(state, defender_idx, is_berserk, StatEnum.SPECIAL_ATTACK, 1)
 
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
@@ -83,7 +86,7 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         lambda k, a, s: (k, a),
         status_helper,
         key, active, status)
-    return update_active(state, side_idx, active)
+    return key, update_active(state, side_idx, active)
 
 def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon, move: Move):
     power = move.base_power
@@ -139,6 +142,8 @@ def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon,
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.ELECTRIC, terrain==TerrainEnum.ELECTRIC))
 
     ability = attacker.ability
+    # TODO: similar to with the low health abilities, we could put the conditions in an array and put mults in array
+    # that is probably faster than this
     # iron fist
     power = conditional_mult_round(power, IRON_FIST, jnp.logical_and(move.punching, ability==AbilityEnum.IRON_FIST))
     # tough claws
@@ -166,8 +171,9 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     is_torrent = triple_and(type_==Type.WATER, attacker.hp_less_than(one_third), ability==AbilityEnum.TORRENT)
     is_swarm = triple_and(type_==Type.BUG, attacker.hp_less_than(one_third), ability==AbilityEnum.SWARM)
     is_steel_worker = jnp.logical_and(type_==Type.STEEL, ability==AbilityEnum.STEELWORKER)
+    arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker])
     offensive_stat = conditional_mult_round(offensive_stat, 1.5,
-                                            jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker]))
+                                            jnp.any(arr))
 
     level = state.active.stat_table.level[attacker_idx]
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
@@ -209,7 +215,8 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
               is_toxic_chain * Status.TOXIC) * triggered
 
     # gooey
-    state = conditional_reduce_boosts(state, attacker_idx, defender.ability==AbilityEnum.GOOEY, StatEnum.SPEED, 1)
+    is_gooey = (defender.ability==AbilityEnum.GOOEY)[0]
+    state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1)
 
     key, state = set_status(key, state, 1-attacker_idx, status)
     return key, state
@@ -383,6 +390,7 @@ def end_turn_damage(state: BattleState) -> BattleState:
 # TODO: at some point probably factor out part of this into like
 # just swapping out to implement baton pass idk
 def swap_out(
+    key,
     state: BattleState,
     side_idx,
     new_active: int
@@ -432,7 +440,7 @@ def swap_out(
     state = state.replace(toxic_spikes=toxic_spikes)
     # this returns 0, 5, 6 for 0, 1, 2
     status_ = (7 - state[side_idx].toxic_spikes) * (state[side_idx].toxic_spikes != 0)
-    state = set_status(state, side_idx, status_ * no_status * is_poison_immune * is_not_flying)
+    key, state = set_status(key, state, side_idx, status_ * is_poison_immune * is_not_flying)
 
     #check if switch in is still alive
     active_hp = state[side_idx].active.current_hp[side_idx]

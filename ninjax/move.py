@@ -53,15 +53,15 @@ class Move(DataclassArray):
 
     @property
     def bullet(self):
-        return (self.move_flags @ MoveFlags.BULLET) == MoveFlags.BULLET
+        return (self.move_flags & MoveFlags.BULLET) == MoveFlags.BULLET
 
     @property
     def launcher(self):
-        return (self.move_flags @ MoveFlags.LAUNCHER) == MoveFlags.LAUNCHER
+        return (self.move_flags & MoveFlags.LAUNCHER) == MoveFlags.LAUNCHER
 
     @property
     def healing(self):
-        return (self.move_flags @ MoveFlags.HEALING) == MoveFlags.HEALING
+        return (self.move_flags & MoveFlags.HEALING) == MoveFlags.HEALING
 
 
 
