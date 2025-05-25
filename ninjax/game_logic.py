@@ -12,7 +12,8 @@ from ninjax.move import Move
 from ninjax.utils import (
     conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
     COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and, conditional_mult_prod_round, conditional_mult_prod)
+    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
+    conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
 jax.config.update("jax_disable_jit", True)
 
@@ -52,10 +53,13 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
         take_damage_value, lambda b, i, d, c: b,
         state, 1-defender_idx, old_health, False
     )
-
+    # TODO: consider making separate functions for take damage value and take damage froma ttack
     # stamina
     is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)[0, 0]
     state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
+    # cotton down
+    is_cotton_down = (defender.ability==AbilityEnum.COTTON_DOWN)[0]
+    state = conditional_reduce_boosts(state, 1-defender_idx, is_cotton_down, StatEnum.SPEED, 1, True)
 
     #berserk
     is_berserk = quad_and(over_half, under_half, is_attack_damage, defender.ability == AbilityEnum.BERSERK)
@@ -163,6 +167,8 @@ def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon,
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.biting, ability==AbilityEnum.STRONG_JAW))
     # mega launcher
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
+    # punk rock
+    power = conditional_mult_round(power, 1.3, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
     return power
 
 def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
@@ -183,6 +189,9 @@ def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
     arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker])
     offensive_stat = conditional_mult_round(offensive_stat, 1.5,
                                             jnp.any(arr))
+    is_transistor = jnp.logical_and(type_==Type.ELECTRIC, ability==AbilityEnum.TRANSISTOR)
+    is_maw = jnp.logical_and(type_==Type.DRAGON, ability==AbilityEnum.DRAGONS_MAW)
+    offensive_stat = conditional_mult_round(offensive_stat, one_point_three, jnp.any(jnp.array([is_maw, is_transistor])))
 
     level = state.active.stat_table.level[attacker_idx]
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
@@ -225,7 +234,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
 
     # gooey
     is_gooey = (defender.ability==AbilityEnum.GOOEY)[0]
-    state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1)
+    state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1, True)
 
     key, state = set_status(key, state, 1-attacker_idx, status)
     return key, state
@@ -322,6 +331,12 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     is_fluffy = defender.ability==AbilityEnum.FLUFFY
     fluffy_increase = jnp.logical_and(is_fire_move, is_fluffy)
     fluffy_decrease = jnp.logical_and(move.contact, is_fluffy)
+    # punk rock
+    is_punk_rock = defender.ability==AbilityEnum.PUNK_ROCK
+    damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_punk_rock, move.sound))
+    # ice scales
+    is_ice_scales = defender.ability==AbilityEnum.ICE_SCALES
+    damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_ice_scales, move.type==MoveType.SPECIAL))
     damage = conditional_mult_prod_round(
         damage,
         jnp.array([2, 1/2]),
@@ -452,7 +467,9 @@ def swap_out(
     )
 
     # sticky webs
-    state = reduce_boosts(state, side_idx, StatEnum.SPEED, 1 * is_not_flying * state[side_idx].sticky_webs)
+    # so apparently if a pokemon sets webs and a pokemon with mirror armor is effected by them
+    # then it applies the stat reduction to that mon, but this only happens if they are on field
+    state = reduce_boosts(state, side_idx, StatEnum.SPEED, 1 * is_not_flying * state[side_idx].sticky_webs, False)
 
     # toxic spikes
     # only remove is poison type and not floating
@@ -514,7 +531,7 @@ def swap_is_alive(
         defender_ability==AbilityEnum.SCRAPPY,
     )
     intimidate_activated = jnp.logical_and(is_intimidate, 1-is_intimidate_immune)
-    state = conditional_reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, 1, intimidate_activated)
+    state = conditional_reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, 1, intimidate_activated, True)
     return state
 
 

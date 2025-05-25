@@ -1,4 +1,5 @@
 from typing import Union, Tuple, Dict, Any
+from functools import partial
 from collections import namedtuple
 from dataclasses import field
 
@@ -8,6 +9,7 @@ from dataclass_array.typing import FloatArray, IntArray, BoolArray
 import dataclass_array as dca
 from flax import struct
 import jax.numpy as jnp
+from jax import jit
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
@@ -180,7 +182,7 @@ def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
 
-def reduce_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
+def reduce_boosts(state: BattleState, side_idx, idx, val, bounceable=False) -> BattleState:
     ability = state.active.ability
     not_clear_body = ability[side_idx]!=AbilityEnum.CLEAR_BODY
     # TODO: this doesn't account for the functionality of idx being an array
@@ -195,16 +197,26 @@ def reduce_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
                  add_boosts,
                  lambda b, s, i, v: s,
                  state, side_idx, StatEnum.SPECIAL_ATTACK, 2)
+    is_mirror_armor = ability[side_idx] = AbilityEnum.MIRROR_ARMOR
     return add_boosts(state, side_idx, idx, -val * not_clear_body)
 
+@partial(jit, static_argnames=['cond'])
 def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
-    return jax.lax.cond(cond, set_boosts, lambda s, b, i: s, state, side_idx, new_boosts)
+    if cond:
+        return set_boosts(state, side_idx, new_boosts)
+    return state
 
+@partial(jit, static_argnames=['cond'])
 def conditional_add_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
-    return jax.lax.cond(cond, add_boosts, lambda s, i, d, v: s, state, side_idx, idx, val)
+    if cond:
+        return add_boosts(state, side_idx, idx, val)
+    return state
 
-def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
-    return jax.lax.cond(cond, reduce_boosts, lambda s, i, d, v: s, state, side_idx, idx, val)
+@partial(jit, static_argnames=['cond'])
+def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val, bounceable) -> BattleState:
+    if cond:
+        return reduce_boosts(state, side_idx, idx, val, bounceable)
+    return state
 
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
