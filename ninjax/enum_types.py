@@ -350,4 +350,15 @@ class AbilityEnum(JaxEnum):
     CURIOUS_MEDICINE = auto()
     TRANSISTOR = auto() # done
     DRAGONS_MAW = auto() # done
+    CHILLING_NEIGH = MOXIE
+    GRIM_NEIGH = auto() # in singles this is functionally identical to soul heart but eventually i want to implement doubles
+    AS_ONE_CHILLING = auto()
+    AS_ONE_GRIM = auto() #so if these were flag enums i could just or them but there are over 300 abilities so idk if i want to make this a flag enum
+    LINGERING_AROMA = WANDERING_SPIRIT
+    SEED_SOWER = auto() # done
+    THERMAL_EXCHANGE = auto() # done
+    ANGER_SHELL = auto()
+    PURIFYING_SALT = auto()
+    WELL_BAKED_BODY = auto() # done
+
 

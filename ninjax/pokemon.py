@@ -7,7 +7,13 @@ import jax.numpy as jnp
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
 from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum
-from ninjax.utils import triple_or
+from ninjax.utils import triple_or, quad_or
+
+BURN_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE])
+PARALYSIS_IMMUNE_ABILITIES = jnp.array([AbilityEnum.LIMBER, AbilityEnum.PURIFYING_SALT])
+POISON_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.IMMUNITY])
+FREEZE_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.MAGMA_ARMOR])
+SLEEP_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.INSOMNIA])
 
 @dataclass_array(broadcast=True, cast_list=True, cast_dtype=True)
 class Pokemon(DataclassArray):
@@ -88,23 +94,23 @@ class Pokemon(DataclassArray):
 
     @property
     def is_poison_immune(self):
-        return triple_or(self.is_type(Type.POISON), self.is_type(Type.STEEL), self.ability==AbilityEnum.IMMUNITY)
+        return triple_or(self.is_type(Type.POISON), self.is_type(Type.STEEL), jnp.any(POISON_IMMUNE_ABILITIES==self.ability))
 
     @property
     def is_paralyze_immune(self):
-        return jnp.logical_or(self.is_type(Type.ELECTRIC), self.ability==AbilityEnum.LIMBER)
+        return jnp.logical_or(self.is_type(Type.ELECTRIC),jnp.any(PARALYSIS_IMMUNE_ABILITIES==self.ability))
 
     @property
     def is_burn_immune(self):
-        return triple_or(self.is_type(Type.FIRE), self.ability==AbilityEnum.WATER_VEIL, self.ability==AbilityEnum.WATER_BUBBLE)
+        return jnp.logical_or(self.is_type(Type.FIRE), jnp.any(BURN_IMMUNE_ABILITIES==self.ability))
 
     @property
     def is_freeze_immune(self):
-        return jnp.logical_or(self.is_type(Type.ICE), self.ability==AbilityEnum.MAGMA_ARMOR)
+        return jnp.logical_or(self.is_type(Type.ICE), jnp.any(FREEZE_IMMUNE_ABILITIES==self.ability))
 
     @property
     def is_sleep_immune(self):
-        return self.ability==AbilityEnum.INSOMNIA
+        return jnp.any(SLEEP_IMMUNE_ABILITIES==self.ability)
 
     @property
     def is_powder_immune(self):

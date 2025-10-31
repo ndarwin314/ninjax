@@ -36,12 +36,15 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
     alive = jnp.logical_and(jnp.bool([new_health != 0]), defender.is_alive)
     defender = defender.replace(current_hp=new_health, is_alive=alive)
 
-    # run moxie or beast boost
+    # run moxie type abilities
     is_soul_heart = attacker.ability==AbilityEnum.SOUL_HEART
     is_moxie = attacker.ability==AbilityEnum.MOXIE
     is_beast_boost = attacker.ability==AbilityEnum.BEAST_BOOST
+    is_grim_neigh = attacker.ability==AbilityEnum.GRIM_NEIGH
     beast_boost_index = (1+jnp.argmax(attacker.stats))
-    index = beast_boost_index*is_beast_boost + is_moxie * StatEnum.ATTACK + is_soul_heart * StatEnum.SPECIAL_ATTACK
+    index = (beast_boost_index*is_beast_boost +
+             is_moxie * StatEnum.ATTACK +
+             jnp.logical_or(is_soul_heart, is_grim_neigh) * StatEnum.SPECIAL_ATTACK)
     # yeah idk why this needs double index thingy here
     cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0, 0]
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
@@ -307,7 +310,7 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
 
     return key, base_damage
 
-def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
     attacker = state.active[player_idx]
     defender = state.active[1-player_idx]
 
@@ -336,7 +339,10 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_punk_rock, move.sound))
     # ice scales
     is_ice_scales = defender.ability==AbilityEnum.ICE_SCALES
-    damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_ice_scales, move.type==MoveType.SPECIAL))
+    damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_ice_scales, move.move_type==MoveType.SPECIAL))
+    # purifying salt
+    is_purifying_salt = defender.ability==AbilityEnum.PURIFYING_SALT
+    damage = conditional_mult_round(damage, 1/2, jnp.logical_and(is_purifying_salt, move.type==Type.GHOST))
     damage = conditional_mult_prod_round(
         damage,
         jnp.array([2, 1/2]),
@@ -351,30 +357,39 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     state = conditional_add_boosts(
         state,
         1-player_idx,
-        (state.active[player_idx].ability==AbilityEnum.WEAK_ARMOR)[0],
+        defender.ability==AbilityEnum.WEAK_ARMOR,
         (StatEnum.DEFENSE, StatEnum.SPEED), (-1, 2)
     )
+    # thermal exchange
+    state = conditional_add_boosts(
+        state,
+        1-player_idx,
+        jnp.logical_and(defender.ability==AbilityEnum.WEAK_ARMOR, is_fire_move),
+        StatEnum.ATTACK, 1
+    )
+    # seed sower
+    state = set_weather(state, TerrainEnum.GRASSY * defender.ability==AbilityEnum.SEED_SOWER, 5)
     return key, state
 
 def do_recoil(state: BattleState, player_idx: int, damage) -> BattleState:
     state = take_damage_value(state, player_idx, damage, False)
     return state
 
-def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
     # this is gonna be a pain
     return key, state
 
 # this is for when water absorb or volt absorb is triggered
-def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
     state = take_damage_percent(state, 1-player_idx, -1/4)
     return key,state
 
-def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
-    state = add_boosts(state, 1-player_idx, stat_index, 1)
+def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+    state = add_boosts(state, 1-player_idx, stat_index, boost_value)
     return key, state
 
 
-def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index) -> (BattleState, chex.PRNGKey):
+def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
     # TODO: i dont want to do volatile status
     return key, state
 
@@ -500,27 +515,18 @@ def swap_is_alive(
 
     # activate weather abilities if target is alive
     # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
-    current_weather = state.weather.weather
     new_weather = (active.ability==AbilityEnum.DROUGHT * WeatherEnum.SUN +
                    active.ability==AbilityEnum.DRIZZLE * WeatherEnum.RAIN +
                    active.ability==AbilityEnum.SAND_STREAM * WeatherEnum.SANDSTORM +
                    active.ability==AbilityEnum.SNOW_WARNING * WeatherEnum.SNOW)
-    new_weather = current_weather * new_weather==WeatherEnum.NONE + new_weather
-    matching_weather = current_weather==new_weather
-    # TODO: add item check for the weather stones
-    new_duration_weather = 5 * (1 - matching_weather) + state.weather.duration * matching_weather
+    state = set_terrain(state, new_weather, 5)
 
     # terrain, same deal as weather
-    current_terrain = state.terrain.terrain
     new_terrain = (active.ability==AbilityEnum.ELECTRIC_SURGE * TerrainEnum.ELECTRIC +
                    active.ability==AbilityEnum.PSYCHIC_SURGE * TerrainEnum.PSYCHIC +
                    active.ability==AbilityEnum.GRASSY_SURGE * TerrainEnum.GRASSY +
                    active.ability==AbilityEnum.MISTY_SURGE * TerrainEnum.MISTY)
-    new_terrain = current_terrain *  new_terrain==TerrainEnum.NONE + new_terrain
-    matching_terrain = current_terrain==new_terrain
-    new_duration_terrain = 5 * (1 - matching_terrain) + state.terrain.duration * matching_terrain
-    state = state.replace(terrain=Terrain(new_terrain, new_duration_terrain),
-                          weather=Weather(new_weather, new_duration_weather))
+    state = set_terrain(state, new_terrain, 5)
 
     # intimidate
     is_intimidate = attacker.ability == AbilityEnum.INTIMIDATE
@@ -534,7 +540,24 @@ def swap_is_alive(
     state = conditional_reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, 1, intimidate_activated, True)
     return state
 
+def set_terrain(
+    state: BattleState, new_terrain: TerrainEnum, duration: int
+    ):
+    current_terrain = state.terrain.terrain
+    new_terrain = current_terrain * new_terrain == TerrainEnum.NONE + new_terrain
+    matching_terrain = current_terrain == new_terrain
+    new_duration_terrain = duration * (1 - matching_terrain) + state.terrain.duration * matching_terrain
+    state = state.replace(terrain=Terrain(new_terrain, new_duration_terrain))
+    return state
 
+def set_weather(
+    state: BattleState, new_weather: WeatherEnum, duration: int):
+    current_weather = state.weather.weather
+    new_weather = current_weather * new_weather == WeatherEnum.NONE + new_weather
+    matching_weather = current_weather == new_weather
+    # TODO: add item check for the weather stones
+    new_duration_weather = duration * (1 - matching_weather) + state.weather.duration * matching_weather
+    return state.replace(weather=Weather(new_weather, new_duration_weather))
 
 def step_side_conditions(
     key: chex.PRNGKey,
@@ -668,23 +691,31 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         jnp.logical_and(ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC))
     is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
     is_speed_boost = jnp.logical_and(ability==AbilityEnum.MOTOR_DRIVE, move.type==Type.ELECTRIC)
+    is_def_boost = jnp.logical_and(ability==AbilityEnum.WELL_BAKED_BODY, move.type==Type.FIRE)
     is_heal = quad_or(
         jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
         jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC),
         jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND),
         jnp.logical_and(ability == AbilityEnum.DRY_SKIN, move.type == Type.WATER)
     )
-    is_stat_boost = triple_or(is_speed_boost, is_attack_boost, is_spa_boost)
+    is_stat_boost = quad_or(is_speed_boost, is_attack_boost, is_spa_boost, is_def_boost)
     is_status = move.move_type == MoveType.STATUS * (1 - triple_or(is_flash_fire, is_stat_boost, is_heal))
     # this feels really hacky way to compute this but :shrug:
     branch_index = is_status + is_stat_boost * 2 + is_flash_fire * 3 + is_heal * 4
+    boost_value = 1 + ability==AbilityEnum.WELL_BAKED_BODY
 
     # i think using a switch means we skip evaluating the branches we don't need
     # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
     return jax.lax.switch(
         branch_index[0],
         branches,
-        key, state, attacker_index, move, is_attack_boost + 4 * is_spa_boost + 6*is_speed_boost)
+        key,
+        state,
+        attacker_index,
+        move,
+        is_attack_boost + 2* is_def_boost + 4 * is_spa_boost + 6*is_speed_boost,
+        boost_value
+    )
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
     return key, state

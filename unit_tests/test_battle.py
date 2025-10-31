@@ -164,7 +164,7 @@ class TestDamage:
             defensive_stat=4 * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0)
+        key, state = do_move_damage(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0]==health
 
     def test_damage_stab(self, battle_state):
@@ -181,7 +181,7 @@ class TestDamage:
             defensive_stat=4 * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0)
+        key, state = do_move_damage(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0] == 259
 
     @pytest.mark.parametrize(
@@ -209,5 +209,5 @@ class TestDamage:
             defensive_stat=(2+3*(1-is_physical)) * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0)
+        key, state = do_move_damage(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0] == damage
