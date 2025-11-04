@@ -360,5 +360,6 @@ class AbilityEnum(JaxEnum):
     ANGER_SHELL = auto()
     PURIFYING_SALT = auto()
     WELL_BAKED_BODY = auto() # done
+    # test
 
 
