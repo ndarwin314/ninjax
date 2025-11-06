@@ -170,7 +170,7 @@ class AbilityEnum(JaxEnum):
     HYPER_CUTTER = auto()
     PICKUP = auto()
     TRUANT = auto()
-    HUSTLE = auto()
+    HUSTLE = auto() # done
     CUTE_CHARM = auto()
     PLUS = auto()
     MINUS = PLUS
@@ -358,8 +358,22 @@ class AbilityEnum(JaxEnum):
     SEED_SOWER = auto() # done
     THERMAL_EXCHANGE = auto() # done
     ANGER_SHELL = auto()
-    PURIFYING_SALT = auto()
+    PURIFYING_SALT = auto() # done i think
     WELL_BAKED_BODY = auto() # done
-    # test
+    WIND_RIDER = auto()
+    GUARD_DOG = auto()
+    ROCKY_PAYLOAD = auto() # done
+    WIND_POWER = auto()
+    ZERO_TO_HERO = auto()
+    COMMANDER = auto()
+    ELECTROMORPHOSIS = auto()
+    PROTOSYNTHESIS = auto()
+    QUARK_DRIVE = auto()
+    GOOD_AS_GOLD = auto()
+    VESSEL_OF_RUIN = auto()
+    SWORD_OF_RUIN = auto()
+    TABLETS_OF_RUIN = auto()
+    BEADS_OF_RUIN = auto()
+    SUPREME_OVERLORD = auto()
 
 

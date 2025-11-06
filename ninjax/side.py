@@ -85,6 +85,39 @@ class BattleState(DataclassArray):
         return self.team[[0,1], flattened_idx]
 
     @property
+    def raw_boosted_stats(self):
+        stats = self.active.stats
+        return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + self.boosts.normal_boosts])
+
+    def attack_multiplier(self):
+        ability = self.active.ability
+        status = self.active.status
+        # guts check
+        is_guts = jnp.logical_and(ability == AbilityEnum.GUTS, status == Status.BURN).squeeze()
+        # huge power
+        is_huge_power = (ability == AbilityEnum.HUGE_POWER).squeeze()
+        # defeatist
+        is_defeatist = jnp.logical_and((ability == AbilityEnum.DEFEATIST).squeeze(), self.active.hp_less_than(0.5))
+        # hustle
+        is_hustle = (ability == AbilityEnum.DEFEATIST).squeeze()
+        # gorilla tactics
+        is_gorilla_tactics = (ability == AbilityEnum.GORILLA_TACTICS).squeeze()
+        # supreme overlord
+        dead_count = jnp.sum(1 - self.team.is_alive)
+        is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
+        return jnp.power(
+            jnp.array([1.5, 1.5, 1.5, 2, 0.5, 1 + dead_count / 10]),
+            jnp.array([is_guts, is_hustle, is_gorilla_tactics, is_huge_power, is_defeatist, is_huge_power, is_defeatist, is_supreme_overlord]))
+
+    def special_attack_multiplier(self):
+        ability = self.active.ability
+        is_defeatist = jnp.logical_and((ability == AbilityEnum.DEFEATIST).squeeze(), self.active.hp_less_than(0.5))
+        # supreme overlord
+        dead_count = jnp.sum(1 - self.team.is_alive)
+        is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
+        return jnp.power(jnp.array([1/2, 1+dead_count/10]), jnp.array([is_defeatist, is_supreme_overlord]))
+
+    @property
     def boosted_stats(self):
         active = self.active
         ability = active.ability
@@ -92,23 +125,6 @@ class BattleState(DataclassArray):
         stats = self.active.stats
         # squeeze removes dimensions with length 1 which makes this broadcast correctly
         # its probably going to be helpful to use this in other places
-
-        # guts check
-        is_guts = jnp.logical_and(ability==AbilityEnum.GUTS, status==Status.BURN).squeeze()
-        temp = conditional_mult_round(stats[...,StatEnum.ATTACK], 1.5, is_guts)
-        # huge power
-        is_huge_power = (ability==AbilityEnum.HUGE_POWER).squeeze()
-        temp = conditional_mult_round(
-            temp,
-            2,
-            is_huge_power)
-        # defeatist
-        is_defeatist = jnp.logical_and((ability==AbilityEnum.DEFEATIST).squeeze(), active.hp_less_than(0.5))
-        temp = conditional_mult_round(temp, 0.5, is_defeatist)
-        stats = stats.at[..., StatEnum.ATTACK].set(temp)
-
-        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_ATTACK], 0.5, is_defeatist)
-        stats = stats.at[..., StatEnum.SPECIAL_ATTACK].set(temp)
 
         # marvel scale
         temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_DEFENSE], 1.5,

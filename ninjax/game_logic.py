@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import jax
 import jax.random as random
 import jax.numpy as jnp
@@ -17,8 +19,10 @@ from ninjax.utils import (
 
 jax.config.update("jax_disable_jit", True)
 
+Array = chex.Array
 
-def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array, is_attack_damage) -> BattleState:
+
+def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage) -> BattleState:
     active = state.active
     defender = active[defender_idx]
     attacker = active[1-defender_idx]
@@ -56,7 +60,7 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: chex.Array,
         take_damage_value, lambda b, i, d, c: b,
         state, 1-defender_idx, old_health, False
     )
-    # TODO: consider making separate functions for take damage value and take damage froma ttack
+    # TODO: consider making separate functions for take damage value and take damage from attack
     # stamina
     is_stamina = jnp.logical_and(defender.ability==AbilityEnum.STAMINA, alive)[0, 0]
     state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
@@ -85,7 +89,7 @@ def status_helper(key, active, status: Status):
     active = active.replace(status=status, sleep_counter=turns*(status==Status.SLEEP))
     return active
 
-def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> (chex.PRNGKey, BattleState):
+def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> Tuple[chex.PRNGKey, BattleState]:
     active = state.active[side_idx]
     already_statused = active.status != Status.NONE
     is_comatose =  active.ability==AbilityEnum.COMATOSE
@@ -104,7 +108,7 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         key, active, status)
     return key, update_active(state, side_idx, active)
 
-def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon, move: Move):
+def compute_base_power(attacker: Pokemon, defender: Pokemon, move: Move, terrain: Terrain) -> chex.Array:
     power = move.base_power
     ability = attacker.ability
     #TODO: tera boost
@@ -149,7 +153,6 @@ def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon,
     power = conditional_mult(power, 1.5, is_flare_boosted)
 
     is_grounded = 1 - attacker.is_floating
-    terrain = state.terrain.terrain
     # grassy terrain
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, triple_and(is_grounded, move.type == Type.GRASS, terrain==TerrainEnum.GRASSY))
     # psychic terrain
@@ -174,29 +177,60 @@ def compute_base_power(state: BattleState, attacker: Pokemon, defender: Pokemon,
     power = conditional_mult_round(power, 1.3, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
     return power
 
-def compute_base_damage(state: BattleState, move: Move, attacker_idx, power):
-    attacker = state.active[attacker_idx]
-    boosted_stats = state.boosted_stats
-    offensive_stat = boosted_stats[attacker_idx][move.offensive_stat]
+def compute_base_damage(
+        ability: AbilityEnum,
+        defender_ability: AbilityEnum,
+        hp_percent,
+        level,
+        attack_multiplier,
+        boosted_stats,
+        move: Move,
+        attacker_idx,
+        power) -> Array:
+
+    # this is a hack but it should work i think probably
+    # TODO i want to write this better actually doing repeated mult rounds but whatever
+    offensive_stat = jnp.fix(boosted_stats[attacker_idx][move.offensive_stat], attack_multiplier)
     defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
-    # TODO: add ruin abilities
+    # ruin abilities
+    sword_of_ruin = ability==AbilityEnum.SWORD_OF_RUIN
+    beads_of_ruin = ability == AbilityEnum.BEADS_OF_RUIN
+    defensive_stat = conditional_mult_round(
+        defensive_stat,
+        0.75,
+        jnp.logical_or(
+            jnp.logical_and(sword_of_ruin, defensive_stat==StatEnum.DEFENSE),
+            jnp.logical_and(beads_of_ruin, defensive_stat==StatEnum.SPECIAL_DEFENSE)
+        ))
+    # i hate body press so much why is it so stupid
+    vessel_of_ruin = defender_ability==AbilityEnum.VESSEL_OF_RUIN
+    tablets_of_ruin = defender_ability==AbilityEnum.TABLETS_OF_RUIN
+    offensive_stat = conditional_mult_round(
+        offensive_stat,
+        0.75,
+        jnp.logical_or(
+            jnp.logical_and(tablets_of_ruin, move.move_type==MoveType.PHYSICAL),
+            jnp.logical_and(vessel_of_ruin, move.move_type==MoveType.SPECIAL)
+        )
+    )
+
     # we need some additional conditional stat changes here
     # for example, guts always effects attack when its active but overgrow boosts attack only for grass moves when its active
     type_ = move.type
-    ability = attacker.ability
-    is_overgrow = triple_and(type_==Type.GRASS, attacker.hp_less_than(one_third), ability==AbilityEnum.OVERGROW)
-    is_blaze = triple_and(type_==Type.FIRE, attacker.hp_less_than(one_third), ability==AbilityEnum.BLAZE)
-    is_torrent = triple_and(type_==Type.WATER, attacker.hp_less_than(one_third), ability==AbilityEnum.TORRENT)
-    is_swarm = triple_and(type_==Type.BUG, attacker.hp_less_than(one_third), ability==AbilityEnum.SWARM)
+    low_hp = jnp.less_equal(hp_percent, 1/3)
+    is_overgrow = triple_and(type_==Type.GRASS, low_hp, ability==AbilityEnum.OVERGROW)
+    is_blaze = triple_and(type_==Type.FIRE, low_hp, ability==AbilityEnum.BLAZE)
+    is_torrent = triple_and(type_==Type.WATER, low_hp, ability==AbilityEnum.TORRENT)
+    is_swarm = triple_and(type_==Type.BUG, low_hp, ability==AbilityEnum.SWARM)
     is_steel_worker = jnp.logical_and(type_==Type.STEEL, ability==AbilityEnum.STEELWORKER)
-    arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker])
+    is_rocky_payload = jnp.logical_and(type_==Type.ROCK, ability==AbilityEnum.ROCKY_PAYLOAD)
+    arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker, is_rocky_payload])
     offensive_stat = conditional_mult_round(offensive_stat, 1.5,
                                             jnp.any(arr))
     is_transistor = jnp.logical_and(type_==Type.ELECTRIC, ability==AbilityEnum.TRANSISTOR)
     is_maw = jnp.logical_and(type_==Type.DRAGON, ability==AbilityEnum.DRAGONS_MAW)
     offensive_stat = conditional_mult_round(offensive_stat, one_point_three, jnp.any(jnp.array([is_maw, is_transistor])))
 
-    level = state.active.stat_table.level[attacker_idx]
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
     return base_damage
 
@@ -206,7 +240,7 @@ def effect_spore_status(r):
             in_range(0.19, r, 0.3) * Status.SLEEP)
 
 
-def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRNGKey, BattleState):
+def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[chex.PRNGKey, BattleState]:
     active = state.active
     defender = active[1-attacker_idx]
     attacker = active[attacker_idx]
@@ -235,14 +269,18 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> (chex.PRN
     status = (is_poison_touch * Status.POISON +
               is_toxic_chain * Status.TOXIC) * triggered
 
-    # gooey
+    # gooey, idk why i take 0 index here but it happens in some places and i think was necessary
     is_gooey = (defender.ability==AbilityEnum.GOOEY)[0]
     state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1, True)
 
-    key, state = set_status(key, state, 1-attacker_idx, status)
+    key, state = set_status(key, state, 1 - attacker_idx, status)
     return key, state
 
-def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, base_damage) -> (chex.PRNGKey, BattleState):
+def after_hit_triggers():
+    pass
+
+
+def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, base_damage) -> Tuple[chex.PRNGKey, Array]:
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
@@ -310,7 +348,7 @@ def compute_damage_multipliers(key: chex.PRNGKey, state: BattleState, attacker_i
 
     return key, base_damage
 
-def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     attacker = state.active[player_idx]
     defender = state.active[1-player_idx]
 
@@ -318,7 +356,22 @@ def do_move_damage(key: chex.PRNGKey, state: BattleState, player_idx, move: Move
     power = compute_base_power(state, attacker, defender, move)
 
     # base damage pre multipliers
-    base_damage = compute_base_damage(state, move, player_idx, power)
+    # so the problem is that body press which does damage based on defence, ignores the defence reduction of sword of ruin
+    # when it calculated the offensive stat, but doesn't ignore it as a modifier of defensive stats
+    # but it also does get boosted by modifiers like choice band, huge power, and guts because this game is made with spaghetti code
+    # so i have to implement that and i think this is probably the least stupid way to do that
+    attack_multiplier = (state[player_idx].attack_multiplier() * move.move_type==MoveType.PHYSICAL +
+                         state[player_idx].special_attack_multiplier() * move.move_type==MoveType.SPECIAL)
+    base_damage = compute_base_damage(
+        attacker.ability,
+        defender.ability,
+        attacker.hp_percent,
+        attacker.level,
+        attack_multiplier,
+        state.boosted_stats,
+        move,
+        player_idx,
+        power)
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
@@ -375,21 +428,21 @@ def do_recoil(state: BattleState, player_idx: int, damage) -> BattleState:
     state = take_damage_value(state, player_idx, damage, False)
     return state
 
-def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     # this is gonna be a pain
     return key, state
 
 # this is for when water absorb or volt absorb is triggered
-def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     state = take_damage_percent(state, 1-player_idx, -1/4)
     return key,state
 
-def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     state = add_boosts(state, 1-player_idx, stat_index, boost_value)
     return key, state
 
 
-def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> (chex.PRNGKey, BattleState):
+def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     # TODO: i dont want to do volatile status
     return key, state
 
@@ -562,7 +615,7 @@ def set_weather(
 def step_side_conditions(
     key: chex.PRNGKey,
     state: BattleState,
-) -> (chex.PRNGKey, BattleState):
+) -> Tuple[chex.PRNGKey, BattleState]:
     toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
     state.replace(
         reflect=jnp.maximum(state.reflect - 1, 0),
@@ -576,7 +629,7 @@ def step_side_conditions(
 def step_moody(
     key: chex.PRNGKey,
     state: BattleState,
-) -> (chex.PRNGKey, BattleState):
+) -> Tuple[chex.PRNGKey, BattleState]:
     # i think this needs to be a loop to make the random choices function work
     abilities = state.active.ability
     for i in range(2):
@@ -592,11 +645,11 @@ def step_moody(
 
 
 
-def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     # TODO: eventually we will need to figure out we handle observations and include it here
     return key, state
 
-def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     move = state.active[attacker_index].moves[move_index]
 
     # decrement pp
@@ -642,7 +695,7 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     return key, state
 
 
-def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> (chex.PRNGKey, BattleState):
+def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     active = state.active
@@ -651,9 +704,12 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
     attacker_ability = active[attacker_index].ability
 
     weather = state.weather.weather
+    is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
+
     accuracy = (move.accuracy *
                 ACCURACY_MULTIPLIER_LOOKUP[6 + state.boosts.acc_boosts[attacker_index, 0]] *
-                ACCURACY_MULTIPLIER_LOOKUP[6 - state.boosts.acc_boosts[1 - attacker_index, 1]])
+                ACCURACY_MULTIPLIER_LOOKUP[6 - state.boosts.acc_boosts[1 - attacker_index, 1]] *
+                jnp.power(0.8, is_hustle))
     veil_active = jnp.logical_or(
         jnp.logical_and(defender_ability == AbilityEnum.SAND_VEIL, weather == WeatherEnum.SANDSTORM),
         jnp.logical_and(defender_ability == AbilityEnum.SNOW_CLOAK, weather == WeatherEnum.SNOW))
@@ -674,7 +730,7 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         move_hits, move_misses,
         key, state, attacker_index, move_index)
 
-def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
 
     # decide branch to execute based on ability immunities
     defender = state.active[1 - attacker_index]
@@ -717,7 +773,7 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         boost_value
     )
 
-def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> (chex.PRNGKey, BattleState):
+def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     return key, state
 
 

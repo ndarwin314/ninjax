@@ -129,6 +129,10 @@ class Pokemon(DataclassArray):
     def is_poisoned(self):
         return jnp.logical_and(self.status==Status.POISON, self.status==Status.TOXIC)
 
+    @property
+    def level(self):
+        return self.stat_table.level.level
+
 
 
 

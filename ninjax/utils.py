@@ -15,7 +15,7 @@ import numpy as np
 # I'm good at programming
 ArrayImpl.__hash__ = lambda : 0
 
-Array = jax.Array
+Array = chex.Array
 increase_mult = 1.1
 one_point_three = 5325/4096
 one_point_one = 4506/4096
@@ -102,7 +102,7 @@ def base_damage_compute(
         base_power: int):
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
 
-def conditional_mult_round(damage, mult, cond):
+def conditional_mult_round(damage, mult, cond) -> Array:
     # fix correctly rounds down at .5 for all values rather than banker's rounding
     return jnp.fix(conditional_mult(damage, mult, cond)).astype(int)
 
