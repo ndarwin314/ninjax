@@ -32,6 +32,10 @@ class Move(DataclassArray):
         return self.replace(current_pp=self.current_pp.at[index].set(value))
 
     @property
+    def powder(self):
+        return (self.move_flags & MoveFlags.POWDER) == MoveFlags.POWDER
+
+    @property
     def contact(self):
         return (self.move_flags & MoveFlags.CONTACT) == MoveFlags.CONTACT
 

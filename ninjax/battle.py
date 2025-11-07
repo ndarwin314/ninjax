@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from ninjax.side import BattleState, update_active
 from ninjax.utils import triple_and, triple_or
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType
-from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_move_damage, do_healing_from_move,
+from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, do_healing_from_move,
                                do_stat_boost_from_move, do_status_move, do_flash_fire_from_move, move_interrupted,
                                move_used, step_moody)
 

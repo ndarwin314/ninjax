@@ -4,6 +4,8 @@ from collections import namedtuple
 from dataclasses import field
 
 import jax.lax
+import jax.random as random
+import chex
 from dataclass_array import DataclassArray
 from dataclass_array.typing import FloatArray, IntArray, BoolArray
 import dataclass_array as dca
@@ -14,7 +16,9 @@ from jax import jit
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type, AbilityEnum
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, calculate_effectiveness_multiplier, conditional_mult_round, quad_or
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, triple_or, conditional_mult_round, quad_or, triple_and
+
+Array = chex.Array
 
 Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
@@ -90,8 +94,9 @@ class BattleState(DataclassArray):
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + self.boosts.normal_boosts])
 
     def attack_multiplier(self):
-        ability = self.active.ability
-        status = self.active.status
+        active = self.active
+        ability = active.ability
+        status = active.status
         # guts check
         is_guts = jnp.logical_and(ability == AbilityEnum.GUTS, status == Status.BURN).squeeze()
         # huge power
@@ -99,15 +104,15 @@ class BattleState(DataclassArray):
         # defeatist
         is_defeatist = jnp.logical_and((ability == AbilityEnum.DEFEATIST).squeeze(), self.active.hp_less_than(0.5))
         # hustle
-        is_hustle = (ability == AbilityEnum.DEFEATIST).squeeze()
+        is_hustle = (ability == AbilityEnum.HUSTLE).squeeze()
         # gorilla tactics
         is_gorilla_tactics = (ability == AbilityEnum.GORILLA_TACTICS).squeeze()
         # supreme overlord
         dead_count = jnp.sum(1 - self.team.is_alive)
         is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
-        return jnp.power(
-            jnp.array([1.5, 1.5, 1.5, 2, 0.5, 1 + dead_count / 10]),
-            jnp.array([is_guts, is_hustle, is_gorilla_tactics, is_huge_power, is_defeatist, is_huge_power, is_defeatist, is_supreme_overlord]))
+        return jnp.prod(jnp.power(
+            jnp.reshape(jnp.array([1.5, 1.5, 1.5, 2, 0.5, 1 + dead_count / 10]), (6,1)),
+            jnp.array([is_guts, is_hustle, is_gorilla_tactics, is_huge_power, is_defeatist, is_supreme_overlord])), axis=0)
 
     def special_attack_multiplier(self):
         ability = self.active.ability
@@ -115,7 +120,7 @@ class BattleState(DataclassArray):
         # supreme overlord
         dead_count = jnp.sum(1 - self.team.is_alive)
         is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
-        return jnp.power(jnp.array([1/2, 1+dead_count/10]), jnp.array([is_defeatist, is_supreme_overlord]))
+        return jnp.prod(jnp.power(jnp.array([1/2, 1+dead_count/10]), jnp.array([is_defeatist, is_supreme_overlord])), axis=0)
 
     @property
     def boosted_stats(self):
@@ -242,6 +247,101 @@ def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     # TODO
     return state
 
+
+def set_terrain(
+    state: BattleState, new_terrain: TerrainEnum, duration: int
+    ):
+    current_terrain = state.terrain.terrain
+    new_terrain = current_terrain * new_terrain == TerrainEnum.NONE + new_terrain
+    matching_terrain = current_terrain == new_terrain
+    new_duration_terrain = duration * (1 - matching_terrain) + state.terrain.duration * matching_terrain
+    state = state.replace(terrain=Terrain(new_terrain, new_duration_terrain))
+    return state
+
+def set_weather(
+    state: BattleState, new_weather: WeatherEnum, duration: int):
+    current_weather = state.weather.weather
+    new_weather = current_weather * new_weather == WeatherEnum.NONE + new_weather
+    matching_weather = current_weather == new_weather
+    # TODO: add item check for the weather stones
+    new_duration_weather = duration * (1 - matching_weather) + state.weather.duration * matching_weather
+    return state.replace(weather=Weather(new_weather, new_duration_weather))
+
+def status_helper(key, active, status: Status):
+    key, sub_key = random.split(key, 2)
+    # makes sleep turns between 1 and 3 equally likely
+    turns = random.randint(sub_key, (1,), minval=2, maxval=5)[0]
+    active = active.replace(status=status, sleep_counter=turns*(status==Status.SLEEP))
+    return active
+
+
+
+def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> Tuple[chex.PRNGKey, BattleState]:
+    active = state.active[side_idx]
+    already_statused = active.status != Status.NONE
+    is_comatose =  active.ability==AbilityEnum.COMATOSE
+    is_immune = jnp.any(jnp.array([
+        jnp.logical_and(jnp.logical_or(status==Status.POISON, status==Status.TOXIC), active.is_poison_immune),
+        jnp.logical_and(status==Status.PARALYZE, active.is_paralyze_immune),
+        jnp.logical_and(status==Status.BURN, active.is_burn_immune),
+        jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune),
+        jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune),
+        is_comatose
+    ]))
+    key, active = jax.lax.cond(
+        triple_or(already_statused, is_immune, status==Status.NONE)[0],
+        lambda k, a, s: (k, a),
+        status_helper,
+        key, active, status)
+    return key, update_active(state, side_idx, active)
+
+def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage) -> BattleState:
+    active = state.active
+    defender = active[defender_idx]
+    attacker = active[1-defender_idx]
+    # TODO: there are some effects that trigger based on damage taken, like mirror coat
+    health_full = defender.current_hp==defender.max_hp
+    is_sturdy = defender.ability==AbilityEnum.STURDY
+    is_multiscale = jnp.logical_and(health_full, defender.ability==AbilityEnum.MULTISCALE)
+    damage = conditional_mult_round(damage, 0.5, is_multiscale)
+    old_health = defender.current_hp
+    over_half = jnp.greater_equal(old_health/defender.max_hp, 0.5)
+    new_health = jax.lax.clamp(0, old_health-damage, (defender.max_hp - health_full*is_sturdy*is_attack_damage)[0])
+    under_half = jnp.less(new_health/defender.max_hp, 0.5)
+
+    # check to make sure we don't accidentally revive a pokemon
+    alive = jnp.logical_and(jnp.bool([new_health != 0]), defender.is_alive)
+    defender = defender.replace(current_hp=new_health, is_alive=alive)
+
+    # run moxie type abilities
+    is_soul_heart = attacker.ability==AbilityEnum.SOUL_HEART
+    is_moxie = attacker.ability==AbilityEnum.MOXIE
+    is_beast_boost = attacker.ability==AbilityEnum.BEAST_BOOST
+    is_grim_neigh = attacker.ability==AbilityEnum.GRIM_NEIGH
+    beast_boost_index = (1+jnp.argmax(attacker.stats))
+    index = (beast_boost_index*is_beast_boost +
+             is_moxie * StatEnum.ATTACK +
+             jnp.logical_or(is_soul_heart, is_grim_neigh) * StatEnum.SPECIAL_ATTACK)
+    # yeah idk why this needs double index thingy here
+    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0, 0]
+    state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
+
+    # innards out
+    is_innards_out = triple_and(1-alive, defender.ability==AbilityEnum.INNARDS_OUT, is_attack_damage)[0]
+    state = jax.lax.cond(
+        is_innards_out[0],
+        take_damage_value, lambda b, i, d, c: b,
+        state, 1-defender_idx, old_health, False
+    )
+    # TODO: consider making separate functions for take damage value and take damage from attack
+    # this keeps active the same if current_hp!=0 and sets field as empty otherwise
+    # there are some other conditions that should trigger emptying field like eject button
+    # idk if that should be handled here or elsewhere
+    return update_active(state, defender_idx, defender)
+
+def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
+    damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
+    return take_damage_value(state, defender_idx, damage, False)
 
 
 

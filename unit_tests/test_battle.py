@@ -7,10 +7,11 @@ import dataclass_array as dca
 from ninjax.battle import Battle, BattleState, BattleParams, step_move
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import Type, MoveType, Status, AbilityEnum
-from ninjax.game_logic import move_used, do_move_damage, do_contact, status_helper
+from ninjax.game_logic import move_used, do_damaging_move
+from ninjax.move_effects import do_contact
 from ninjax.move import Move
 from ninjax.stats import StatTable, Nature, StatBoosts
-from ninjax.side import BattleState
+from ninjax.side import BattleState, status_helper
 
 jax.config.update("jax_traceback_filtering", "off")
 
@@ -164,7 +165,7 @@ class TestDamage:
             defensive_stat=4 * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0, 0)
+        key, state = do_damaging_move(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0]==health
 
     def test_damage_stab(self, battle_state):
@@ -181,7 +182,7 @@ class TestDamage:
             defensive_stat=4 * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0, 0)
+        key, state = do_damaging_move(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0] == 259
 
     @pytest.mark.parametrize(
@@ -209,5 +210,5 @@ class TestDamage:
             defensive_stat=(2+3*(1-is_physical)) * jnp.ones((1,)),
             crit_stage=jnp.zeros((1,))
         )
-        key, state = do_move_damage(key, state, 0, move, 0, 0)
+        key, state = do_damaging_move(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0] == damage

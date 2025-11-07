@@ -6,8 +6,8 @@ import jax.numpy as jnp
 
 from ninjax.move import Move
 from ninjax.stats import StatTable, StatBoosts
-from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum
-from ninjax.utils import triple_or, quad_or
+from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum, MoveType
+from ninjax.utils import triple_or, quad_or, calculate_effectiveness_multiplier
 
 BURN_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE])
 PARALYSIS_IMMUNE_ABILITIES = jnp.array([AbilityEnum.LIMBER, AbilityEnum.PURIFYING_SALT])
@@ -74,6 +74,9 @@ class Pokemon(DataclassArray):
     def hp_less_than(self, percent):
         return jnp.less_equal(self.hp_percent, percent)
 
+    def hp_greater_than(self, percent):
+        return jnp.greater(self.hp_percent, percent)
+
     # TODO: this method doesnt seem to work properly for stacked pokemon
     def is_type(self, t: Type):
         return jnp.any(self.type_list==t)
@@ -122,6 +125,14 @@ class Pokemon(DataclassArray):
         return self.ability==AbilityEnum.SOUNDPROOF
 
     @property
+    def is_bulletproof(self):
+        return self.ability==AbilityEnum.BULLET_PROOF
+
+    @property
+    def is_status_immune(self):
+        return self.ability==AbilityEnum.GOOD_AS_GOLD
+
+    @property
     def has_status(self):
         return self.status!=Status.NONE
 
@@ -131,7 +142,16 @@ class Pokemon(DataclassArray):
 
     @property
     def level(self):
-        return self.stat_table.level.level
+        return self.stat_table.level
+
+    def is_immune_to_move(self, move):
+        type_immunity = calculate_effectiveness_multiplier(move.type, self.type_list)
+        return jnp.any(jnp.array([
+            jnp.logical_and(self.is_powder_immune, move.powder),
+            jnp.logical_and(self.is_sound_immune, move.sound),
+            jnp.logical_and(self.is_bulletproof, move.bullet),
+            jnp.logical_and(self.is_status_immune, move.move_type==MoveType.STATUS),
+            type_immunity]))
 
 
 

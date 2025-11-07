@@ -87,6 +87,7 @@ class MoveFlags(IntFlag):
     LAUNCHER = auto()
     HEALING = auto()
     BITING = auto()
+    POWDER = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
