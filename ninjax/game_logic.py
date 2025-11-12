@@ -9,7 +9,7 @@ from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
 from ninjax.side import (BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts, reduce_boosts,
                          conditional_add_boosts, conditional_reduce_boosts, set_weather, set_terrain,
-                         take_damage_percent, set_status, take_damage_value)
+                         take_damage_percent, set_status, take_damage_value, raw_boosted_stats)
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.move_effects import after_move_finished, after_every_hit
@@ -26,10 +26,10 @@ Array = chex.Array
 
 
 
-def do_damaging_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     active = state.active
-    attacker = active[player_idx]
-    defender = active[1-player_idx]
+    attacker = active[attacker_idx]
+    defender = active[1-attacker_idx]
     hp_start = defender.current_hp
 
     # base power modifications, technician, tera, terrain etc
@@ -39,78 +39,99 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Mo
         move,
         state.terrain
     )
+    key, one, two = random.split(key, num=3)
+    # crit multiplier
+    # battle armor prevents crits
+    crit_stage = (move.crit_stage+
+                  (attacker.ability==AbilityEnum.SUPER_LUCK)[0] +
+                  3*jnp.logical_and(attacker.ability==AbilityEnum.MERCILESS, defender.is_poisoned))
+    crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
+    is_crit = random.uniform(one) < crit_chance
+    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
+
     # base damage pre multipliers
     # so the problem is that body press which does damage based on defence, ignores the defence reduction of sword of ruin
     # when it calculated the offensive stat, but doesn't ignore it as a modifier of defensive stats
     # but it also does get boosted by modifiers like choice band, huge power, and guts because this game is made with spaghetti code
     # so i have to implement that and i think this is probably the least stupid way to do that
-    test = state.attack_multiplier()[player_idx]
-    test2 = state.special_attack_multiplier()[player_idx]
-    move_type = move.move_type
-    test3 = move_type==MoveType.PHYSICAL
-    test4 = move_type==MoveType.SPECIAL
-    attack_multiplier = (test * test3 + test2 * test4)
+    raw_stats = state.active.stats
+    boosts = state.boosts
+    attacker_stats, defender_stats = raw_boosted_stats(
+        raw_stats,
+        boosts,
+        attacker_idx,
+        attacker.ability==AbilityEnum.UNAWARE,
+        defender.ability==AbilityEnum.UNAWARE,
+        is_crit
+    )
+
+
     base_damage = compute_base_damage(
         attacker.ability,
         defender.ability,
         attacker.hp_percent,
         attacker.level,
-        attack_multiplier,
-        state.boosted_stats,
+        attacker_stats,
+        defender_stats,
         move,
-        player_idx,
-        power)
+        power,
+        attacker.status,
+        defender.status
+    )
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
-    key, damage, is_crit = compute_damage_multipliers(
+    damage = compute_damage_multipliers(
         key,
         attacker,
         defender,
         state.weather,
         move,
-        base_damage)
+        base_damage,
+        is_crit,
+        damage_roll
+    )
 
     damage = damage_post_modifiers(damage, defender.ability, move)
 
     # dealing damage
-    state = take_damage_value(state, 1 - player_idx, damage, True)
+    state = take_damage_value(state, 1 - attacker_idx, damage, True)
 
 
     # recoil
     state = jax.lax.cond(
         jnp.logical_and(move.recoil, attacker.ability!=AbilityEnum.ROCK_HEAD)[0],
         do_recoil, lambda s, p, d: s,
-        state, player_idx, jnp.fix(damage*move.recoil_percent))
+        state, attacker_idx, jnp.fix(damage*move.recoil_percent))
 
     # TODO: this is actually really important and really hard
     # i have no clue how to implement multi-hit moves well, it might just need to be hard coded or something stupid
     # once that is done move around these to appropriate places, this is fine for now ig
-    key, state = after_every_hit(key, state, player_idx, move, is_crit)
-    state = after_move_finished(state, defender, 1-player_idx, hp_start)
+    key, state = after_every_hit(key, state, attacker_idx, move, is_crit)
+    state = after_move_finished(state, defender, 1-attacker_idx, hp_start)
 
     return key, state
 
-def do_recoil(state: BattleState, player_idx: int, damage) -> BattleState:
-    state = take_damage_value(state, player_idx, damage, False)
+def do_recoil(state: BattleState, attacker_idx: int, damage) -> BattleState:
+    state = take_damage_value(state, attacker_idx, damage, False)
     return state
 
-def do_status_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     # this is gonna be a pain
     return key, state
 
 # this is for when water absorb or volt absorb is triggered
-def do_healing_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    state = take_damage_percent(state, 1-player_idx, -1/4)
+def do_healing_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    state = take_damage_percent(state, 1-attacker_idx, -1/4)
     return key,state
 
-def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    state = add_boosts(state, 1-player_idx, stat_index, boost_value)
+def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    state = add_boosts(state, 1-attacker_idx, stat_index, boost_value)
     return key, state
 
 
-def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     # TODO: i dont want to do volatile status
     return key, state
 
@@ -236,14 +257,15 @@ def swap_is_alive(
 
     # activate weather abilities if target is alive
     # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
-    new_weather = (active.ability==AbilityEnum.DROUGHT * WeatherEnum.SUN +
+
+    new_weather = (jnp.logical_or(active.ability==AbilityEnum.DROUGHT, active.ability==AbilityEnum.ORICHALCUM_PULSE) * WeatherEnum.SUN +
                    active.ability==AbilityEnum.DRIZZLE * WeatherEnum.RAIN +
                    active.ability==AbilityEnum.SAND_STREAM * WeatherEnum.SANDSTORM +
                    active.ability==AbilityEnum.SNOW_WARNING * WeatherEnum.SNOW)
     state = set_terrain(state, new_weather, 5)
 
     # terrain, same deal as weather
-    new_terrain = (active.ability==AbilityEnum.ELECTRIC_SURGE * TerrainEnum.ELECTRIC +
+    new_terrain = (jnp.logical_and(active.ability==AbilityEnum.ELECTRIC_SURGE, active.ability==AbilityEnum.HADRON_ENGINE) * TerrainEnum.ELECTRIC +
                    active.ability==AbilityEnum.PSYCHIC_SURGE * TerrainEnum.PSYCHIC +
                    active.ability==AbilityEnum.GRASSY_SURGE * TerrainEnum.GRASSY +
                    active.ability==AbilityEnum.MISTY_SURGE * TerrainEnum.MISTY)
@@ -382,7 +404,7 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         move_hits, move_misses,
         key, state, attacker_index, move_index)
 
-def is_immune(key: chex.PRNGKey, state: BattleState, player_idx, move: Move, stat_index, boost_value):
+def is_immune(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value):
     return key, state
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:

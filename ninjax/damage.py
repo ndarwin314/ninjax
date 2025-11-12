@@ -4,11 +4,12 @@ import jax
 import jax.random as random
 import jax.numpy as jnp
 import chex
+
+
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import (BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts,reduce_boosts,
-                         conditional_add_boosts, conditional_reduce_boosts, set_weather, set_terrain)
+from ninjax.side import boosted_stats_helper
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
@@ -43,9 +44,6 @@ def compute_base_power(
     power = conditional_mult_round(power, four_thirds, jnp.logical_and(aura, 1-aura_break))
     power = conditional_mult_round(power, 3/4, jnp.logical_and(aura, aura_break))
 
-    # water bubble
-    water_bubble = jnp.logical_and(ability==AbilityEnum.WATER_BUBBLE, move.type==Type.WATER)
-    power = conditional_mult_round(power, 2, water_bubble)
 
     #technician
     is_technician = ability==AbilityEnum.TECHNICIAN
@@ -97,23 +95,31 @@ def compute_base_power(
     return power
 
 def compute_base_damage(
-        ability: AbilityEnum,
+        attacker_ability: AbilityEnum,
         defender_ability: AbilityEnum,
         hp_percent,
         level,
-        attack_multiplier,
-        boosted_stats,
+        attacker_stats,
+        defender_stats,
         move: Move,
-        attacker_idx,
-        power) -> Array:
+        power,
+        attacker_status,
+        defender_status
+) -> Array:
 
-    # this is a hack but it should work i think probably
-    # TODO i want to write this better actually doing repeated mult rounds but whatever
-    offensive_stat = jnp.floor(boosted_stats[attacker_idx][move.offensive_stat] * attack_multiplier)
-    defensive_stat = boosted_stats[1-attacker_idx][move.defensive_stat]
+    offensive_stat = compute_offensive_stat(
+        attacker_stats[move.offensive_stat],
+        attacker_ability,
+        defender_ability,
+        move,
+        hp_percent,
+        attacker_status
+    )
+
+    defensive_stat = compute_defensive_stat(defender_stats, defender_ability, defender_status, move.defensive_stat)
     # ruin abilities
-    sword_of_ruin = ability==AbilityEnum.SWORD_OF_RUIN
-    beads_of_ruin = ability == AbilityEnum.BEADS_OF_RUIN
+    sword_of_ruin = attacker_ability==AbilityEnum.SWORD_OF_RUIN
+    beads_of_ruin = attacker_ability == AbilityEnum.BEADS_OF_RUIN
     defensive_stat = conditional_mult_round(
         defensive_stat,
         0.75,
@@ -133,22 +139,6 @@ def compute_base_damage(
         )
     )
 
-    # we need some additional conditional stat changes here
-    # for example, guts always effects attack when its active but overgrow boosts attack only for grass moves when its active
-    type_ = move.type
-    low_hp = jnp.less_equal(hp_percent, 1/3)
-    is_overgrow = triple_and(type_==Type.GRASS, low_hp, ability==AbilityEnum.OVERGROW)
-    is_blaze = triple_and(type_==Type.FIRE, low_hp, ability==AbilityEnum.BLAZE)
-    is_torrent = triple_and(type_==Type.WATER, low_hp, ability==AbilityEnum.TORRENT)
-    is_swarm = triple_and(type_==Type.BUG, low_hp, ability==AbilityEnum.SWARM)
-    is_steel_worker = jnp.logical_and(type_==Type.STEEL, ability==AbilityEnum.STEELWORKER)
-    is_rocky_payload = jnp.logical_and(type_==Type.ROCK, ability==AbilityEnum.ROCKY_PAYLOAD)
-    arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker, is_rocky_payload])
-    offensive_stat = conditional_mult_round(offensive_stat, 1.5,
-                                            jnp.any(arr))
-    is_transistor = jnp.logical_and(type_==Type.ELECTRIC, ability==AbilityEnum.TRANSISTOR)
-    is_maw = jnp.logical_and(type_==Type.DRAGON, ability==AbilityEnum.DRAGONS_MAW)
-    offensive_stat = conditional_mult_round(offensive_stat, one_point_three, jnp.any(jnp.array([is_maw, is_transistor])))
 
     base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
     return base_damage
@@ -160,7 +150,10 @@ def compute_damage_multipliers(
         defender,
         weather: Weather,
         move: Move,
-        base_damage) -> Tuple[chex.PRNGKey, Array, bool]:
+        base_damage,
+        is_crit,
+        damage_roll
+) -> Array:
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
     # at some point we can see if it makes any difference for speed to not do it this way
@@ -174,18 +167,9 @@ def compute_damage_multipliers(
     base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_rain, move.type == Type.WATER))
     base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
 
-    key, one, two = random.split(key, num=3)
-    # crit multiplier
-    # battle armor prevents crits
-    crit_stage = (move.crit_stage+
-                  (attacker.ability==AbilityEnum.SUPER_LUCK)[0] +
-                  3*jnp.logical_and(attacker.ability==AbilityEnum.MERCILESS, defender.is_poisoned))
-    crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
-    is_crit = random.uniform(one) < crit_chance
     crit_multiplier = 1.5 + 0.75 * (attacker.ability==AbilityEnum.SNIPER)[0]
     # damage roll, idc about preserving the in game RNG generation
     base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
-    damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
     base_damage = conditional_mult_round(base_damage, damage_roll, 1)
     # stab multiplier
     # TODO: this logic can probably be simplified
@@ -218,17 +202,15 @@ def compute_damage_multipliers(
     is_guts = attacker.ability == AbilityEnum.GUTS
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
 
-    return key, base_damage, is_crit
+    return base_damage
 
 def damage_post_modifiers(
         damage: Array,
         defender_ability: AbilityEnum,
         move: Move) -> Array:
     damage = damage.astype(int)
-    # bulbapedia says water bubble "halves damage" so here we are
+    # so these might function the same as water bubble defensively which modifies the attackers attack but idk for sure
     is_fire_move = move.type == Type.FIRE
-    water_bubble = jnp.logical_and(is_fire_move, defender_ability == AbilityEnum.WATER_BUBBLE)
-    damage = conditional_mult_round(damage, 1 / 2, water_bubble)
     # fluffy is the same
     is_fluffy = defender_ability == AbilityEnum.FLUFFY
     fluffy_increase = jnp.logical_and(is_fire_move, is_fluffy)
@@ -247,3 +229,82 @@ def damage_post_modifiers(
         jnp.array([2, 1 / 2]),
         jnp.array([fluffy_increase, fluffy_decrease]).squeeze())
     return damage
+
+def compute_offensive_stat(
+        starting_stat: Array,
+        attacker_ability: AbilityEnum,
+        defender_ability: AbilityEnum,
+        move,
+        hp_percent: Array,
+        status: Status):
+
+    # I'm copying this implementation from what i can find of DaWoblefet's damage dissertation
+    # ignoring the rounding
+
+    is_physical = move.move_type == MoveType.PHYSICAL
+    is_special = move.move_type == MoveType.SPECIAL
+    hp_under_half = jnp.less_equal(hp_percent, 0.5)
+    hp_low = jnp.less_equal(hp_percent, 1/3)
+    move_type = move.type
+
+    # hustle: for whatever reason this is separate from anything else
+    stat = conditional_mult_prod(
+        starting_stat,
+        1.5,
+        jnp.logical_and(attacker_ability==AbilityEnum.HUSTLE, is_physical)
+    )
+
+    # 0.5x abilities
+    # TODO: slow start
+    stat = conditional_mult_prod(stat, 0.5, jnp.logical_and(attacker_ability==AbilityEnum.DEFEATIST, hp_under_half))
+
+    # 1.5x abilities
+    is_guts = jnp.logical_and(status!=Status.NONE, jnp.logical_and(attacker_ability==AbilityEnum.GUTS, is_physical))
+    is_overgrow = triple_and(move_type==Type.GRASS, hp_low, attacker_ability==AbilityEnum.OVERGROW)
+    is_blaze = triple_and(move_type==Type.FIRE, hp_low, attacker_ability==AbilityEnum.BLAZE)
+    is_torrent = triple_and(move_type==Type.WATER, hp_low, attacker_ability==AbilityEnum.TORRENT)
+    is_swarm = triple_and(move_type==Type.BUG, hp_low, attacker_ability==AbilityEnum.SWARM)
+    is_steel_worker = jnp.logical_and(move_type==Type.STEEL, attacker_ability==AbilityEnum.STEELWORKER)
+    is_rocky_payload = jnp.logical_and(move_type==Type.ROCK, attacker_ability==AbilityEnum.ROCKY_PAYLOAD)
+    is_maw = jnp.logical_and(move_type==Type.DRAGON, attacker_ability==AbilityEnum.DRAGONS_MAW)
+
+    arr = jnp.array([is_swarm, is_torrent, is_blaze, is_overgrow, is_steel_worker, is_rocky_payload, is_maw, is_guts])
+
+    stat = conditional_mult(stat, 1.5, jnp.any(arr))
+
+    # 2x abilities
+    # TODO: stakeout
+    huge_power = jnp.logical_and(attacker_ability==AbilityEnum.HUGE_POWER, is_physical)
+    water_bubble = jnp.logical_and(attacker_ability==AbilityEnum.WATER_BUBBLE, move_type==Type.WATER)
+    arr = jnp.array([huge_power, water_bubble])
+
+    stat = conditional_mult(stat, 2, jnp.any(arr))
+
+    # 0.5x defensive abilities
+    water_bubble = jnp.logical_and(defender_ability==AbilityEnum.WATER_BUBBLE, move_type==Type.FIRE)
+    thick_fat = jnp.logical_and(
+        defender_ability==AbilityEnum.THICK_FAT,
+        jnp.logical_or(move_type==Type.FIRE, move_type==Type.ICE)
+    )
+
+    stat = conditional_mult(stat, 0.5, jnp.logical_or(water_bubble, thick_fat))
+
+    # transistor is the only 1.3x
+    is_transistor = jnp.logical_and(move_type==Type.ELECTRIC, attacker_ability==AbilityEnum.TRANSISTOR)
+    stat = conditional_mult_round(stat, one_point_three, is_transistor)
+
+    #choice items
+
+    # pokemon specific boosting items, eg thick club or ogerpon mask
+
+    return jnp.fix(stat)
+
+def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
+
+    # marvel scale
+    stats = conditional_mult_round(
+        starting_stats[StatEnum.SPECIAL_DEFENSE], 1.5,
+        jnp.logical_and(defender_ability == AbilityEnum.MARVEL_SCALE, status!=Status.NONE))
+
+    # eviolite and assault vest
+    return stats[stat_idx]

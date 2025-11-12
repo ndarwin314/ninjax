@@ -93,35 +93,6 @@ class BattleState(DataclassArray):
         stats = self.active.stats
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + self.boosts.normal_boosts])
 
-    def attack_multiplier(self):
-        active = self.active
-        ability = active.ability
-        status = active.status
-        # guts check
-        is_guts = jnp.logical_and(ability == AbilityEnum.GUTS, status == Status.BURN).squeeze()
-        # huge power
-        is_huge_power = (ability == AbilityEnum.HUGE_POWER).squeeze()
-        # defeatist
-        is_defeatist = jnp.logical_and((ability == AbilityEnum.DEFEATIST).squeeze(), self.active.hp_less_than(0.5))
-        # hustle
-        is_hustle = (ability == AbilityEnum.HUSTLE).squeeze()
-        # gorilla tactics
-        is_gorilla_tactics = (ability == AbilityEnum.GORILLA_TACTICS).squeeze()
-        # supreme overlord
-        dead_count = jnp.sum(1 - self.team.is_alive)
-        is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
-        return jnp.prod(jnp.power(
-            jnp.reshape(jnp.array([1.5, 1.5, 1.5, 2, 0.5, 1 + dead_count / 10]), (6,1)),
-            jnp.array([is_guts, is_hustle, is_gorilla_tactics, is_huge_power, is_defeatist, is_supreme_overlord])), axis=0)
-
-    def special_attack_multiplier(self):
-        ability = self.active.ability
-        is_defeatist = jnp.logical_and((ability == AbilityEnum.DEFEATIST).squeeze(), self.active.hp_less_than(0.5))
-        # supreme overlord
-        dead_count = jnp.sum(1 - self.team.is_alive)
-        is_supreme_overlord = (ability == AbilityEnum.SUPREME_OVERLORD).squeeze()
-        return jnp.prod(jnp.power(jnp.array([1/2, 1+dead_count/10]), jnp.array([is_defeatist, is_supreme_overlord])), axis=0)
-
     @property
     def boosted_stats(self):
         active = self.active
@@ -339,9 +310,35 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_a
     # idk if that should be handled here or elsewhere
     return update_active(state, defender_idx, defender)
 
+def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
+    # this probably works
+    boosts = boosts.normal_boosts
+    boosts = jnp.minimum(boosts, 13 - 7 * ignore_boosts)
+    boosts = jnp.maximum(boosts, 6 * ignore_drops)
+    return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + boosts])
+
+def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defender_unaware, is_crit):
+    attacker_stats = raw_stats[attacker_idx]
+    defender_stats = raw_stats[1 - attacker_idx]
+    attacker_boosts = boosts[attacker_idx]
+    defender_boosts = boosts[attacker_idx]
+    attacker_stats = boosted_stats_helper(
+        attacker_stats,
+        attacker_boosts,
+        is_crit,
+        defender_unaware)
+    defender_stats = boosted_stats_helper(
+        defender_stats,
+        defender_boosts,
+        attacker_unaware,
+        jnp.logical_or(is_crit, attacker_unaware)
+    )
+    return attacker_stats, defender_stats
+
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
     damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
     return take_damage_value(state, defender_idx, damage, False)
+
 
 
 

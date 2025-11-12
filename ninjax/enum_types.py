@@ -370,11 +370,18 @@ class AbilityEnum(JaxEnum):
     ELECTROMORPHOSIS = auto()
     PROTOSYNTHESIS = auto()
     QUARK_DRIVE = auto()
-    GOOD_AS_GOLD = auto()
-    VESSEL_OF_RUIN = auto()
-    SWORD_OF_RUIN = auto()
-    TABLETS_OF_RUIN = auto()
-    BEADS_OF_RUIN = auto()
+    GOOD_AS_GOLD = auto() # done
+    VESSEL_OF_RUIN = auto() # done
+    SWORD_OF_RUIN = auto() # done
+    TABLETS_OF_RUIN = auto() # done
+    BEADS_OF_RUIN = auto() # done
+    ORICHALCUM_PULSE = auto()
+    HADRON_ENGINE = auto()
+    OPPORTUNIST = auto()
+    CUD_CHEW = auto()
+    SHARPNESS = auto()
     SUPREME_OVERLORD = auto()
+    COSTAR = auto()
+    TOXIC_DEBRIS = auto()
 
 
