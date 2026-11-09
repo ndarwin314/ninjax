@@ -109,6 +109,12 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
     # once that is done move around these to appropriate places, this is fine for now ig
     key, state = after_every_hit(key, state, attacker_idx, move, is_crit)
     state = after_move_finished(state, defender, 1-attacker_idx, hp_start)
+    state = jax.lax.cond(move.self_ko[0],
+        lambda s: take_damage_value(s, attacker_idx, s.active[attacker_idx].current_hp, False),
+        lambda s: s, state)
+    both_out = ~jnp.any((state.team.current_hp[..., 0] > 0) & state.roster)
+    winner = jnp.where(move.self_ko[0], 1-attacker_idx, attacker_idx)
+    state = state.replace(winner=jnp.where(both_out, winner, state.winner))
 
     return key, state
 
@@ -117,7 +123,27 @@ def do_recoil(state: BattleState, attacker_idx: int, damage) -> BattleState:
     return state
 
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    # this is gonna be a pain
+    target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
+    key, state = jax.lax.cond(move.status_effect[0] != Status.NONE,
+        lambda k, s: set_status(k, s, target, move.status_effect),
+        lambda k, s: (k, s), key, state)
+    stat = move.boost_stat[0]
+    stages = move.boost_stages[0]
+    state = jax.lax.cond((stat >= 1) & (stat <= 5) & (stages != 0),
+        lambda s: jax.lax.cond(stages > 0,
+            lambda b: add_boosts(b, target, stat, stages),
+            lambda b: reduce_boosts(b, target, stat, -stages), s),
+        lambda s: s, state)
+    state = set_weather(state, move.weather_effect[0], 5)
+    state = set_terrain(state, move.terrain_effect[0], 5)
+    state = state.replace(perish_turns=jnp.where(move.perish_effect[0] & (state.perish_turns < 0),
+                                                4, state.perish_turns))
+    hazard = move.hazard_effect[0]
+    state = state.replace(
+        stealth_rocks=state.stealth_rocks.at[target].set(state.stealth_rocks[target] | (hazard == 1)),
+        sticky_webs=state.sticky_webs.at[target].set(state.sticky_webs[target] | (hazard == 2)),
+        spikes=state.spikes.at[target].set(jnp.minimum(3, state.spikes[target] + (hazard == 3))),
+        toxic_spikes=state.toxic_spikes.at[target].set(jnp.minimum(2, state.toxic_spikes[target] + (hazard == 4))))
     return key, state
 
 # this is for when water absorb or volt absorb is triggered
@@ -151,25 +177,25 @@ def end_turn_damage(state: BattleState) -> BattleState:
     is_sand_immune = active.is_sand_immune
 
     # sand damage
-    sand_damage = (1 - is_sand_immune) / 16 * state.weather.weather == WeatherEnum.SANDSTORM
+    sand_damage = (1 - is_sand_immune) / 16 * (state.weather.weather == WeatherEnum.SANDSTORM)
     state = take_damage_percent(state, idx, sand_damage)
 
     # rain abilities
-    rain_healing = (active.ability==AbilityEnum.RAIN_DISH + 2 * (active.ability==AbilityEnum.DRY_SKIN)) / 16 * state.weather.weather == WeatherEnum.RAIN
+    rain_healing = ((active.ability==AbilityEnum.RAIN_DISH) + 2 * (active.ability==AbilityEnum.DRY_SKIN)) / 16 * (state.weather.weather == WeatherEnum.RAIN)
     # why is this one an int but the others arent
     state = take_damage_percent(state, idx, -rain_healing)
 
     # sun abilities
-    sun_damage = (active.ability==AbilityEnum.DRY_SKIN + active.ability==AbilityEnum.SOLAR_POWER) / 8 *state.weather.weather == WeatherEnum.SUN
+    sun_damage = ((active.ability==AbilityEnum.DRY_SKIN) + (active.ability==AbilityEnum.SOLAR_POWER)) / 8 * (state.weather.weather == WeatherEnum.SUN)
     state = take_damage_percent(state, idx, sun_damage)
 
     # snow abilities
-    snow_healing = active.ability==AbilityEnum.ICE_BODY / 16 *state.weather.weather == WeatherEnum.SNOW
+    snow_healing = (active.ability==AbilityEnum.ICE_BODY) / 16 * (state.weather.weather == WeatherEnum.SNOW)
     state = take_damage_percent(state, idx, -snow_healing)
 
 
     # grassy terrain healing
-    grass_healing = (is_floating - 1) / 16 * state.terrain.terrain == TerrainEnum.GRASSY
+    grass_healing = (is_floating - 1) / 16 * (state.terrain.terrain == TerrainEnum.GRASSY)
     state = take_damage_percent(state, idx, grass_healing)
 
     # status damage
@@ -186,7 +212,7 @@ def swap_out(
     key,
     state: BattleState,
     side_idx,
-    new_active: int
+    new_active: int | jax.Array
 ) -> BattleState:
     # swaps the active pokemon and does appropriate things like
     # 1. clearing volatile statuses
@@ -201,7 +227,8 @@ def swap_out(
     # this update could be saved since we need an update later but idk if it will matter
     active = state.active_index.at[side_idx].set(new_active)
     toxic_counter = state.toxic_counter.at[side_idx].set(0)
-    state = state.replace(active=active, toxic_counter=toxic_counter)
+    state = state.replace(active_index=active, toxic_counter=toxic_counter,
+                          perish_turns=state.perish_turns.at[side_idx].set(-1))
 
     # hazards
     active = state[side_idx].team[new_active]
@@ -213,19 +240,20 @@ def swap_out(
     state = take_damage_percent(
         state,
         side_idx,
-        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8
+        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8 * is_not_hazard_immune
     )
 
     # spikes
     state = take_damage_percent(
         state, side_idx,
-        (state[side_idx].spikes != 0) / (10 - 2 * state[side_idx].spikes) * is_not_flying
+        (state[side_idx].spikes != 0) / (10 - 2 * state[side_idx].spikes) * is_not_flying * is_not_hazard_immune
     )
 
     # sticky webs
     # so apparently if a pokemon sets webs and a pokemon with mirror armor is effected by them
     # then it applies the stat reduction to that mon, but this only happens if they are on field
-    state = reduce_boosts(state, side_idx, StatEnum.SPEED, 1 * is_not_flying * state[side_idx].sticky_webs, False)
+    state = conditional_reduce_boosts(state, side_idx,
+        (is_not_flying * state[side_idx].sticky_webs).reshape(()) != 0, StatEnum.SPEED, 1, False)
 
     # toxic spikes
     # only remove is poison type and not floating
@@ -234,10 +262,10 @@ def swap_out(
     state = state.replace(toxic_spikes=toxic_spikes)
     # this returns 0, 5, 6 for 0, 1, 2
     status_ = (7 - state[side_idx].toxic_spikes) * (state[side_idx].toxic_spikes != 0)
-    key, state = set_status(key, state, side_idx, status_ * is_poison_immune * is_not_flying)
+    key, state = set_status(key, state, side_idx, status_ * (1-is_poison_immune) * is_not_flying)
 
     #check if switch in is still alive
-    active_hp = state[side_idx].active.current_hp[side_idx]
+    active_hp = state.active.current_hp[side_idx, 0]
     is_alive = active_hp != 0
 
     state = jax.lax.cond(is_alive, swap_is_alive, lambda a, b: a, state, side_idx)
@@ -257,17 +285,18 @@ def swap_is_alive(
     # activate weather abilities if target is alive
     # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
 
-    new_weather = (jnp.logical_or(active.ability==AbilityEnum.DROUGHT, active.ability==AbilityEnum.ORICHALCUM_PULSE) * WeatherEnum.SUN +
-                   active.ability==AbilityEnum.DRIZZLE * WeatherEnum.RAIN +
-                   active.ability==AbilityEnum.SAND_STREAM * WeatherEnum.SANDSTORM +
-                   active.ability==AbilityEnum.SNOW_WARNING * WeatherEnum.SNOW)
-    state = set_terrain(state, new_weather, 5)
+    ability = attacker.ability[0]
+    new_weather = (jnp.logical_or(ability==AbilityEnum.DROUGHT, ability==AbilityEnum.ORICHALCUM_PULSE) * WeatherEnum.SUN +
+                   (ability==AbilityEnum.DRIZZLE) * WeatherEnum.RAIN +
+                   (ability==AbilityEnum.SAND_STREAM) * WeatherEnum.SANDSTORM +
+                   (ability==AbilityEnum.SNOW_WARNING) * WeatherEnum.SNOW)
+    state = set_weather(state, new_weather, 5)
 
     # terrain, same deal as weather
-    new_terrain = (jnp.logical_and(active.ability==AbilityEnum.ELECTRIC_SURGE, active.ability==AbilityEnum.HADRON_ENGINE) * TerrainEnum.ELECTRIC +
-                   active.ability==AbilityEnum.PSYCHIC_SURGE * TerrainEnum.PSYCHIC +
-                   active.ability==AbilityEnum.GRASSY_SURGE * TerrainEnum.GRASSY +
-                   active.ability==AbilityEnum.MISTY_SURGE * TerrainEnum.MISTY)
+    new_terrain = (jnp.logical_or(ability==AbilityEnum.ELECTRIC_SURGE, ability==AbilityEnum.HADRON_ENGINE) * TerrainEnum.ELECTRIC +
+                   (ability==AbilityEnum.PSYCHIC_SURGE) * TerrainEnum.PSYCHIC +
+                   (ability==AbilityEnum.GRASSY_SURGE) * TerrainEnum.GRASSY +
+                   (ability==AbilityEnum.MISTY_SURGE) * TerrainEnum.MISTY)
     state = set_terrain(state, new_terrain, 5)
 
     # intimidate
@@ -279,7 +308,7 @@ def swap_is_alive(
         defender_ability==AbilityEnum.SCRAPPY,
     )
     intimidate_activated = jnp.logical_and(is_intimidate, 1-is_intimidate_immune)
-    state = conditional_reduce_boosts(state, 1-side_idx, StatEnum.ATTACK, 1, intimidate_activated, True)
+    state = conditional_reduce_boosts(state, 1-side_idx, intimidate_activated, StatEnum.ATTACK, 1, True)
     return state
 
 
@@ -305,7 +334,7 @@ def step_moody(
     abilities = state.active.ability
     for i in range(2):
         key, sub_key = random.split(key, 2)
-        key, state = conditional_add_boosts(
+        state = conditional_add_boosts(
             state,
             i,
             abilities[i]==AbilityEnum.MOODY,
@@ -331,6 +360,12 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     new_moves = active.moves.replace(current_pp=new_pp)
     active = active.replace(moves=new_moves)
     state = update_active(state, attacker_index, active)
+    return jax.lax.cond(move.implemented[0], _apply_move_effects, move_misses,
+                        key, state, attacker_index, move_index)
+
+
+def _apply_move_effects(key, state, attacker_index, move_index):
+    move = state.active[attacker_index].moves[move_index]
     attacker_ability = state.active[attacker_index].ability
 
     # do modifications to the move
@@ -361,8 +396,8 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
 
     key, state = jax.lax.cond(
-        draw_in,
-        do_stat_boost_from_move, move_not_drawn_in,
+        draw_in.reshape(()),
+        lambda k, s, a, m, stat: do_stat_boost_from_move(k, s, a, s.active[a].moves[m], stat, 1), move_not_drawn_in,
         key, state, attacker_index, move_index, StatEnum.SPECIAL_ATTACK
     )
     return key, state
@@ -407,6 +442,12 @@ def is_immune(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, s
     return key, state
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+    move = state.active[attacker_index].moves[move_index]
+    return jax.lax.cond(move.implemented[0], _move_hits, move_misses,
+                        key, state, attacker_index, move_index)
+
+
+def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
 
     # decide branch to execute based on ability immunities
     defender = state.active[1 - attacker_index]
@@ -437,8 +478,8 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     is_stat_boost = quad_or(is_speed_boost, is_attack_boost, is_spa_boost, is_def_boost)
     not_bypass_move = triple_or(is_flash_fire, is_stat_boost, is_heal)
     immune = defender.is_immune_to_move(move)
-    immune = jnp.logical_and(immune, not_bypass_move)
-    is_status = jnp.logical_and(move.move_type == MoveType.STATUS, not_bypass_move)
+    immune = jnp.logical_and(immune, ~not_bypass_move)
+    is_status = jnp.logical_and(move.move_type == MoveType.STATUS, ~not_bypass_move & ~immune)
     # this feels really hacky way to compute this but :shrug:
     branch_index = (
             is_status +
@@ -447,11 +488,11 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
             is_heal * 4 +
             immune * 5
     )
-    boost_value = 1 + ability==AbilityEnum.WELL_BAKED_BODY
+    boost_value = 1 + (ability==AbilityEnum.WELL_BAKED_BODY)
 
     # i think using a switch means we skip evaluating the branches we don't need
     # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
-    return jax.lax.switch(
+    key, state = jax.lax.switch(
         branch_index[0],
         branches,
         key,
@@ -461,6 +502,8 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         is_attack_boost + 2 * is_def_boost + 4 * is_spa_boost + 6 * is_speed_boost,
         boost_value
     )
+    requested = move.switch_out[0] & (branch_index[0] <= 1)
+    return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     return key, state

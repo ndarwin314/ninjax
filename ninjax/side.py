@@ -1,6 +1,4 @@
-from typing import Union, Tuple, Dict, Any
-from functools import partial
-from collections import namedtuple
+from typing import Tuple
 from dataclasses import field
 
 import jax.lax
@@ -8,28 +6,23 @@ import jax.random as random
 import chex
 from flax import struct
 import jax.numpy as jnp
-from jax import jit
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, Type, AbilityEnum
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, triple_or, conditional_mult_round, quad_or, triple_and
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, AbilityEnum, Weather, Terrain
+from ninjax.utils import STAT_MULTIPLIER_LOOKUP, triple_or, conditional_mult_round, triple_and
 
-Array = chex.Array
-
-Weather = namedtuple("Weather", ["weather", "duration"])
-Terrain = namedtuple("Terrain", ["terrain", "duration"])
+Array = jax.Array
 
 
-@struct.dataclass
-class VolatileStatus:
+
+class VolatileStatus(struct.PyTreeNode):
     confused: bool = False
     # TODO this is gonna suck, make sure everything has default values
     def replace_row(self, idx: int, new_status: 'VolatileStatus'):
         return self
 
-@struct.dataclass
-class BattleState:
+class BattleState(struct.PyTreeNode):
     """A single battle: side fields have shape (2, 1), team shape (2, 6)."""
     team: Pokemon
     # figure out how to represent no pokemon on field, maybe active_index=-1?
@@ -49,6 +42,10 @@ class BattleState:
         acc_boosts=jnp.zeros((2,2), dtype='int32')))
     legal_action_mask: Array = field(default_factory=lambda: jnp.ones((2, 15), dtype=jnp.bool_))
     can_tera: Array = field(default_factory=lambda: jnp.ones((2, 1), dtype=jnp.bool_))
+    switch_requested: Array = field(default_factory=lambda: jnp.zeros(2, dtype=jnp.bool_))
+    roster: Array = field(default_factory=lambda: jnp.ones((2, 6), dtype=jnp.bool_))
+    winner: Array = field(default_factory=lambda: jnp.int32(-1))
+    perish_turns: Array = field(default_factory=lambda: -jnp.ones((2, 1), dtype=jnp.int32))
     # notably volatile status needs like wish, healing wish, and future sight things
     # but those are lowish priority
     volatile_status: VolatileStatus = field(default_factory=VolatileStatus) # TODO
@@ -180,6 +177,8 @@ def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     # contrary
     idx = jnp.asarray(idx)
     val = jnp.asarray(val) * (2 * (state.active.ability[side_idx]!=AbilityEnum.CONTRARY)[0]-1)
+    if idx.ndim == 0:
+        val = val.reshape(())
     new_boosts = state.boosts.normal_boosts[side_idx]
     new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
@@ -349,6 +348,10 @@ def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defende
     return attacker_stats, defender_stats
 
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -> BattleState:
+    if jnp.ndim(defender_idx) > 0:
+        for i in range(2):
+            state = take_damage_percent(state, i, jnp.broadcast_to(percent, (2, 1))[i])
+        return state
     damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
     return take_damage_value(state, defender_idx, damage, False)
 

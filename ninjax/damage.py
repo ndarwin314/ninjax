@@ -174,7 +174,7 @@ def compute_damage_multipliers(
     # TODO: this logic can probably be simplified
     is_tera_boosted = jnp.logical_and(attacker.is_terastallized, attacker.tera_type == move.type)
     is_matching_tera = jnp.logical_and(is_tera_boosted, jnp.any(attacker.type_list == attacker.tera_type))
-    is_stab = jnp.logical_or(jnp.any(attacker.type_list == move.type), is_tera_boosted)
+    is_stab = jnp.logical_or(jnp.any(attacker.type_list == move.type), is_tera_boosted) & (move.type != Type.NONE)
     is_adaptability_boosted = jnp.logical_and(attacker.ability==AbilityEnum.ADAPTABILITY, is_stab)
     stab_multiplier = (
             1.5 +

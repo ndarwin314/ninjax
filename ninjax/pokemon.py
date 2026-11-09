@@ -1,14 +1,13 @@
 import jax
-from flax import struct
 from ninjax.tree import ArrayTree, broadcast_tree
 from dataclasses import field
 
 import jax.numpy as jnp
 
 from ninjax.move import Move
-from ninjax.stats import StatTable, StatBoosts
-from ninjax.enum_types import StatEnum, Type, Status, AbilityEnum, MoveType
-from ninjax.utils import triple_or, quad_or, calculate_effectiveness_multiplier
+from ninjax.stats import StatTable
+from ninjax.enum_types import Type, Status, AbilityEnum, MoveType
+from ninjax.utils import triple_or, calculate_effectiveness_multiplier
 
 BURN_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE])
 PARALYSIS_IMMUNE_ABILITIES = jnp.array([AbilityEnum.LIMBER, AbilityEnum.PURIFYING_SALT])
@@ -16,11 +15,13 @@ POISON_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.IMM
 FREEZE_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.MAGMA_ARMOR])
 SLEEP_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.INSOMNIA])
 
-@struct.dataclass
 class Pokemon(ArrayTree):
     """Team leaves use (2 players, 6 slots, features); moves add a move axis."""
     type_list: jax.Array
     moves: Move
+    species: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    item: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    encore_move: jax.Array = field(default_factory=lambda: jnp.int32([-1]))
     tera_type: jax.Array = field(default_factory=lambda: jnp.int32([0]))
     #species: jax.Array = jnp.int32([0])
     #name: jax.Array = jnp.int32([0])
@@ -40,7 +41,7 @@ class Pokemon(ArrayTree):
         batch = jnp.shape(self.type_list)[:-1]
         object.__setattr__(self, 'type_list', jnp.asarray(self.type_list, jnp.int32))
         object.__setattr__(self, 'stat_table', broadcast_tree(self.stat_table, batch))
-        for name in ('tera_type', 'is_alive', 'gender', 'is_terastallized', 'status', 'ability', 'sleep_counter', 'current_hp'):
+        for name in ('species', 'item', 'encore_move', 'tera_type', 'is_alive', 'gender', 'is_terastallized', 'status', 'ability', 'sleep_counter', 'current_hp'):
             value = getattr(self, name)
             if value is None:
                 value = self.stat_table.stats[..., :1]
@@ -137,13 +138,13 @@ class Pokemon(ArrayTree):
         return self.stat_table.level
 
     def is_immune_to_move(self, move):
-        type_immunity = calculate_effectiveness_multiplier(move.type, self.type_list)
-        return jnp.any(jnp.array([
+        type_immunity = calculate_effectiveness_multiplier(move.type, self.type_list) == 0
+        return jnp.any(jnp.stack(jnp.broadcast_arrays(
             jnp.logical_and(self.is_powder_immune, move.powder),
             jnp.logical_and(self.is_sound_immune, move.sound),
             jnp.logical_and(self.is_bulletproof, move.bullet),
             jnp.logical_and(self.is_status_immune, move.move_type==MoveType.STATUS),
-            type_immunity]))
+            type_immunity)))
 
 
 

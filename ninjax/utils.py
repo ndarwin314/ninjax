@@ -81,8 +81,8 @@ def calculate_stats(level: Array, nature: "Nature", base_stats: Array, ivs: Arra
 
     # factor in nature modifiers
     stats_tenth = jnp.floor_divide(stats, 10)
-    stats = stats.at[nature.increased].add(stats_tenth[nature.increased])
-    stats = stats.at[nature.decreased].add(-stats_tenth[nature.decreased])
+    stats = stats + stats_tenth * (jnp.arange(6) == nature.increased)
+    stats = stats - stats_tenth * (jnp.arange(6) == nature.decreased)
 
     return stats
 

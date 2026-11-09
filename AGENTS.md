@@ -12,9 +12,8 @@
 - Prefer pure functions and immutable state.
 - Avoid Python-side control flow on traced JAX values.
 - Use explicit PRNG keys for randomness.
-- Replace existing usage of gymnax with Jumanji
-- Aim for parity with Pokemon Champions
-- Do not aim to implement features not currently available in Pokemon Champions
+- Aim for parity with gen 9 scarlet and violet mechanics
+- Look towards future compatibility with slightly different versions of mechanics
 
 ## Workflow
 - Inspect existing code before making changes.

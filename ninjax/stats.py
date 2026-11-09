@@ -1,18 +1,15 @@
 import jax
-from flax import struct
 from ninjax.tree import ArrayTree, broadcast_tree
 from dataclasses import field
 
 
 import jax.numpy as jnp
 
-from ninjax.enum_types import StatEnum
-from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
+from ninjax.utils import calculate_stats
 
 Array = jax.Array
 int32 = jnp.int32
 
-@struct.dataclass
 class Nature(ArrayTree):
     increased: jax.Array = field(default_factory=lambda: jnp.array([1]))
     decreased: jax.Array = field(default_factory=lambda: jnp.array([1]))
@@ -26,7 +23,6 @@ class Nature(ArrayTree):
         decreased = self.decreased.at[idx].set(new_nature.decreased)
         return self.replace(increased=increased, decreased=decreased)
 
-@struct.dataclass
 class StatBoosts(ArrayTree):
     normal_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(6, dtype=int32))
     acc_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(2, dtype=int32))
@@ -47,7 +43,6 @@ class StatBoosts(ArrayTree):
         acc_boosts = self.acc_boosts + other.acc_boosts
         return StatBoosts(normal_boosts=normal_boosts, acc_boosts=acc_boosts)
 
-@struct.dataclass
 class StatTable(ArrayTree):
     level: jax.Array = field(default_factory=lambda: jnp.array([100]))
     nature: Nature = field(default_factory=Nature)
