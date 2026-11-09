@@ -6,9 +6,6 @@ from dataclasses import field
 import jax.lax
 import jax.random as random
 import chex
-from dataclass_array import DataclassArray
-from dataclass_array.typing import FloatArray, IntArray, BoolArray
-import dataclass_array as dca
 from flax import struct
 import jax.numpy as jnp
 from jax import jit
@@ -24,32 +21,34 @@ Weather = namedtuple("Weather", ["weather", "duration"])
 Terrain = namedtuple("Terrain", ["terrain", "duration"])
 
 
-class VolatileStatus(DataclassArray):
+@struct.dataclass
+class VolatileStatus:
     confused: bool = False
     # TODO this is gonna suck, make sure everything has default values
     def replace_row(self, idx: int, new_status: 'VolatileStatus'):
         return self
 
-@dca.dataclass_array(broadcast=True, cast_dtype=True)
-class BattleState(DataclassArray):
-    team: Pokemon['*batch_size 6']
+@struct.dataclass
+class BattleState:
+    """A single battle: side fields have shape (2, 1), team shape (2, 6)."""
+    team: Pokemon
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
-    active_index: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    stealth_rocks: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
-    sticky_webs: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
-    spikes: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    toxic_spikes: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    reflect: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    light_screen: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    aurora_veil: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    tailwind: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    toxic_counter: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    boosts: StatBoosts = StatBoosts(
+    active_index: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    stealth_rocks: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    sticky_webs: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    spikes: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    toxic_spikes: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    reflect: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    light_screen: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    aurora_veil: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    tailwind: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    toxic_counter: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    boosts: StatBoosts = field(default_factory=lambda: StatBoosts(
         normal_boosts=jnp.zeros((2, 6) ,dtype='int32'),
-        acc_boosts=jnp.zeros((2,2), dtype='int32'))
-    legal_action_mask: BoolArray['*batch_size 15'] = field(default_factory=lambda: jnp.ones((2, 15)))
-    can_tera: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.ones(1))
+        acc_boosts=jnp.zeros((2,2), dtype='int32')))
+    legal_action_mask: Array = field(default_factory=lambda: jnp.ones((2, 15), dtype=jnp.bool_))
+    can_tera: Array = field(default_factory=lambda: jnp.ones((2, 1), dtype=jnp.bool_))
     # notably volatile status needs like wish, healing wish, and future sight things
     # but those are lowish priority
     volatile_status: VolatileStatus = field(default_factory=VolatileStatus) # TODO
@@ -60,6 +59,16 @@ class BattleState(DataclassArray):
     trick_room_duration: int = 0
     gravity_duration: int = 0
     turn_type: TurnType = TurnType.STANDARD
+
+    def __getitem__(self, idx):
+        return self.replace(
+            team=self.team[idx], active_index=self.active_index[idx],
+            stealth_rocks=self.stealth_rocks[idx], sticky_webs=self.sticky_webs[idx],
+            spikes=self.spikes[idx], toxic_spikes=self.toxic_spikes[idx],
+            reflect=self.reflect[idx], light_screen=self.light_screen[idx],
+            aurora_veil=self.aurora_veil[idx], tailwind=self.tailwind[idx],
+            toxic_counter=self.toxic_counter[idx], boosts=self.boosts[idx],
+            legal_action_mask=self.legal_action_mask[idx], can_tera=self.can_tera[idx])
 
 
     def replace_row(self, idx: int, new_side: 'BattleState'):
@@ -169,46 +178,43 @@ def clear_boosts(state: BattleState, side_idx) -> BattleState:
 
 def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     # contrary
-    val = val * (2 * (state.active.ability[side_idx]!=AbilityEnum.CONTRARY)[0]-1)
+    idx = jnp.asarray(idx)
+    val = jnp.asarray(val) * (2 * (state.active.ability[side_idx]!=AbilityEnum.CONTRARY)[0]-1)
     new_boosts = state.boosts.normal_boosts[side_idx]
     new_boosts = new_boosts.at[idx].add(val)
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
 
 def reduce_boosts(state: BattleState, side_idx, idx, val, bounceable=False) -> BattleState:
     ability = state.active.ability
-    not_clear_body = ability[side_idx]!=AbilityEnum.CLEAR_BODY
+    not_clear_body = (ability[side_idx]!=AbilityEnum.CLEAR_BODY)[0]
     # TODO: this doesn't account for the functionality of idx being an array
     # in which case it should apply len(idx) times but that is hard to implement in JAX
     is_defiant = ability[side_idx]==AbilityEnum.DEFIANT
     is_competitive = ability[side_idx]==AbilityEnum.COMPETITIVE
-    jax.lax.cond(is_defiant,
+    state = jax.lax.cond(is_defiant.reshape(()),
                  add_boosts,
-                 lambda b, s, i, v: s,
+                 lambda b, s, i, v: b,
                  state, side_idx, StatEnum.ATTACK, 2)
-    jax.lax.cond(is_competitive,
+    state = jax.lax.cond(is_competitive.reshape(()),
                  add_boosts,
-                 lambda b, s, i, v: s,
+                 lambda b, s, i, v: b,
                  state, side_idx, StatEnum.SPECIAL_ATTACK, 2)
-    is_mirror_armor = ability[side_idx] = AbilityEnum.MIRROR_ARMOR
     return add_boosts(state, side_idx, idx, -val * not_clear_body)
 
-@partial(jit, static_argnames=['cond'])
 def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
-    if cond:
-        return set_boosts(state, side_idx, new_boosts)
-    return state
+    return jax.lax.cond(jnp.asarray(cond).reshape(()), set_boosts,
+                        lambda state, side_idx, new_boosts: state,
+                        state, side_idx, new_boosts)
 
-@partial(jit, static_argnames=['cond'])
 def conditional_add_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
-    if cond:
-        return add_boosts(state, side_idx, idx, val)
-    return state
+    return jax.lax.cond(jnp.asarray(cond).reshape(()), add_boosts,
+                        lambda state, side_idx, idx, val: state,
+                        state, side_idx, idx, val)
 
-@partial(jit, static_argnames=['cond'])
 def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val, bounceable) -> BattleState:
-    if cond:
-        return reduce_boosts(state, side_idx, idx, val, bounceable)
-    return state
+    return jax.lax.cond(jnp.asarray(cond).reshape(()), reduce_boosts,
+                        lambda state, side_idx, idx, val, bounceable: state,
+                        state, side_idx, idx, val, bounceable)
 
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
@@ -223,7 +229,8 @@ def set_terrain(
     state: BattleState, new_terrain: TerrainEnum, duration: int
     ):
     current_terrain = state.terrain.terrain
-    new_terrain = current_terrain * new_terrain == TerrainEnum.NONE + new_terrain
+    requested = jnp.asarray(new_terrain, jnp.int32).reshape(())
+    new_terrain = jnp.where(requested == TerrainEnum.NONE, current_terrain, requested)
     matching_terrain = current_terrain == new_terrain
     new_duration_terrain = duration * (1 - matching_terrain) + state.terrain.duration * matching_terrain
     state = state.replace(terrain=Terrain(new_terrain, new_duration_terrain))
@@ -232,7 +239,8 @@ def set_terrain(
 def set_weather(
     state: BattleState, new_weather: WeatherEnum, duration: int):
     current_weather = state.weather.weather
-    new_weather = current_weather * new_weather == WeatherEnum.NONE + new_weather
+    requested = jnp.asarray(new_weather, jnp.int32).reshape(())
+    new_weather = jnp.where(requested == WeatherEnum.NONE, current_weather, requested)
     matching_weather = current_weather == new_weather
     # TODO: add item check for the weather stones
     new_duration_weather = duration * (1 - matching_weather) + state.weather.duration * matching_weather
@@ -243,7 +251,7 @@ def status_helper(key, active, status: Status):
     # makes sleep turns between 1 and 3 equally likely
     turns = random.randint(sub_key, (1,), minval=2, maxval=5)[0]
     active = active.replace(status=status, sleep_counter=turns*(status==Status.SLEEP))
-    return active
+    return key, active
 
 
 
@@ -267,6 +275,9 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
     return key, update_active(state, side_idx, active)
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage) -> BattleState:
+    return _take_damage_value(state, defender_idx, damage, is_attack_damage, True)
+
+def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_innards):
     active = state.active
     defender = active[defender_idx]
     attacker = active[1-defender_idx]
@@ -281,7 +292,7 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_a
     under_half = jnp.less(new_health/defender.max_hp, 0.5)
 
     # check to make sure we don't accidentally revive a pokemon
-    alive = jnp.logical_and(jnp.bool([new_health != 0]), defender.is_alive)
+    alive = jnp.logical_and(new_health != 0, defender.is_alive)
     defender = defender.replace(current_hp=new_health, is_alive=alive)
 
     # run moxie type abilities
@@ -294,16 +305,18 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_a
              is_moxie * StatEnum.ATTACK +
              jnp.logical_or(is_soul_heart, is_grim_neigh) * StatEnum.SPECIAL_ATTACK)
     # yeah idk why this needs double index thingy here
-    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0, 0]
+    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0]
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
 
     # innards out
-    is_innards_out = triple_and(1-alive, defender.ability==AbilityEnum.INNARDS_OUT, is_attack_damage)[0]
-    state = jax.lax.cond(
-        is_innards_out[0],
-        take_damage_value, lambda b, i, d, c: b,
-        state, 1-defender_idx, old_health, False
-    )
+    is_innards_out = triple_and(1-alive, defender.ability==AbilityEnum.INNARDS_OUT, is_attack_damage)
+    if allow_innards:
+        state = jax.lax.cond(
+            is_innards_out[0],
+            lambda b, i, d: _take_damage_value(b, i, d, False, False),
+            lambda b, i, d: b,
+            state, 1-defender_idx, old_health
+        )
     # TODO: consider making separate functions for take damage value and take damage from attack
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button

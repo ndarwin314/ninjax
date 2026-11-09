@@ -18,8 +18,6 @@ from ninjax.utils import (
     in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
     conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
-jax.config.update("jax_disable_jit", True)
-
 Array = chex.Array
 
 
@@ -40,7 +38,7 @@ def after_every_hit(
     is_cotton_down = (defender.ability == AbilityEnum.COTTON_DOWN)
     state = conditional_reduce_boosts(state, 1 - defender_idx, is_cotton_down, StatEnum.SPEED, 1, True)
     # seed sower
-    state = set_weather(state, TerrainEnum.GRASSY * defender.ability==AbilityEnum.SEED_SOWER, 5)
+    state = set_terrain(state, TerrainEnum.GRASSY * (defender.ability==AbilityEnum.SEED_SOWER), 5)
     # weak armor
     state = conditional_add_boosts(
         state,

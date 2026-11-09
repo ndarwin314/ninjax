@@ -20,7 +20,6 @@ from ninjax.utils import (
     in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
     conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
-jax.config.update("jax_disable_jit", True)
 
 Array = chex.Array
 
@@ -103,7 +102,7 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
     state = jax.lax.cond(
         jnp.logical_and(move.recoil, attacker.ability!=AbilityEnum.ROCK_HEAD)[0],
         do_recoil, lambda s, p, d: s,
-        state, attacker_idx, jnp.fix(damage*move.recoil_percent))
+        state, attacker_idx, jnp.trunc(damage*move.recoil_percent))
 
     # TODO: this is actually really important and really hard
     # i have no clue how to implement multi-hit moves well, it might just need to be hard coded or something stupid
@@ -289,7 +288,7 @@ def step_side_conditions(
     state: BattleState,
 ) -> Tuple[chex.PRNGKey, BattleState]:
     toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
-    state.replace(
+    state = state.replace(
         reflect=jnp.maximum(state.reflect - 1, 0),
         light_screen=jnp.maximum(state.light_screen - 1, 0),
         aurora_veil=jnp.maximum(state.aurora_veil - 1, 0),

@@ -1,6 +1,7 @@
+import jax
+from flax import struct
+from ninjax.tree import ArrayTree, broadcast_tree
 from dataclasses import field
-from dataclass_array import DataclassArray, dataclass_array
-from dataclass_array.typing import IntArray, BoolArray
 
 import jax.numpy as jnp
 
@@ -15,48 +16,39 @@ POISON_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.IMM
 FREEZE_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.MAGMA_ARMOR])
 SLEEP_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.INSOMNIA])
 
-@dataclass_array(broadcast=True, cast_list=True, cast_dtype=True)
-class Pokemon(DataclassArray):
-    type_list: IntArray['*batch_size 2']
-    moves: Move['*batch_size 4']
-    tera_type: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    #species: IntArray['*batch_size'] = jnp.int32([0])
-    #name: IntArray['*batch_size'] = jnp.int32([0])
-    #level: IntArray['*batch_size 1'] = jnp.int32([0])
-    is_alive: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([1]))
-    gender: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
-    is_terastallized: BoolArray['*batch_size 1'] = field(default_factory=lambda: jnp.bool([0]))
-    status: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    ability: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    sleep_counter: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.int32([0]))
-    #item: IntArray['*batch_size'] = jnp.int32([0])
-    stat_table: StatTable = StatTable()
-    # this is a hack
-    current_hp: IntArray['*batch_size 1'] = stat_table.stats[...,0].reshape(1)
+@struct.dataclass
+class Pokemon(ArrayTree):
+    """Team leaves use (2 players, 6 slots, features); moves add a move axis."""
+    type_list: jax.Array
+    moves: Move
+    tera_type: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    #species: jax.Array = jnp.int32([0])
+    #name: jax.Array = jnp.int32([0])
+    #level: jax.Array = jnp.int32([0])
+    is_alive: jax.Array = field(default_factory=lambda: jnp.bool([1]))
+    gender: jax.Array = field(default_factory=lambda: jnp.bool([0]))
+    is_terastallized: jax.Array = field(default_factory=lambda: jnp.bool([0]))
+    status: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    ability: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    sleep_counter: jax.Array = field(default_factory=lambda: jnp.int32([0]))
+    #item: jax.Array = jnp.int32([0])
+    stat_table: StatTable = field(default_factory=StatTable)
+    current_hp: jax.Array = None
     # TODO add stats conditions and volatile status conditions
 
-    def replace_row(self, idx, new_pokemon: "Pokemon"):
-        # unfortunately this is literally the best way i can think of to do this
-        # it saves ugliness everywhere else
-        # with the cost of needing to update all fields manually like this
-        type = self.type_list.at[idx].set(new_pokemon.type_list)
-        # probably need to call a similar function for move to update it properly
-        # the only time moves should need to be changed is transform and i dont need to deal with that yet
-        #new_moves = self.moves.at[idx].set(new_pokemon.moves)
-        #level = self.level.at[idx].set(new_pokemon.level)
-        is_alive = self.is_alive.at[idx].set(new_pokemon.is_alive)
-        gender = self.gender.at[idx].set(new_pokemon.gender)
-        is_terastallized = self.is_terastallized.at[idx].set(new_pokemon.is_terastallized)
-        status = self.status.at[idx].set(new_pokemon.status)
-        ability = self.ability.at[idx].set(new_pokemon.ability)
-        stat_table = self.stat_table.row_update(idx, new_pokemon.stat_table)
-        current_hp = self.current_hp.at[idx].set(new_pokemon.current_hp)
-        moves = self.moves.set_pp(idx, new_pokemon.moves.current_pp)
-        new_obj = self.replace(
-            type_list=type, is_alive=is_alive, gender=gender, is_terastallized=is_terastallized, status=status,
-            stat_table=stat_table, current_hp=current_hp, ability=ability, moves=moves
-        )
-        return new_obj
+    def __post_init__(self):
+        batch = jnp.shape(self.type_list)[:-1]
+        object.__setattr__(self, 'type_list', jnp.asarray(self.type_list, jnp.int32))
+        object.__setattr__(self, 'stat_table', broadcast_tree(self.stat_table, batch))
+        for name in ('tera_type', 'is_alive', 'gender', 'is_terastallized', 'status', 'ability', 'sleep_counter', 'current_hp'):
+            value = getattr(self, name)
+            if value is None:
+                value = self.stat_table.stats[..., :1]
+            dtype = jnp.bool_ if name in ('is_alive', 'gender', 'is_terastallized') else jnp.int32
+            object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(value, dtype), batch + (1,)))
+
+    def replace_row(self, idx, new_pokemon):
+        return jax.tree.map(lambda old, new: old.at[idx].set(new), self, new_pokemon)
 
     @property
     def stats(self):

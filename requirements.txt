@@ -1,9 +1,8 @@
 jax>=0.4.31
 flax>=0.8.5
 pettingzoo>=1.24.3
-gymnax>=0.0.8
+jumanji>=1.1.2
 chex>=0.1.86
 numpy>=2.0.1
 orjson>=3.10.7
-dataclass_array>=1.5.2
 pytest

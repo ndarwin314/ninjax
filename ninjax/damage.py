@@ -18,7 +18,6 @@ from ninjax.utils import (
     in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
     conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
-jax.config.update("jax_disable_jit", True)
 
 Array = chex.Array
 
@@ -195,7 +194,7 @@ def compute_damage_multipliers(
         jnp.array([2, 3/4, 1.25]),
         jnp.array([is_tinted_lens, is_filter, is_neuroforce]).squeeze()
     )
-    base_damage = jnp.fix(base_damage * effectiveness)
+    base_damage = jnp.trunc(base_damage * effectiveness)
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
@@ -297,7 +296,7 @@ def compute_offensive_stat(
 
     # pokemon specific boosting items, eg thick club or ogerpon mask
 
-    return jnp.fix(stat)
+    return jnp.trunc(stat)
 
 def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
 

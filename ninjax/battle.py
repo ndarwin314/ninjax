@@ -4,8 +4,10 @@ import chex
 import jax.lax
 from flax import struct
 from jax import lax, random, jit
-from gymnax.environments import environment
-import gymnax.environments.spaces as spaces
+from functools import cached_property
+from jumanji.env import Environment
+from jumanji import specs
+from jumanji.types import StepType, restart, transition
 import jax.numpy as jnp
 
 
@@ -20,16 +22,27 @@ from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, 
 Binary = (0,1)
 
 @struct.dataclass
-class BattleParams(environment.EnvParams):
+class BattleParams:
     max_steps_in_episode: int = 100
 
-class Battle(environment.Environment[BattleState, BattleParams]):
+@struct.dataclass
+class EpisodeState:
+    """Jumanji state; the existing battle representation is retained for now."""
+    key: chex.PRNGKey
+    battle: BattleState
+    turn: chex.Array
 
-    def __init__(self):
+
+class Battle(Environment):
+
+    def __init__(self, teams=None, params=None):
         # this is a bad way to represent actions but i cant think of a better way
         # we have 4 actions for moves, 4 for move + tera, and 6 for switching, 1 for no-op
         # one of these actions is still illegal, switching to self but that makes it way worse
         self.action_set = jnp.array(range(15))
+        self.teams = teams
+        self.params = params or BattleParams()
+        super().__init__()
         # idk
         #self.obs_shape = (1, 1)
 
@@ -42,9 +55,28 @@ class Battle(environment.Environment[BattleState, BattleParams]):
         """Number of actions possible in environment."""
         return len(self.action_set)
 
-    def action_space(self, params: Optional[BattleParams] = None) -> spaces.Discrete:
-        """Action space of the environment."""
-        return spaces.Discrete(len(self.action_set))
+    @cached_property
+    def action_spec(self):
+        return specs.MultiDiscreteArray(jnp.array([15, 15], dtype=jnp.int32), name="actions")
+
+    @cached_property
+    def observation_spec(self):
+        return specs.Array(shape=(2, 1), dtype=jnp.int32, name="observation")
+
+    def reset(self, key):
+        if self.teams is None:
+            raise ValueError("Battle requires caller-provided teams for reset")
+        state = EpisodeState(key=key, battle=BattleState(team=self.teams), turn=jnp.int32(0))
+        return state, restart(jnp.zeros((2, 1), dtype=jnp.int32))
+
+    def step(self, state, action):
+        # Battle transitions are not yet connected to this interface.
+        key, _ = random.split(state.key)
+        state = state.replace(key=key, turn=state.turn + jnp.int32(1))
+        timestep = transition(jnp.float32(0), jnp.zeros((2, 1), dtype=jnp.int32))
+        timeout = state.turn >= self.params.max_steps_in_episode
+        timestep = timestep.replace(step_type=jnp.where(timeout, StepType.LAST, StepType.MID))
+        return state, timestep
 
 
     def step_env(

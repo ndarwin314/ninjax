@@ -1,29 +1,36 @@
+import jax
+from flax import struct
+from ninjax.tree import ArrayTree
 from dataclasses import field
 
 import jax.numpy as jnp
-from dataclass_array import DataclassArray
-import dataclass_array as dca
-from dataclass_array.typing import FloatArray, IntArray, BoolArray
 
 from ninjax.enum_types import MoveType, Type, MoveFlags
 
-@dca.dataclass_array(cast_dtype=True, broadcast=True)
-class Move(DataclassArray):
-    #name: IntArray['*batch_shape']
+@struct.dataclass
+class Move(ArrayTree):
+    """Move arrays have entity axes followed by (4 moves, 1 feature)."""
+    #name: jax.Array
     # e.g. special, physical, status
-    move_type: IntArray['*batch_shape 1']
-    max_pp: IntArray['*batch_shape 1']
-    current_pp: IntArray['*batch_shape 1']
+    move_type: jax.Array
+    max_pp: jax.Array
+    current_pp: jax.Array
     # e.g. fire, water
-    type: IntArray['*batch_shape 1']
-    base_power: IntArray['*batch_shape 1']
-    accuracy: FloatArray['*batch_shape 1']
-    priority: IntArray['*batch_shape 1']
-    offensive_stat: IntArray['*batch_shape 1']
-    defensive_stat: IntArray['*batch_shape 1']
-    crit_stage: IntArray['*batch_shape 1']
-    move_flags: IntArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([0]))
-    recoil_percent: FloatArray['*batch_shape 1'] = field(default_factory=lambda: jnp.array([0]))
+    type: jax.Array
+    base_power: jax.Array
+    accuracy: jax.Array
+    priority: jax.Array
+    offensive_stat: jax.Array
+    defensive_stat: jax.Array
+    crit_stage: jax.Array
+    move_flags: jax.Array = field(default_factory=lambda: jnp.array([0]))
+    recoil_percent: jax.Array = field(default_factory=lambda: jnp.array([0]))
+
+    def __post_init__(self):
+        shape = jnp.shape(self.current_pp)
+        for name in self.__dataclass_fields__:
+            dtype = jnp.float32 if name in ('accuracy', 'recoil_percent') else jnp.int32
+            object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):
         return self.replace(current_pp=self.current_pp.at[index].subtract(increment))

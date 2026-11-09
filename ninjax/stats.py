@@ -1,11 +1,10 @@
-from dataclasses import field
-import dataclass_array as dca
-
-
 import jax
+from flax import struct
+from ninjax.tree import ArrayTree, broadcast_tree
+from dataclasses import field
+
+
 import jax.numpy as jnp
-from dataclass_array import DataclassArray
-from dataclass_array.typing import FloatArray, IntArray
 
 from ninjax.enum_types import StatEnum
 from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
@@ -13,24 +12,27 @@ from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
 Array = jax.Array
 int32 = jnp.int32
 
-@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
-class Nature(DataclassArray):
-    increased: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([1]))
-    decreased: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([1]))
+@struct.dataclass
+class Nature(ArrayTree):
+    increased: jax.Array = field(default_factory=lambda: jnp.array([1]))
+    decreased: jax.Array = field(default_factory=lambda: jnp.array([1]))
+
+    def __post_init__(self):
+        object.__setattr__(self, 'increased', jnp.asarray(self.increased, jnp.int32))
+        object.__setattr__(self, 'decreased', jnp.asarray(self.decreased, jnp.int32))
 
     def row_update(self, idx: int, new_nature: 'Nature'):
         increased = self.increased.at[idx].set(new_nature.increased)
         decreased = self.decreased.at[idx].set(new_nature.decreased)
         return self.replace(increased=increased, decreased=decreased)
 
-@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
-class StatBoosts(DataclassArray):
-    normal_boosts: IntArray['*batch_size 6'] = field(default_factory=lambda: jnp.zeros(6, dtype=int32))
-    acc_boosts: IntArray['*batch_size 2'] = field(default_factory=lambda: jnp.zeros(2, dtype=int32))
+@struct.dataclass
+class StatBoosts(ArrayTree):
+    normal_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(6, dtype=int32))
+    acc_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(2, dtype=int32))
 
 
     def __post_init__(self) -> None:
-        super().__post_init__()
         # use __setattr__ manually instead of attribute assignment since the class is frozen
         object.__setattr__(self, "normal_boosts", jnp.clip(self.normal_boosts, -6, 6))
         object.__setattr__(self, "acc_boosts", jnp.clip(self.acc_boosts, -6, 6))
@@ -45,13 +47,20 @@ class StatBoosts(DataclassArray):
         acc_boosts = self.acc_boosts + other.acc_boosts
         return StatBoosts(normal_boosts=normal_boosts, acc_boosts=acc_boosts)
 
-@dca.dataclass_array(cast_dtype=True, broadcast=True, cast_list=True)
-class StatTable(DataclassArray):
-    level: IntArray['*batch_size 1'] = field(default_factory=lambda: jnp.array([100]))
-    nature: Nature = Nature()
-    base_stats: IntArray['*batch_size 6'] = field(default_factory=lambda: 100 * jnp.ones(6, dtype=int32))
-    ivs: IntArray['*batch_size 6'] = field(default_factory=lambda: 31*jnp.ones(6, dtype=int32))
-    evs: IntArray['*batch_size 6'] = field(default_factory=lambda: 84*jnp.ones(6, dtype=int32))
+@struct.dataclass
+class StatTable(ArrayTree):
+    level: jax.Array = field(default_factory=lambda: jnp.array([100]))
+    nature: Nature = field(default_factory=Nature)
+    base_stats: jax.Array = field(default_factory=lambda: 100 * jnp.ones(6, dtype=int32))
+    ivs: jax.Array = field(default_factory=lambda: 31*jnp.ones(6, dtype=int32))
+    evs: jax.Array = field(default_factory=lambda: 84*jnp.ones(6, dtype=int32))
+
+    def __post_init__(self):
+        batch = jnp.broadcast_shapes(jnp.asarray(self.base_stats).shape[:-1], jnp.asarray(self.level).shape[:-1])
+        for name in ('level', 'base_stats', 'ivs', 'evs'):
+            size = 1 if name == 'level' else 6
+            object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), jnp.int32), batch + (size,)))
+        object.__setattr__(self, 'nature', broadcast_tree(self.nature, batch))
 
     def row_update(self, idx: int, new_stats: 'StatTable'):
         level = self.level.at[idx].set(new_stats.level)

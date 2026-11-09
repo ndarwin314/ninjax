@@ -5,15 +5,8 @@ from functools import partial
 import chex
 from flax import struct
 import jax
-from jaxlib.xla_extension import ArrayImpl
 import jax.numpy as jnp
 import numpy as np
-
-# i deserve to be tried at the hague for this line of code
-# dataclass_array checks if field have a hash as a proxy for being immutable
-# so i'm adding a dummy hash function to it here to avoid it throwing errors
-# I'm good at programming
-ArrayImpl.__hash__ = lambda : 0
 
 Array = chex.Array
 increase_mult = 1.1
@@ -103,8 +96,8 @@ def base_damage_compute(
     return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2
 
 def conditional_mult_round(damage, mult, cond) -> Array:
-    # fix correctly rounds down at .5 for all values rather than banker's rounding
-    return jnp.fix(conditional_mult(damage, mult, cond)).astype(int)
+    # Truncate toward zero, matching numpy.fix.
+    return jnp.trunc(conditional_mult(damage, mult, cond)).astype(int)
 
 
 def conditional_mult(value, mult, cond):
@@ -116,8 +109,8 @@ def conditional_mult_prod(value, mult, cond):
     return value * jnp.prod(jnp.power(mult, cond))
 
 def conditional_mult_prod_round(damage, mult, cond):
-    # fix correctly rounds down at .5 for all values rather than banker's rounding
-    return jnp.fix(conditional_mult_prod(damage, mult, cond)).astype(int)
+    # Truncate toward zero, matching numpy.fix.
+    return jnp.trunc(conditional_mult_prod(damage, mult, cond)).astype(int)
 
 
 

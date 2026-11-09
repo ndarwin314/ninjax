@@ -2,7 +2,7 @@ import pytest
 import jax.numpy as jnp
 from jax import random
 import jax
-import dataclass_array as dca
+from ninjax.tree import stack
 
 from ninjax.battle import Battle, BattleState, BattleParams, step_move
 from ninjax.pokemon import Pokemon
@@ -32,8 +32,8 @@ def neutral_type():
     )
 
     mon = Pokemon(type_list=type_list, moves=moves)
-    mons = dca.stack([mon for _ in range(6)])
-    mons = dca.stack([mons, mons])
+    mons = stack([mon for _ in range(6)])
+    mons = stack([mons, mons])
     state = BattleState(team=mons)
     key = random.key(5)
     return key, state
@@ -57,10 +57,10 @@ def battle_state():
     )
 
     mon = Pokemon(type_list=type_list, moves=moves)
-    mons = dca.stack([mon for _ in range(6)])
+    mons = stack([mon for _ in range(6)])
     bad = Pokemon(type_list=jnp.array((Type.GRASS, 0)), moves=moves)
-    bads = dca.stack([bad for _ in range(6)])
-    mons = dca.stack([bads, mons])
+    bads = stack([bad for _ in range(6)])
+    mons = stack([bads, mons])
     state = BattleState(team=mons)
     key = random.key(5)
     battle = Battle()
@@ -74,6 +74,30 @@ def test_contact(neutral_type):
 def test_stat_helper(neutral_type):
     key, state = neutral_type
     status_helper(key, state.active[0], jnp.ones(1))
+
+
+def test_compiled_damage_transforms(neutral_type):
+    key, state = neutral_type
+
+    def hit(key, state):
+        return do_damaging_move(key, state, 0, state.active[0].moves[0], 0, 0)
+
+    assert not jax.config.jax_disable_jit
+    expected_key, expected = hit(key, state)
+    compiled_key, compiled = jax.jit(hit)(key, state)
+    assert jnp.array_equal(compiled.team.current_hp, expected.team.current_hp)
+
+    keys = random.split(key, 2)
+    _, batched = jax.jit(jax.vmap(hit))(keys, stack([state, state]))
+    assert batched.team.current_hp.shape == (2, 2, 6, 1)
+
+    def turn(carry, unused):
+        next_carry = hit(*carry)
+        return next_carry, next_carry[1].team.current_hp
+
+    (_, final), hp = jax.jit(lambda carry: jax.lax.scan(turn, carry, None, length=2))((key, state))
+    assert hp.shape == (2, 2, 6, 1)
+    assert jnp.all(final.team.current_hp <= state.team.current_hp)
 
 class TestStats:
     @pytest.mark.parametrize(
@@ -136,7 +160,8 @@ class TestStats:
         )
 
         mon = Pokemon(type_list=type_list, moves=moves)
-        mons = dca.stack([mon for _ in range(6)])
+        mons = stack([mon for _ in range(6)])
+        mons = stack([mons, mons])
         boosts = StatBoosts(normal_boosts=stage*jnp.ones((2,6), dtype=int))
         state = BattleState(team=mons, boosts=boosts)
         boosted_stats = state.boosted_stats[0]
