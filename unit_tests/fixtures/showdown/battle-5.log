@@ -1,0 +1,552 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Plusle|Plusle, L95, F|268/268
+|switch|p2a: Necrozma|Necrozma-Dusk-Mane, L69|248/248
+|turn|1
+|
+|t:|1794291502
+|move|p1a: Plusle|Grass Knot|p2a: Necrozma
+|-resisted|p2a: Necrozma
+|-damage|p2a: Necrozma|180/248
+|-damage|p1a: Plusle|242/268|[from] item: Life Orb
+|move|p2a: Necrozma|Dragon Dance|p2a: Necrozma
+|-boost|p2a: Necrozma|atk|1
+|-boost|p2a: Necrozma|spe|1
+|
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p1a: Plusle|Encore|p2a: Necrozma
+|-start|p2a: Necrozma|Encore
+|move|p2a: Necrozma|Dragon Dance|p2a: Necrozma
+|-boost|p2a: Necrozma|atk|1
+|-boost|p2a: Necrozma|spe|1
+|
+|upkeep
+|turn|3
+|
+|t:|1794291502
+|move|p2a: Necrozma|Dragon Dance|p2a: Necrozma
+|-boost|p2a: Necrozma|atk|1
+|-boost|p2a: Necrozma|spe|1
+|move|p1a: Plusle|Encore||[still]
+|-fail|p1a: Plusle
+|
+|upkeep
+|turn|4
+|
+|t:|1794291502
+|switch|p2a: Rabsca|Rabsca, L91, M|284/284
+|move|p1a: Plusle|Encore||[still]
+|-fail|p1a: Plusle
+|
+|upkeep
+|turn|5
+|
+|t:|1794291502
+|switch|p2a: Stantler|Stantler, L90, M|278/278
+|-ability|p2a: Stantler|Intimidate|boost
+|-unboost|p1a: Plusle|atk|1
+|move|p1a: Plusle|Nasty Plot|p1a: Plusle
+|-boost|p1a: Plusle|spa|2
+|
+|upkeep
+|turn|6
+|
+|t:|1794291502
+|move|p1a: Plusle|Grass Knot|p2a: Stantler
+|-damage|p2a: Stantler|153/278
+|-damage|p1a: Plusle|216/268|[from] item: Life Orb
+|move|p2a: Stantler|Shadow Ball|p1a: Plusle
+|-damage|p1a: Plusle|157/268
+|
+|upkeep
+|turn|7
+|
+|t:|1794291502
+|switch|p2a: Necrozma|Necrozma-Dusk-Mane, L69|180/248
+|move|p1a: Plusle|Encore||[still]
+|-fail|p1a: Plusle
+|
+|upkeep
+|turn|8
+|
+|t:|1794291502
+|move|p1a: Plusle|Grass Knot|p2a: Necrozma
+|-resisted|p2a: Necrozma
+|-damage|p2a: Necrozma|44/248
+|-damage|p1a: Plusle|131/268|[from] item: Life Orb
+|move|p2a: Necrozma|Dragon Dance|p2a: Necrozma
+|-boost|p2a: Necrozma|atk|1
+|-boost|p2a: Necrozma|spe|1
+|
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|switch|p1a: Honchkrow|Honchkrow, L86, M|312/312
+|move|p2a: Necrozma|Morning Sun|p2a: Necrozma
+|-heal|p2a: Necrozma|168/248
+|
+|upkeep
+|turn|10
+|
+|t:|1794291502
+|move|p2a: Necrozma|Earthquake|p1a: Honchkrow
+|-immune|p1a: Honchkrow
+|move|p1a: Honchkrow|Brave Bird|p2a: Necrozma
+|-resisted|p2a: Necrozma
+|-damage|p2a: Necrozma|96/248
+|-damage|p1a: Honchkrow|288/312|[from] Recoil
+|
+|upkeep
+|turn|11
+|
+|t:|1794291502
+|move|p2a: Necrozma|Sunsteel Strike|p1a: Honchkrow
+|-damage|p1a: Honchkrow|68/312
+|move|p1a: Honchkrow|Heat Wave|p2a: Necrozma
+|-supereffective|p2a: Necrozma
+|-damage|p2a: Necrozma|0 fnt
+|faint|p2a: Necrozma
+|-ability|p1a: Honchkrow|Moxie|boost
+|-boost|p1a: Honchkrow|atk|1
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Stantler|Stantler, L90, M|153/278
+|-ability|p2a: Stantler|Intimidate|boost
+|-unboost|p1a: Honchkrow|atk|1
+|turn|12
+|
+|t:|1794291502
+|switch|p2a: Azumarill|Azumarill, L82, F|298/298
+|move|p1a: Honchkrow|Heat Wave|p2a: Azumarill
+|-resisted|p2a: Azumarill
+|-damage|p2a: Azumarill|258/298
+|
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p1a: Honchkrow|U-turn|p2a: Azumarill
+|-resisted|p2a: Azumarill
+|-damage|p2a: Azumarill|224/298
+|
+|t:|1794291502
+|switch|p1a: Arceus|Arceus, L68|276/276|[from] U-turn
+|move|p2a: Azumarill|Liquidation|p1a: Arceus
+|-damage|p1a: Arceus|119/276
+|-unboost|p1a: Arceus|def|1
+|
+|upkeep
+|turn|14
+|
+|t:|1794291502
+|move|p1a: Arceus|Extreme Speed|p2a: Azumarill
+|-damage|p2a: Azumarill|127/298
+|-damage|p1a: Arceus|92/276|[from] item: Life Orb
+|move|p2a: Azumarill|Liquidation|p1a: Arceus
+|-damage|p1a: Arceus|0 fnt
+|faint|p1a: Arceus
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Plusle|Plusle, L95, F|131/268
+|turn|15
+|
+|t:|1794291502
+|move|p1a: Plusle|Encore|p2a: Azumarill
+|-start|p2a: Azumarill|Encore
+|move|p2a: Azumarill|Liquidation|p1a: Plusle
+|-damage|p1a: Plusle|0 fnt
+|faint|p1a: Plusle
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Honchkrow|Honchkrow, L86, M|68/312
+|turn|16
+|
+|t:|1794291502
+|move|p1a: Honchkrow|Heat Wave|p2a: Azumarill
+|-resisted|p2a: Azumarill
+|-damage|p2a: Azumarill|87/298
+|move|p2a: Azumarill|Liquidation|p1a: Honchkrow
+|-damage|p1a: Honchkrow|0 fnt
+|faint|p1a: Honchkrow
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Articuno|Articuno, L86|295/295
+|-ability|p1a: Articuno|Pressure
+|turn|17
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost||[still]
+|-fail|p1a: Articuno|heal
+|move|p2a: Azumarill|Liquidation|p1a: Articuno
+|-damage|p1a: Articuno|151/295
+|
+|-end|p2a: Azumarill|Encore
+|upkeep
+|turn|18
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|295/295
+|-singleturn|p1a: Articuno|move: Roost
+|move|p2a: Azumarill|Liquidation|p1a: Articuno
+|-damage|p1a: Articuno|156/295
+|
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|move|p1a: Articuno|Brave Bird|p2a: Azumarill
+|-damage|p2a: Azumarill|0 fnt
+|faint|p2a: Azumarill
+|-damage|p1a: Articuno|127/295|[from] Recoil
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Stantler|Stantler, L90, M|153/278
+|-ability|p2a: Stantler|Intimidate|boost
+|-unboost|p1a: Articuno|atk|1
+|turn|20
+|
+|t:|1794291502
+|switch|p2a: Cetitan|Cetitan, L82, F|412/412
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|275/295
+|-singleturn|p1a: Articuno|move: Roost
+|
+|upkeep
+|turn|21
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|295/295
+|-singleturn|p1a: Articuno|move: Roost
+|move|p2a: Cetitan|Earthquake|p1a: Articuno
+|-damage|p1a: Articuno|233/295
+|
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|295/295
+|-singleturn|p1a: Articuno|move: Roost
+|move|p2a: Cetitan|Ice Spinner|p1a: Articuno
+|-resisted|p1a: Articuno
+|-damage|p1a: Articuno|256/295
+|
+|upkeep
+|turn|23
+|
+|t:|1794291502
+|move|p2a: Cetitan|Ice Shard|p1a: Articuno
+|-damage|p1a: Articuno|213/295
+|move|p1a: Articuno|Brave Bird|p2a: Cetitan
+|-damage|p2a: Cetitan|313/412
+|-damage|p1a: Articuno|180/295|[from] Recoil
+|
+|upkeep
+|turn|24
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-start|p1a: Articuno|Substitute
+|-damage|p1a: Articuno|107/295
+|move|p2a: Cetitan|Belly Drum|p2a: Cetitan
+|-damage|p2a: Cetitan|107/412
+|-setboost|p2a: Cetitan|atk|6|[from] move: Belly Drum
+|-enditem|p2a: Cetitan|Sitrus Berry|[eat]
+|-heal|p2a: Cetitan|210/412|[from] item: Sitrus Berry
+|
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|move|p2a: Cetitan|Earthquake|p1a: Articuno
+|-immune|p1a: Articuno
+|
+|upkeep
+|turn|26
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|255/295
+|-singleturn|p1a: Articuno|move: Roost
+|move|p2a: Cetitan|Belly Drum||[still]
+|-fail|p2a: Cetitan
+|
+|upkeep
+|turn|27
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|move|p2a: Cetitan|Ice Spinner|p1a: Articuno
+|-end|p1a: Articuno|Substitute
+|
+|upkeep
+|turn|28
+|
+|t:|1794291502
+|move|p2a: Cetitan|Ice Shard|p1a: Articuno
+|-damage|p1a: Articuno|99/295
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|247/295
+|-singleturn|p1a: Articuno|move: Roost
+|
+|upkeep
+|turn|29
+|
+|t:|1794291502
+|switch|p2a: Stantler|Stantler, L90, M|153/278
+|-ability|p2a: Stantler|Intimidate|boost
+|-unboost|p1a: Articuno|atk|1
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-start|p1a: Articuno|Substitute
+|-damage|p1a: Articuno|174/295
+|
+|upkeep
+|turn|30
+|
+|t:|1794291502
+|move|p2a: Stantler|Shadow Ball|p1a: Articuno
+|-activate|p1a: Articuno|move: Substitute|[damage]
+|move|p1a: Articuno|Freeze-Dry|p2a: Stantler
+|-damage|p2a: Stantler|92/278
+|
+|upkeep
+|turn|31
+|
+|t:|1794291502
+|switch|p2a: Rabsca|Rabsca, L91, M|284/284
+|move|p1a: Articuno|Freeze-Dry|p2a: Rabsca
+|-damage|p2a: Rabsca|224/284
+|
+|upkeep
+|turn|32
+|
+|t:|1794291502
+|move|p1a: Articuno|Roost|p1a: Articuno
+|-heal|p1a: Articuno|295/295
+|-singleturn|p1a: Articuno|move: Roost
+|move|p2a: Rabsca|Psychic|p1a: Articuno
+|-end|p1a: Articuno|Substitute
+|
+|upkeep
+|turn|33
+|
+|t:|1794291502
+|move|p1a: Articuno|Freeze-Dry|p2a: Rabsca
+|-damage|p2a: Rabsca|161/284
+|-status|p2a: Rabsca|frz
+|cant|p2a: Rabsca|frz
+|
+|upkeep
+|turn|34
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-start|p1a: Articuno|Substitute
+|-damage|p1a: Articuno|222/295
+|cant|p2a: Rabsca|frz
+|
+|upkeep
+|turn|35
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|cant|p2a: Rabsca|frz
+|
+|upkeep
+|turn|36
+|
+|t:|1794291502
+|move|p1a: Articuno|Brave Bird|p2a: Rabsca
+|-supereffective|p2a: Rabsca
+|-damage|p2a: Rabsca|41/284 frz
+|-damage|p1a: Articuno|182/295|[from] Recoil
+|-curestatus|p2a: Rabsca|frz|[msg]
+|move|p2a: Rabsca|Psychic|p1a: Articuno
+|-end|p1a: Articuno|Substitute
+|
+|upkeep
+|turn|37
+|
+|t:|1794291502
+|move|p1a: Articuno|Brave Bird|p2a: Rabsca
+|-supereffective|p2a: Rabsca
+|-damage|p2a: Rabsca|0 fnt
+|faint|p2a: Rabsca
+|-damage|p1a: Articuno|168/295|[from] Recoil
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Cetitan|Cetitan, L82, F|210/412
+|turn|38
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-start|p1a: Articuno|Substitute
+|-damage|p1a: Articuno|95/295
+|move|p2a: Cetitan|Belly Drum|p2a: Cetitan
+|-damage|p2a: Cetitan|4/412
+|-setboost|p2a: Cetitan|atk|6|[from] move: Belly Drum
+|
+|upkeep
+|turn|39
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|move|p2a: Cetitan|Belly Drum||[still]
+|-fail|p2a: Cetitan
+|
+|upkeep
+|turn|40
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|move|p2a: Cetitan|Earthquake|p1a: Articuno
+|-immune|p1a: Articuno
+|
+|upkeep
+|turn|41
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute
+|move|p2a: Cetitan|Earthquake|p1a: Articuno
+|-immune|p1a: Articuno
+|
+|upkeep
+|turn|42
+|
+|t:|1794291502
+|move|p1a: Articuno|Freeze-Dry|p2a: Cetitan
+|-resisted|p2a: Cetitan
+|-damage|p2a: Cetitan|0 fnt
+|faint|p2a: Cetitan
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Stantler|Stantler, L90, M|92/278
+|-ability|p2a: Stantler|Intimidate|boost
+|-immune|p1a: Articuno
+|turn|43
+|
+|t:|1794291502
+|move|p2a: Stantler|Shadow Ball|p1a: Articuno
+|-activate|p1a: Articuno|move: Substitute|[damage]
+|move|p1a: Articuno|Freeze-Dry|p2a: Stantler
+|-damage|p2a: Stantler|35/278
+|
+|upkeep
+|turn|44
+|
+|t:|1794291502
+|move|p2a: Stantler|Calm Mind|p2a: Stantler
+|-boost|p2a: Stantler|spa|1
+|-boost|p2a: Stantler|spd|1
+|move|p1a: Articuno|Brave Bird|p2a: Stantler
+|-damage|p2a: Stantler|0 fnt
+|faint|p2a: Stantler
+|-damage|p1a: Articuno|83/295|[from] Recoil
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Conkeldurr|Conkeldurr, L80, F|299/299
+|turn|45
+|
+|t:|1794291502
+|move|p2a: Conkeldurr|Mach Punch|p1a: Articuno
+|-end|p1a: Articuno|Substitute
+|move|p1a: Articuno|Freeze-Dry|p2a: Conkeldurr
+|-damage|p2a: Conkeldurr|200/299
+|
+|-status|p2a: Conkeldurr|brn|[from] item: Flame Orb
+|upkeep
+|turn|46
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-start|p1a: Articuno|Substitute
+|-damage|p1a: Articuno|10/295
+|move|p2a: Conkeldurr|Close Combat|p1a: Articuno
+|-end|p1a: Articuno|Substitute
+|-unboost|p2a: Conkeldurr|def|1
+|-unboost|p2a: Conkeldurr|spd|1
+|
+|-damage|p2a: Conkeldurr|182/299 brn|[from] brn
+|upkeep
+|turn|47
+|
+|t:|1794291502
+|move|p1a: Articuno|Substitute|p1a: Articuno
+|-fail|p1a: Articuno|move: Substitute|[weak]
+|move|p2a: Conkeldurr|Facade|p1a: Articuno
+|-damage|p1a: Articuno|0 fnt
+|faint|p1a: Articuno
+|
+|-damage|p2a: Conkeldurr|164/299 brn|[from] brn
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Hatterene|Hatterene, L85, F|236/236
+|turn|48
+|
+|t:|1794291502
+|move|p2a: Conkeldurr|Close Combat|p1a: Hatterene
+|-resisted|p1a: Hatterene
+|-damage|p1a: Hatterene|181/236
+|-unboost|p2a: Conkeldurr|def|1
+|-unboost|p2a: Conkeldurr|spd|1
+|move|p1a: Hatterene|Nuzzle|p2a: Conkeldurr
+|-damage|p2a: Conkeldurr|135/299 brn
+|
+|-damage|p2a: Conkeldurr|117/299 brn|[from] brn
+|upkeep
+|turn|49
+|
+|t:|1794291502
+|move|p2a: Conkeldurr|Mach Punch|p1a: Hatterene
+|-resisted|p1a: Hatterene
+|-damage|p1a: Hatterene|163/236
+|move|p1a: Hatterene|Draining Kiss|p2a: Conkeldurr
+|-supereffective|p2a: Conkeldurr
+|-damage|p2a: Conkeldurr|0 fnt
+|-heal|p1a: Hatterene|236/236|[from] drain|[of] p2a: Conkeldurr
+|faint|p2a: Conkeldurr
+|
+|win|Policy1

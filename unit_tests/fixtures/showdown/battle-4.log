@@ -1,0 +1,398 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Enamorus|Enamorus-Therian, L83, F|259/259
+|switch|p2a: Hariyama|Hariyama, L87, M|392/392
+|turn|1
+|
+|t:|1794291502
+|move|p2a: Hariyama|Close Combat|p1a: Enamorus
+|-resisted|p1a: Enamorus
+|-crit|p1a: Enamorus
+|-damage|p1a: Enamorus|205/259
+|-unboost|p2a: Hariyama|def|1
+|-unboost|p2a: Hariyama|spd|1
+|move|p1a: Enamorus|Psychic|p2a: Hariyama
+|-supereffective|p2a: Hariyama
+|-damage|p2a: Hariyama|94/392
+|
+|-status|p2a: Hariyama|brn|[from] item: Flame Orb
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p2a: Hariyama|Fake Out||[still]
+|-hint|Fake Out only works on your first turn out.
+|-fail|p2a: Hariyama
+|move|p1a: Enamorus|Superpower|p2a: Hariyama
+|-damage|p2a: Hariyama|0 fnt
+|-unboost|p1a: Enamorus|atk|1
+|-unboost|p1a: Enamorus|def|1
+|faint|p2a: Hariyama
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Brute Bonnet|Brute Bonnet, L79|305/305
+|turn|3
+|
+|t:|1794291502
+|move|p2a: Brute Bonnet|Seed Bomb|p1a: Enamorus
+|-resisted|p1a: Enamorus
+|-damage|p1a: Enamorus|145/259
+|move|p1a: Enamorus|Earth Power|p2a: Brute Bonnet
+|-resisted|p2a: Brute Bonnet
+|-damage|p2a: Brute Bonnet|268/305
+|
+|-heal|p2a: Brute Bonnet|287/305|[from] item: Leftovers
+|upkeep
+|turn|4
+|
+|t:|1794291502
+|move|p2a: Brute Bonnet|Crunch|p1a: Enamorus
+|-resisted|p1a: Enamorus
+|-damage|p1a: Enamorus|84/259
+|move|p1a: Enamorus|Psychic|p2a: Brute Bonnet
+|-immune|p2a: Brute Bonnet
+|
+|-heal|p2a: Brute Bonnet|305/305|[from] item: Leftovers
+|upkeep
+|turn|5
+|
+|t:|1794291502
+|move|p2a: Brute Bonnet|Seed Bomb|p1a: Enamorus
+|-resisted|p1a: Enamorus
+|-damage|p1a: Enamorus|26/259
+|move|p1a: Enamorus|Psychic|p2a: Brute Bonnet
+|-immune|p2a: Brute Bonnet
+|
+|upkeep
+|turn|6
+|
+|t:|1794291502
+|move|p2a: Brute Bonnet|Seed Bomb|p1a: Enamorus
+|-resisted|p1a: Enamorus
+|-damage|p1a: Enamorus|0 fnt
+|faint|p1a: Enamorus
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Mimikyu|Mimikyu, L79, M|216/216
+|turn|7
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Shadow Sneak|p2a: Brute Bonnet
+|-resisted|p2a: Brute Bonnet
+|-damage|p2a: Brute Bonnet|282/305
+|-damage|p1a: Mimikyu|195/216|[from] item: Life Orb
+|move|p2a: Brute Bonnet|Seed Bomb|p1a: Mimikyu
+|-activate|p1a: Mimikyu|ability: Disguise
+|-damage|p1a: Mimikyu|195/216
+|detailschange|p1a: Mimikyu|Mimikyu-Busted, L79, M
+|-damage|p1a: Mimikyu|168/216|[from] pokemon: Mimikyu-Busted
+|
+|-heal|p2a: Brute Bonnet|301/305|[from] item: Leftovers
+|upkeep
+|turn|8
+|
+|t:|1794291502
+|move|p2a: Brute Bonnet|Sucker Punch||[still]
+|-fail|p2a: Brute Bonnet
+|move|p1a: Mimikyu|Swords Dance|p1a: Mimikyu
+|-boost|p1a: Mimikyu|atk|2
+|
+|-heal|p2a: Brute Bonnet|305/305|[from] item: Leftovers
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Play Rough|p2a: Brute Bonnet
+|-supereffective|p2a: Brute Bonnet
+|-damage|p2a: Brute Bonnet|0 fnt
+|faint|p2a: Brute Bonnet
+|-end|p2a: Brute Bonnet|Protosynthesis|[silent]
+|-damage|p1a: Mimikyu|147/216|[from] item: Life Orb
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Passimian|Passimian, L83, F|302/302
+|turn|10
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Shadow Sneak|p2a: Passimian
+|-damage|p2a: Passimian|215/302
+|-damage|p1a: Mimikyu|126/216|[from] item: Life Orb
+|move|p2a: Passimian|Knock Off|p1a: Mimikyu
+|-damage|p1a: Mimikyu|39/216
+|-enditem|p1a: Mimikyu|Life Orb|[from] move: Knock Off|[of] p2a: Passimian
+|
+|upkeep
+|turn|11
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Shadow Sneak|p2a: Passimian
+|-damage|p2a: Passimian|140/302
+|move|p2a: Passimian|Knock Off|p1a: Mimikyu
+|-damage|p1a: Mimikyu|0 fnt
+|faint|p1a: Mimikyu
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Tentacruel|Tentacruel, L84, M|272/272
+|turn|12
+|
+|t:|1794291502
+|switch|p1a: Chien-Pao|Chien-Pao, L72|234/234
+|-ability|p1a: Chien-Pao|Sword of Ruin
+|move|p2a: Passimian|Knock Off|p1a: Chien-Pao
+|-resisted|p1a: Chien-Pao
+|-damage|p1a: Chien-Pao|186/234
+|-enditem|p1a: Chien-Pao|Choice Band|[from] move: Knock Off|[of] p2a: Passimian
+|
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p2a: Passimian|Knock Off|p1a: Chien-Pao
+|-resisted|p1a: Chien-Pao
+|-damage|p1a: Chien-Pao|151/234
+|move|p1a: Chien-Pao|Sacred Sword|p2a: Passimian
+|-damage|p2a: Passimian|71/302
+|
+|upkeep
+|turn|14
+|
+|t:|1794291502
+|move|p2a: Passimian|Knock Off|p1a: Chien-Pao
+|-resisted|p1a: Chien-Pao
+|-damage|p1a: Chien-Pao|119/234
+|move|p1a: Chien-Pao|Sacred Sword|p2a: Passimian
+|-crit|p2a: Passimian
+|-damage|p2a: Passimian|0 fnt
+|faint|p2a: Passimian
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Delphox|Delphox, L84, F|263/263
+|turn|15
+|
+|t:|1794291502
+|move|p1a: Chien-Pao|Ice Shard|p2a: Delphox
+|-resisted|p2a: Delphox
+|-damage|p2a: Delphox|233/263
+|move|p2a: Delphox|Grass Knot|p1a: Chien-Pao
+|-damage|p1a: Chien-Pao|4/234
+|
+|upkeep
+|turn|16
+|
+|t:|1794291502
+|move|p2a: Delphox|Grass Knot|p1a: Chien-Pao
+|-damage|p1a: Chien-Pao|0 fnt
+|faint|p1a: Chien-Pao
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Tentacruel|Tentacruel, L84, M|272/272
+|turn|17
+|
+|t:|1794291502
+|switch|p2a: Dusknoir|Dusknoir, L89, M|225/225
+|-item|p1a: Tentacruel|Assault Vest|[from] ability: Frisk|[of] p2a: Dusknoir
+|move|p1a: Tentacruel|Flip Turn|p2a: Dusknoir
+|-damage|p2a: Dusknoir|194/225
+|
+|t:|1794291502
+|switch|p1a: Gouging Fire|Gouging Fire, L74|277/277|[from] Flip Turn
+|
+|-heal|p2a: Dusknoir|208/225|[from] item: Leftovers
+|upkeep
+|turn|18
+|
+|t:|1794291502
+|move|p1a: Gouging Fire|Heat Crash|p2a: Dusknoir
+|-damage|p2a: Dusknoir|136/225
+|move|p2a: Dusknoir|Substitute|p2a: Dusknoir
+|-start|p2a: Dusknoir|Substitute
+|-damage|p2a: Dusknoir|80/225
+|
+|-heal|p2a: Dusknoir|94/225|[from] item: Leftovers
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|move|p1a: Gouging Fire|Outrage|p2a: Dusknoir
+|-end|p2a: Dusknoir|Substitute
+|move|p2a: Dusknoir|Pain Split|p1a: Gouging Fire
+|-sethp|p1a: Gouging Fire|185/277|[from] move: Pain Split|[silent]
+|-sethp|p2a: Dusknoir|185/225|[from] move: Pain Split
+|
+|-heal|p2a: Dusknoir|199/225|[from] item: Leftovers
+|upkeep
+|turn|20
+|
+|t:|1794291502
+|-singleturn|p2a: Dusknoir|move: Focus Punch
+|move|p1a: Gouging Fire|Outrage|p2a: Dusknoir|[from] lockedmove
+|-damage|p2a: Dusknoir|121/225
+|cant|p2a: Dusknoir|Focus Punch|Focus Punch
+|
+|-heal|p2a: Dusknoir|135/225|[from] item: Leftovers
+|upkeep
+|turn|21
+|
+|t:|1794291502
+|switch|p2a: Delphox|Delphox, L84, F|233/263
+|move|p1a: Gouging Fire|Outrage|p2a: Delphox|[from] lockedmove
+|-damage|p2a: Delphox|112/263
+|-start|p1a: Gouging Fire|confusion|[fatigue]
+|
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Gouging Fire
+|-damage|p1a: Gouging Fire|94/277
+|-activate|p1a: Gouging Fire|confusion
+|-damage|p1a: Gouging Fire|72/277|[from] confusion
+|
+|upkeep
+|turn|23
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Gouging Fire
+|-damage|p1a: Gouging Fire|0 fnt
+|faint|p1a: Gouging Fire
+|-end|p1a: Gouging Fire|Protosynthesis|[silent]
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Sinistcha|Sinistcha-Masterpiece, L83|254/254
+|turn|24
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Sinistcha
+|-damage|p1a: Sinistcha|175/254
+|move|p1a: Sinistcha|Strength Sap|p2a: Delphox
+|-unboost|p2a: Delphox|atk|1
+|-heal|p1a: Sinistcha|254/254
+|
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Sinistcha
+|-damage|p1a: Sinistcha|169/254
+|move|p1a: Sinistcha|Calm Mind|p1a: Sinistcha
+|-boost|p1a: Sinistcha|spa|1
+|-boost|p1a: Sinistcha|spd|1
+|
+|-heal|p1a: Sinistcha|184/254|[from] item: Leftovers
+|upkeep
+|turn|26
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Sinistcha
+|-damage|p1a: Sinistcha|105/254
+|move|p1a: Sinistcha|Matcha Gotcha|p2a: Delphox
+|-resisted|p2a: Delphox
+|-damage|p2a: Delphox|43/263
+|-heal|p1a: Sinistcha|140/254|[from] drain|[of] p2a: Delphox
+|
+|-heal|p1a: Sinistcha|155/254|[from] item: Leftovers
+|upkeep
+|turn|27
+|
+|t:|1794291502
+|move|p2a: Delphox|Psyshock|p1a: Sinistcha
+|-damage|p1a: Sinistcha|70/254
+|move|p1a: Sinistcha|Matcha Gotcha|p2a: Delphox
+|-resisted|p2a: Delphox
+|-damage|p2a: Delphox|0 fnt
+|-heal|p1a: Sinistcha|92/254|[from] drain|[of] p2a: Delphox
+|faint|p2a: Delphox
+|
+|-heal|p1a: Sinistcha|107/254|[from] item: Leftovers
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Zangoose|Zangoose, L85, M|263/263
+|turn|28
+|
+|t:|1794291502
+|move|p2a: Zangoose|Knock Off|p1a: Sinistcha
+|-supereffective|p1a: Sinistcha
+|-damage|p1a: Sinistcha|0 fnt
+|-enditem|p1a: Sinistcha|Leftovers|[from] move: Knock Off|[of] p2a: Zangoose
+|faint|p1a: Sinistcha
+|
+|-status|p2a: Zangoose|tox|[from] item: Toxic Orb
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Tentacruel|Tentacruel, L84, M|272/272
+|turn|29
+|
+|t:|1794291502
+|move|p1a: Tentacruel|Rapid Spin|p2a: Zangoose
+|-damage|p2a: Zangoose|225/263 tox
+|-boost|p1a: Tentacruel|spe|1
+|move|p2a: Zangoose|Swords Dance|p2a: Zangoose
+|-boost|p2a: Zangoose|atk|2
+|
+|-damage|p2a: Zangoose|209/263 tox|[from] psn
+|upkeep
+|turn|30
+|
+|t:|1794291502
+|move|p1a: Tentacruel|Surf|p2a: Zangoose
+|-damage|p2a: Zangoose|100/263 tox
+|move|p2a: Zangoose|Close Combat|p1a: Tentacruel
+|-resisted|p1a: Tentacruel
+|-damage|p1a: Tentacruel|77/272
+|-unboost|p2a: Zangoose|def|1
+|-unboost|p2a: Zangoose|spd|1
+|
+|-damage|p2a: Zangoose|68/263 tox|[from] psn
+|upkeep
+|turn|31
+|
+|t:|1794291502
+|move|p1a: Tentacruel|Sludge Bomb|p2a: Zangoose
+|-damage|p2a: Zangoose|0 fnt
+|faint|p2a: Zangoose
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Dusknoir|Dusknoir, L89, M|135/225
+|-item|p1a: Tentacruel|Assault Vest|[from] ability: Frisk|[of] p2a: Dusknoir
+|turn|32
+|
+|t:|1794291502
+|move|p1a: Tentacruel|Flip Turn|p2a: Dusknoir
+|-damage|p2a: Dusknoir|102/225
+|move|p2a: Dusknoir|Poltergeist|p1a: Tentacruel
+|-activate|p1a: Tentacruel|move: Poltergeist|Assault Vest
+|-damage|p1a: Tentacruel|0 fnt
+|faint|p1a: Tentacruel
+|
+|win|Policy2

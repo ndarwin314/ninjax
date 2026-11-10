@@ -1,0 +1,437 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Bastiodon|Bastiodon, L89, F|252/252
+|switch|p2a: Wyrdeer|Wyrdeer, L87, F|321/321
+|-ability|p2a: Wyrdeer|Intimidate|boost
+|-unboost|p1a: Bastiodon|atk|1
+|turn|1
+|
+|t:|1794291502
+|move|p2a: Wyrdeer|Thunder Wave|p1a: Bastiodon
+|-status|p1a: Bastiodon|par
+|move|p1a: Bastiodon|Body Press|p2a: Wyrdeer
+|-damage|p2a: Wyrdeer|205/321
+|
+|-heal|p2a: Wyrdeer|225/321|[from] item: Leftovers
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p2a: Wyrdeer|Megahorn|p1a: Bastiodon|[miss]
+|-miss|p2a: Wyrdeer|p1a: Bastiodon
+|move|p1a: Bastiodon|Rest|p1a: Bastiodon
+|-fail|p1a: Bastiodon|heal
+|
+|-heal|p2a: Wyrdeer|245/321|[from] item: Leftovers
+|upkeep
+|turn|3
+|
+|t:|1794291502
+|move|p2a: Wyrdeer|Psychic Noise|p1a: Bastiodon
+|-immune|p1a: Bastiodon|[from] ability: Soundproof
+|move|p1a: Bastiodon|Body Press|p2a: Wyrdeer
+|-damage|p2a: Wyrdeer|134/321
+|
+|-heal|p2a: Wyrdeer|154/321|[from] item: Leftovers
+|upkeep
+|turn|4
+|
+|t:|1794291502
+|move|p2a: Wyrdeer|Psychic Noise|p1a: Bastiodon
+|-immune|p1a: Bastiodon|[from] ability: Soundproof
+|move|p1a: Bastiodon|Iron Defense|p1a: Bastiodon
+|-boost|p1a: Bastiodon|def|2
+|
+|-heal|p2a: Wyrdeer|174/321|[from] item: Leftovers
+|upkeep
+|turn|5
+|
+|t:|1794291502
+|move|p2a: Wyrdeer|Megahorn|p1a: Bastiodon
+|-resisted|p1a: Bastiodon
+|-damage|p1a: Bastiodon|239/252 par
+|move|p1a: Bastiodon|Foul Play|p2a: Wyrdeer
+|-supereffective|p2a: Wyrdeer
+|-damage|p2a: Wyrdeer|0 fnt
+|faint|p2a: Wyrdeer
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Salamence|Salamence, L77, M|273/273
+|turn|6
+|
+|t:|1794291502
+|switch|p1a: Palafin|Palafin, L77, M|281/281
+|move|p2a: Salamence|Dual Wingbeat|p1a: Palafin
+|-damage|p1a: Palafin|223/281
+|-damage|p1a: Palafin|165/281
+|-hitcount|p1a: Palafin|2
+|
+|-heal|p1a: Palafin|182/281|[from] item: Leftovers
+|upkeep
+|turn|7
+|
+|t:|1794291502
+|detailschange|p1a: Palafin|Palafin-Hero, L77, M
+|switch|p1a: Phione|Phione, L91|293/293
+|move|p2a: Salamence|Roost||[still]
+|-fail|p2a: Salamence|heal
+|
+|upkeep
+|turn|8
+|
+|t:|1794291502
+|move|p2a: Salamence|Outrage|p1a: Phione
+|-damage|p1a: Phione|148/293
+|move|p1a: Phione|Rest|p1a: Phione
+|-status|p1a: Phione|slp|[from] move: Rest
+|-heal|p1a: Phione|293/293 slp|[silent]
+|
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|move|p2a: Salamence|Outrage|p1a: Phione|[from] lockedmove
+|-damage|p1a: Phione|149/293 slp
+|-start|p2a: Salamence|confusion|[fatigue]
+|cant|p1a: Phione|slp
+|move|p1a: Phione|Sleep Talk|p1a: Phione
+|move|p1a: Phione|Rest||[from] move: Sleep Talk|[still]
+|-fail|p1a: Phione
+|
+|-heal|p1a: Phione|167/293 slp|[from] item: Leftovers
+|upkeep
+|turn|10
+|
+|t:|1794291502
+|-activate|p2a: Salamence|confusion
+|move|p2a: Salamence|Roost||[still]
+|-fail|p2a: Salamence|heal
+|cant|p1a: Phione|slp
+|
+|-heal|p1a: Phione|185/293 slp|[from] item: Leftovers
+|upkeep
+|turn|11
+|
+|t:|1794291502
+|switch|p1a: Hariyama|Hariyama, L87, M|392/392
+|-activate|p2a: Salamence|confusion
+|-damage|p2a: Salamence|238/273|[from] confusion
+|
+|upkeep
+|turn|12
+|
+|t:|1794291502
+|-end|p2a: Salamence|confusion
+|move|p2a: Salamence|Dragon Dance|p2a: Salamence
+|-boost|p2a: Salamence|atk|1
+|-boost|p2a: Salamence|spe|1
+|move|p1a: Hariyama|Heavy Slam|p2a: Salamence
+|-damage|p2a: Salamence|177/273
+|
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p2a: Salamence|Dual Wingbeat|p1a: Hariyama
+|-supereffective|p1a: Hariyama
+|-damage|p1a: Hariyama|224/392
+|-supereffective|p1a: Hariyama
+|-damage|p1a: Hariyama|36/392
+|-hitcount|p1a: Hariyama|2
+|move|p1a: Hariyama|Knock Off|p2a: Salamence
+|-damage|p2a: Salamence|85/273
+|-enditem|p2a: Salamence|Heavy-Duty Boots|[from] move: Knock Off|[of] p1a: Hariyama
+|
+|upkeep
+|turn|14
+|
+|t:|1794291502
+|move|p2a: Salamence|Outrage|p1a: Hariyama
+|-damage|p1a: Hariyama|0 fnt
+|faint|p1a: Hariyama
+|-ability|p2a: Salamence|Moxie|boost
+|-boost|p2a: Salamence|atk|1
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Phione|Phione, L91|185/293 slp
+|turn|15
+|
+|t:|1794291502
+|move|p2a: Salamence|Outrage|p1a: Phione|[from] lockedmove
+|-damage|p1a: Phione|0 fnt
+|faint|p1a: Phione
+|-ability|p2a: Salamence|Moxie|boost
+|-boost|p2a: Salamence|atk|1
+|-start|p2a: Salamence|confusion|[fatigue]
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Lucario|Lucario, L84, F|255/255
+|turn|16
+|
+|t:|1794291502
+|-activate|p2a: Salamence|confusion
+|move|p2a: Salamence|Dual Wingbeat|p1a: Lucario
+|-damage|p1a: Lucario|119/255
+|-damage|p1a: Lucario|0 fnt
+|faint|p1a: Lucario
+|-ability|p2a: Salamence|Moxie|boost
+|-boost|p2a: Salamence|atk|1
+|-hitcount|p1: Lucario|2
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Palafin|Palafin-Hero, L77, M|182/281
+|-activate|p1a: Palafin|ability: Zero to Hero
+|turn|17
+|
+|t:|1794291502
+|move|p1a: Palafin|Jet Punch|p2a: Salamence
+|-resisted|p2a: Salamence
+|-damage|p2a: Salamence|40/273
+|-activate|p2a: Salamence|confusion
+|-damage|p2a: Salamence|0 fnt|[from] confusion
+|faint|p2a: Salamence
+|
+|-heal|p1a: Palafin|199/281|[from] item: Leftovers
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Rotom|Rotom, L88|231/231
+|turn|18
+|
+|t:|1794291502
+|move|p2a: Rotom|Volt Switch|p1a: Palafin
+|-supereffective|p1a: Palafin
+|-damage|p1a: Palafin|19/281
+|
+|t:|1794291502
+|switch|p2a: Greedent|Greedent, L86, F|347/347|[from] Volt Switch
+|move|p1a: Palafin|Drain Punch|p2a: Greedent
+|-supereffective|p2a: Greedent
+|-damage|p2a: Greedent|233/347
+|-heal|p1a: Palafin|76/281|[from] drain|[of] p2a: Greedent
+|
+|-heal|p1a: Palafin|93/281|[from] item: Leftovers
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|move|p1a: Palafin|Drain Punch|p2a: Greedent
+|-supereffective|p2a: Greedent
+|-damage|p2a: Greedent|115/347
+|-heal|p1a: Palafin|152/281|[from] drain|[of] p2a: Greedent
+|-enditem|p2a: Greedent|Sitrus Berry|[eat]
+|-heal|p2a: Greedent|201/347|[from] item: Sitrus Berry
+|-heal|p2a: Greedent|316/347|[from] ability: Cheek Pouch
+|move|p2a: Greedent|Earthquake|p1a: Palafin
+|-damage|p1a: Palafin|76/281
+|
+|-heal|p1a: Palafin|93/281|[from] item: Leftovers
+|upkeep
+|turn|20
+|
+|t:|1794291502
+|move|p1a: Palafin|Ice Punch|p2a: Greedent
+|-damage|p2a: Greedent|255/347
+|-status|p2a: Greedent|frz
+|cant|p2a: Greedent|frz
+|
+|-heal|p1a: Palafin|110/281|[from] item: Leftovers
+|upkeep
+|turn|21
+|
+|t:|1794291502
+|move|p1a: Palafin|Jet Punch|p2a: Greedent
+|-damage|p2a: Greedent|186/347 frz
+|cant|p2a: Greedent|frz
+|
+|-heal|p1a: Palafin|127/281|[from] item: Leftovers
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|move|p1a: Palafin|Bulk Up|p1a: Palafin
+|-boost|p1a: Palafin|atk|1
+|-boost|p1a: Palafin|def|1
+|cant|p2a: Greedent|frz
+|
+|-heal|p1a: Palafin|144/281|[from] item: Leftovers
+|upkeep
+|turn|23
+|
+|t:|1794291502
+|move|p1a: Palafin|Jet Punch|p2a: Greedent
+|-damage|p2a: Greedent|77/347 frz
+|cant|p2a: Greedent|frz
+|
+|-heal|p1a: Palafin|161/281|[from] item: Leftovers
+|upkeep
+|turn|24
+|
+|t:|1794291502
+|switch|p2a: Samurott|Samurott, L88, F|310/310
+|move|p1a: Palafin|Ice Punch|p2a: Samurott
+|-resisted|p2a: Samurott
+|-crit|p2a: Samurott
+|-damage|p2a: Samurott|237/310
+|
+|-heal|p1a: Palafin|178/281|[from] item: Leftovers
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p1a: Palafin|Drain Punch|p2a: Samurott
+|-damage|p2a: Samurott|136/310
+|-heal|p1a: Palafin|229/281|[from] drain|[of] p2a: Samurott
+|move|p2a: Samurott|Hydro Pump|p1a: Palafin
+|-resisted|p1a: Palafin
+|-damage|p1a: Palafin|153/281
+|
+|-heal|p1a: Palafin|170/281|[from] item: Leftovers
+|upkeep
+|turn|26
+|
+|t:|1794291502
+|switch|p1a: Bastiodon|Bastiodon, L89, F|239/252 par
+|move|p2a: Samurott|Aqua Jet|p1a: Bastiodon
+|-supereffective|p1a: Bastiodon
+|-damage|p1a: Bastiodon|185/252 par
+|
+|upkeep
+|turn|27
+|
+|t:|1794291502
+|move|p2a: Samurott|Knock Off|p1a: Bastiodon
+|-damage|p1a: Bastiodon|143/252 par
+|-enditem|p1a: Bastiodon|Chesto Berry|[from] move: Knock Off|[of] p2a: Samurott
+|cant|p1a: Bastiodon|par
+|
+|upkeep
+|turn|28
+|
+|t:|1794291502
+|move|p2a: Samurott|Sacred Sword|p1a: Bastiodon
+|-supereffective|p1a: Bastiodon
+|-damage|p1a: Bastiodon|0 fnt
+|faint|p1a: Bastiodon
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Banette|Banette, L93, M|270/270
+|turn|29
+|
+|t:|1794291502
+|move|p1a: Banette|Swords Dance|p1a: Banette
+|-boost|p1a: Banette|atk|2
+|move|p2a: Samurott|Sacred Sword|p1a: Banette
+|-immune|p1a: Banette
+|
+|upkeep
+|turn|30
+|
+|t:|1794291502
+|switch|p2a: Greedent|Greedent, L86, F|77/347 frz
+|move|p1a: Banette|Shadow Sneak|p2a: Greedent
+|-immune|p2a: Greedent
+|
+|upkeep
+|turn|31
+|
+|t:|1794291502
+|move|p1a: Banette|Gunk Shot|p2a: Greedent|[miss]
+|-miss|p1a: Banette|p2a: Greedent
+|cant|p2a: Greedent|frz
+|
+|upkeep
+|turn|32
+|
+|t:|1794291502
+|move|p1a: Banette|Gunk Shot|p2a: Greedent
+|-damage|p2a: Greedent|0 fnt
+|faint|p2a: Greedent
+|-damage|p1a: Banette|243/270|[from] item: Life Orb
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Samurott|Samurott, L88, F|136/310
+|turn|33
+|
+|t:|1794291502
+|move|p1a: Banette|Gunk Shot|p2a: Samurott
+|-damage|p2a: Samurott|0 fnt
+|faint|p2a: Samurott
+|-damage|p1a: Banette|216/270|[from] item: Life Orb
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Rotom|Rotom, L88|231/231
+|turn|34
+|
+|t:|1794291502
+|move|p2a: Rotom|Volt Switch|p1a: Banette
+|-damage|p1a: Banette|125/270
+|
+|t:|1794291502
+|switch|p2a: Mismagius|Mismagius, L86, M|243/243|[from] Volt Switch
+|move|p1a: Banette|Gunk Shot|p2a: Mismagius
+|-resisted|p2a: Mismagius
+|-damage|p2a: Mismagius|38/243
+|-damage|p1a: Banette|98/270|[from] item: Life Orb
+|
+|upkeep
+|turn|35
+|
+|t:|1794291502
+|move|p1a: Banette|Shadow Sneak|p2a: Mismagius
+|-supereffective|p2a: Mismagius
+|-damage|p2a: Mismagius|0 fnt
+|faint|p2a: Mismagius
+|-damage|p1a: Banette|71/270|[from] item: Life Orb
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Rotom|Rotom, L88|231/231
+|turn|36
+|
+|t:|1794291502
+|move|p2a: Rotom|Volt Switch|p1a: Banette
+|-damage|p1a: Banette|0 fnt
+|faint|p1a: Banette
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Palafin|Palafin-Hero, L77, M|170/281
+|turn|37
+|
+|t:|1794291502
+|move|p2a: Rotom|Volt Switch|p1a: Palafin
+|-supereffective|p1a: Palafin
+|-damage|p1a: Palafin|0 fnt
+|faint|p1a: Palafin
+|
+|win|Policy2

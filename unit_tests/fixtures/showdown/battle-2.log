@@ -1,0 +1,359 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Chandelure|Chandelure, L83, F|235/235
+|switch|p2a: Kricketune|Kricketune, L99, M|311/311
+|turn|1
+|
+|t:|1794291502
+|move|p2a: Kricketune|Sticky Web|p1a: Chandelure
+|-sidestart|p1: Policy1|move: Sticky Web
+|move|p1a: Chandelure|Shadow Ball|p2a: Kricketune
+|-damage|p2a: Kricketune|173/311
+|-unboost|p2a: Kricketune|spd|1
+|
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p2a: Kricketune|Pounce|p1a: Chandelure
+|-resisted|p1a: Chandelure
+|-damage|p1a: Chandelure|209/235
+|-unboost|p1a: Chandelure|spe|1
+|move|p1a: Chandelure|Energy Ball|p2a: Kricketune
+|-resisted|p2a: Kricketune
+|-damage|p2a: Kricketune|99/311
+|
+|upkeep
+|turn|3
+|
+|t:|1794291502
+|move|p2a: Kricketune|Knock Off|p1a: Chandelure
+|-supereffective|p1a: Chandelure
+|-damage|p1a: Chandelure|49/235
+|-enditem|p1a: Chandelure|Heavy-Duty Boots|[from] move: Knock Off|[of] p2a: Kricketune
+|move|p1a: Chandelure|Fire Blast|p2a: Kricketune|[miss]
+|-miss|p1a: Chandelure|p2a: Kricketune
+|
+|upkeep
+|turn|4
+|
+|t:|1794291502
+|move|p2a: Kricketune|Knock Off|p1a: Chandelure
+|-supereffective|p1a: Chandelure
+|-damage|p1a: Chandelure|0 fnt
+|faint|p1a: Chandelure
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Kingambit|Kingambit, L74, M|270/270
+|-activate|p1a: Kingambit|move: Sticky Web
+|-unboost|p1a: Kingambit|spe|1
+|-activate|p1a: Kingambit|ability: Supreme Overlord
+|-start|p1a: Kingambit|fallen1|[silent]
+|turn|5
+|
+|t:|1794291502
+|move|p2a: Kricketune|Pounce|p1a: Kingambit
+|-damage|p1a: Kingambit|186/270
+|-unboost|p1a: Kingambit|spe|1
+|move|p1a: Kingambit|Iron Head|p2a: Kricketune
+|-damage|p2a: Kricketune|0 fnt
+|faint|p2a: Kricketune
+|
+|-heal|p1a: Kingambit|202/270|[from] item: Leftovers
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Sawsbuck|Sawsbuck-Autumn, L88, F|284/284
+|turn|6
+|
+|t:|1794291502
+|switch|p1a: Muk|Muk, L86, F|321/321
+|-activate|p1a: Muk|move: Sticky Web
+|-unboost|p1a: Muk|spe|1
+|move|p2a: Sawsbuck|High Horsepower|p1a: Muk|[miss]
+|-miss|p2a: Sawsbuck|p1a: Muk
+|
+|upkeep
+|turn|7
+|
+|t:|1794291502
+|move|p1a: Muk|Shadow Sneak|p2a: Sawsbuck
+|-immune|p2a: Sawsbuck
+|move|p2a: Sawsbuck|Headbutt|p1a: Muk
+|-damage|p1a: Muk|204/321
+|-damage|p2a: Sawsbuck|256/284|[from] item: Life Orb
+|
+|upkeep
+|turn|8
+|
+|t:|1794291502
+|move|p2a: Sawsbuck|Horn Leech|p1a: Muk
+|-resisted|p1a: Muk
+|-damage|p1a: Muk|142/321
+|-heal|p2a: Sawsbuck|284/284|[from] drain|[of] p1a: Muk
+|-damage|p2a: Sawsbuck|256/284|[from] item: Life Orb
+|move|p1a: Muk|Knock Off|p2a: Sawsbuck
+|-damage|p2a: Sawsbuck|165/284
+|-enditem|p2a: Sawsbuck|Life Orb|[from] move: Knock Off|[of] p1a: Muk
+|
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|move|p2a: Sawsbuck|Horn Leech|p1a: Muk
+|-resisted|p1a: Muk
+|-damage|p1a: Muk|93/321
+|-heal|p2a: Sawsbuck|190/284|[from] drain|[of] p1a: Muk
+|move|p1a: Muk|Knock Off|p2a: Sawsbuck
+|-damage|p2a: Sawsbuck|129/284
+|-status|p2a: Sawsbuck|psn|[from] ability: Poison Touch|[of] p1a: Muk
+|
+|-damage|p2a: Sawsbuck|94/284 psn|[from] psn
+|upkeep
+|turn|10
+|
+|t:|1794291502
+|move|p2a: Sawsbuck|Headbutt|p1a: Muk
+|-damage|p1a: Muk|9/321
+|cant|p1a: Muk|flinch
+|
+|-damage|p2a: Sawsbuck|59/284 psn|[from] psn
+|upkeep
+|turn|11
+|
+|t:|1794291502
+|move|p2a: Sawsbuck|Swords Dance|p2a: Sawsbuck
+|-boost|p2a: Sawsbuck|atk|2
+|move|p1a: Muk|Knock Off|p2a: Sawsbuck
+|-damage|p2a: Sawsbuck|0 fnt
+|faint|p2a: Sawsbuck
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Rabsca|Rabsca, L91, M|284/284
+|turn|12
+|
+|t:|1794291502
+|move|p2a: Rabsca|Recover||[still]
+|-fail|p2a: Rabsca|heal
+|move|p1a: Muk|Ice Punch|p2a: Rabsca
+|-damage|p2a: Rabsca|226/284
+|-status|p2a: Rabsca|psn|[from] ability: Poison Touch|[of] p1a: Muk
+|-activate|p2a: Rabsca|ability: Synchronize
+|-immune|p1a: Muk
+|
+|-damage|p2a: Rabsca|191/284 psn|[from] psn
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p1a: Muk|Shadow Sneak|p2a: Rabsca
+|-supereffective|p2a: Rabsca
+|-damage|p2a: Rabsca|129/284 psn
+|move|p2a: Rabsca|Psychic|p1a: Muk
+|-supereffective|p1a: Muk
+|-damage|p1a: Muk|0 fnt
+|faint|p1a: Muk
+|
+|-damage|p2a: Rabsca|94/284 psn|[from] psn
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Cloyster|Cloyster, L80, F|211/211
+|-activate|p1a: Cloyster|move: Sticky Web
+|-unboost|p1a: Cloyster|spe|1
+|-enditem|p1a: Cloyster|White Herb
+|-clearnegativeboost|p1a: Cloyster|[silent]
+|turn|14
+|
+|t:|1794291502
+|move|p1a: Cloyster|Shell Smash|p1a: Cloyster
+|-unboost|p1a: Cloyster|def|1
+|-unboost|p1a: Cloyster|spd|1
+|-boost|p1a: Cloyster|atk|2
+|-boost|p1a: Cloyster|spa|2
+|-boost|p1a: Cloyster|spe|2
+|move|p2a: Rabsca|Recover|p2a: Rabsca
+|-heal|p2a: Rabsca|236/284 psn
+|
+|-damage|p2a: Rabsca|201/284 psn|[from] psn
+|upkeep
+|turn|15
+|
+|t:|1794291502
+|move|p1a: Cloyster|Drill Run|p2a: Rabsca
+|-resisted|p2a: Rabsca
+|-damage|p2a: Rabsca|156/284 psn
+|move|p2a: Rabsca|Revival Blessing|p2a: Rabsca
+|
+|t:|1794291502
+|-heal|p2: Kricketune|155/311|[from] move: Revival Blessing
+|
+|-damage|p2a: Rabsca|121/284 psn|[from] psn
+|upkeep
+|turn|16
+|
+|t:|1794291502
+|move|p1a: Cloyster|Shell Smash|p1a: Cloyster
+|-unboost|p1a: Cloyster|def|1
+|-unboost|p1a: Cloyster|spd|1
+|-boost|p1a: Cloyster|atk|2
+|-boost|p1a: Cloyster|spa|2
+|-boost|p1a: Cloyster|spe|2
+|move|p2a: Rabsca|Recover|p2a: Rabsca
+|-heal|p2a: Rabsca|263/284 psn
+|
+|-damage|p2a: Rabsca|228/284 psn|[from] psn
+|upkeep
+|turn|17
+|
+|t:|1794291502
+|move|p1a: Cloyster|Icicle Spear|p2a: Rabsca
+|-damage|p2a: Rabsca|164/284 psn
+|-damage|p2a: Rabsca|97/284 psn
+|-damage|p2a: Rabsca|30/284 psn
+|-damage|p2a: Rabsca|0 fnt
+|faint|p2a: Rabsca
+|-hitcount|p2: Rabsca|4
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Mightyena|Mightyena, L96, M|290/290
+|-ability|p2a: Mightyena|Intimidate|boost
+|-unboost|p1a: Cloyster|atk|1
+|turn|18
+|
+|t:|1794291502
+|move|p2a: Mightyena|Sucker Punch|p1a: Cloyster
+|-damage|p1a: Cloyster|106/211
+|move|p1a: Cloyster|Drill Run|p2a: Mightyena
+|-damage|p2a: Mightyena|152/290
+|
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|move|p1a: Cloyster|Drill Run|p2a: Mightyena
+|-damage|p2a: Mightyena|21/290
+|move|p2a: Mightyena|Play Rough|p1a: Cloyster
+|-damage|p1a: Cloyster|20/211
+|
+|upkeep
+|turn|20
+|
+|t:|1794291502
+|move|p1a: Cloyster|Drill Run|p2a: Mightyena
+|-damage|p2a: Mightyena|0 fnt
+|faint|p2a: Mightyena
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Noctowl|Noctowl, L95, M|344/344
+|turn|21
+|
+|t:|1794291502
+|move|p1a: Cloyster|Drill Run|p2a: Noctowl
+|-immune|p2a: Noctowl
+|move|p2a: Noctowl|Roost||[still]
+|-fail|p2a: Noctowl|heal
+|
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|move|p1a: Cloyster|Icicle Spear|p2a: Noctowl
+|-supereffective|p2a: Noctowl
+|-damage|p2a: Noctowl|176/344
+|-supereffective|p2a: Noctowl
+|-damage|p2a: Noctowl|2/344
+|-supereffective|p2a: Noctowl
+|-damage|p2a: Noctowl|0 fnt
+|faint|p2a: Noctowl
+|-hitcount|p2: Noctowl|3
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Golduck|Golduck, L90, M|290/290
+|-ability|p2a: Golduck|Cloud Nine
+|turn|23
+|
+|t:|1794291502
+|move|p1a: Cloyster|Icicle Spear|p2a: Golduck
+|-resisted|p2a: Golduck
+|-damage|p2a: Golduck|257/290
+|-resisted|p2a: Golduck
+|-damage|p2a: Golduck|227/290
+|-resisted|p2a: Golduck
+|-damage|p2a: Golduck|195/290
+|-resisted|p2a: Golduck
+|-damage|p2a: Golduck|165/290
+|-resisted|p2a: Golduck
+|-damage|p2a: Golduck|132/290
+|-hitcount|p2a: Golduck|5
+|move|p2a: Golduck|Hydro Pump|p1a: Cloyster
+|-resisted|p1a: Cloyster
+|-damage|p1a: Cloyster|0 fnt
+|faint|p1a: Cloyster
+|
+|-heal|p2a: Golduck|150/290|[from] item: Leftovers
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Kingambit|Kingambit, L74, M|202/270
+|-activate|p1a: Kingambit|move: Sticky Web
+|-unboost|p1a: Kingambit|spe|1
+|-activate|p1a: Kingambit|ability: Supreme Overlord
+|-start|p1a: Kingambit|fallen3|[silent]
+|turn|24
+|
+|t:|1794291502
+|move|p1a: Kingambit|Sucker Punch|p2a: Golduck
+|-damage|p2a: Golduck|53/290
+|move|p2a: Golduck|Grass Knot|p1a: Kingambit
+|-resisted|p1a: Kingambit
+|-damage|p1a: Kingambit|155/270
+|
+|-heal|p2a: Golduck|71/290|[from] item: Leftovers
+|-heal|p1a: Kingambit|171/270|[from] item: Leftovers
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p1a: Kingambit|Sucker Punch|p2a: Golduck
+|-damage|p2a: Golduck|0 fnt
+|faint|p2a: Golduck
+|
+|-heal|p1a: Kingambit|187/270|[from] item: Leftovers
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Kricketune|Kricketune, L99, M|155/311
+|turn|26
+|
+|t:|1794291502
+|move|p2a: Kricketune|Sticky Web||[still]
+|-fail|p2a: Kricketune
+|move|p1a: Kingambit|Kowtow Cleave|p2a: Kricketune
+|-damage|p2a: Kricketune|0 fnt
+|faint|p2a: Kricketune
+|
+|win|Policy1

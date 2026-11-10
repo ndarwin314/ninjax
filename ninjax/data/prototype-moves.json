@@ -1,0 +1,200 @@
+{
+  "Earthquake": {
+    "id": "earthquake",
+    "num": 89,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false
+  },
+  "Hydro Pump": {
+    "id": "hydropump",
+    "num": 56,
+    "type": "Water",
+    "category": "Special",
+    "power": 110,
+    "accuracy": 0.8,
+    "priority": 0,
+    "pp": 5,
+    "contact": false
+  },
+  "Shadow Sneak": {
+    "id": "shadowsneak",
+    "num": 425,
+    "type": "Ghost",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "priority": 1,
+    "pp": 30,
+    "contact": true
+  },
+  "U-turn": {
+    "id": "uturn",
+    "num": 369,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": true
+  },
+  "Volt Switch": {
+    "id": "voltswitch",
+    "num": 521,
+    "type": "Electric",
+    "category": "Special",
+    "power": 70,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Swords Dance": {
+    "id": "swordsdance",
+    "num": 14,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Nasty Plot": {
+    "id": "nastyplot",
+    "num": 417,
+    "type": "Dark",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Will-O-Wisp": {
+    "id": "willowisp",
+    "num": 261,
+    "type": "Fire",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.85,
+    "priority": 0,
+    "pp": 15,
+    "contact": false
+  },
+  "Toxic": {
+    "id": "toxic",
+    "num": 92,
+    "type": "Poison",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 10,
+    "contact": false
+  },
+  "Thunder Wave": {
+    "id": "thunderwave",
+    "num": 86,
+    "type": "Electric",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Stealth Rock": {
+    "id": "stealthrock",
+    "num": 446,
+    "type": "Rock",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Spikes": {
+    "id": "spikes",
+    "num": 191,
+    "type": "Ground",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Toxic Spikes": {
+    "id": "toxicspikes",
+    "num": 390,
+    "type": "Poison",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Sticky Web": {
+    "id": "stickyweb",
+    "num": 564,
+    "type": "Bug",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Rain Dance": {
+    "id": "raindance",
+    "num": 240,
+    "type": "Water",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false
+  },
+  "Sunny Day": {
+    "id": "sunnyday",
+    "num": 241,
+    "type": "Fire",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false
+  },
+  "Grassy Terrain": {
+    "id": "grassyterrain",
+    "num": 580,
+    "type": "Grass",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false
+  },
+  "Recover": {
+    "id": "recover",
+    "num": 105,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false
+  }
+}

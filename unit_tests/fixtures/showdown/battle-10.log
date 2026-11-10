@@ -1,0 +1,372 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Sawsbuck|Sawsbuck-Winter, L88, F|284/284
+|switch|p2a: Munkidori|Munkidori, L79, M|269/269
+|turn|1
+|
+|t:|1794291502
+|move|p1a: Sawsbuck|Double-Edge|p2a: Munkidori
+|-damage|p2a: Munkidori|18/269
+|-damage|p1a: Sawsbuck|201/284|[from] Recoil
+|-damage|p1a: Sawsbuck|173/284|[from] item: Life Orb
+|move|p2a: Munkidori|Focus Blast|p1a: Sawsbuck|[miss]
+|-miss|p2a: Munkidori|p1a: Sawsbuck
+|
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p1a: Sawsbuck|High Horsepower|p2a: Munkidori|[miss]
+|-miss|p1a: Sawsbuck|p2a: Munkidori
+|move|p2a: Munkidori|Focus Blast|p1a: Sawsbuck|[miss]
+|-miss|p2a: Munkidori|p1a: Sawsbuck
+|
+|upkeep
+|turn|3
+|
+|t:|1794291502
+|move|p1a: Sawsbuck|Swords Dance|p1a: Sawsbuck
+|-boost|p1a: Sawsbuck|atk|2
+|move|p2a: Munkidori|Psyshock|p1a: Sawsbuck
+|-damage|p1a: Sawsbuck|31/284
+|-damage|p2a: Munkidori|0 fnt|[from] item: Life Orb
+|faint|p2a: Munkidori
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Salazzle|Salazzle, L83, F|249/249
+|turn|4
+|
+|t:|1794291502
+|move|p2a: Salazzle|Tera Blast|p1a: Sawsbuck
+|-damage|p1a: Sawsbuck|0 fnt
+|faint|p1a: Sawsbuck
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Solgaleo|Solgaleo, L74|325/325
+|turn|5
+|
+|t:|1794291502
+|move|p2a: Salazzle|Nasty Plot|p2a: Salazzle
+|-boost|p2a: Salazzle|spa|2
+|move|p1a: Solgaleo|Flame Charge|p2a: Salazzle
+|-resisted|p2a: Salazzle
+|-crit|p2a: Salazzle
+|-damage|p2a: Salazzle|212/249
+|-boost|p1a: Solgaleo|spe|1
+|
+|upkeep
+|turn|6
+|
+|t:|1794291502
+|move|p1a: Solgaleo|Close Combat|p2a: Salazzle
+|-resisted|p2a: Salazzle
+|-damage|p2a: Salazzle|155/249
+|-unboost|p1a: Solgaleo|def|1
+|-unboost|p1a: Solgaleo|spd|1
+|move|p2a: Salazzle|Tera Blast|p1a: Solgaleo
+|-resisted|p1a: Solgaleo
+|-crit|p1a: Solgaleo
+|-damage|p1a: Solgaleo|175/325
+|
+|upkeep
+|turn|7
+|
+|t:|1794291502
+|move|p1a: Solgaleo|Sunsteel Strike|p2a: Salazzle
+|-resisted|p2a: Salazzle
+|-damage|p2a: Salazzle|85/249
+|move|p2a: Salazzle|Sludge Wave|p1a: Solgaleo
+|-immune|p1a: Solgaleo
+|
+|upkeep
+|turn|8
+|
+|t:|1794291502
+|move|p1a: Solgaleo|Close Combat|p2a: Salazzle
+|-resisted|p2a: Salazzle
+|-damage|p2a: Salazzle|29/249
+|-unboost|p1a: Solgaleo|def|1
+|-unboost|p1a: Solgaleo|spd|1
+|move|p2a: Salazzle|Sludge Wave|p1a: Solgaleo
+|-immune|p1a: Solgaleo
+|
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|switch|p2a: Zangoose|Zangoose, L85, M|263/263
+|move|p1a: Solgaleo|Sunsteel Strike|p2a: Zangoose
+|-damage|p2a: Zangoose|133/263
+|
+|-status|p2a: Zangoose|tox|[from] item: Toxic Orb
+|upkeep
+|turn|10
+|
+|t:|1794291502
+|move|p2a: Zangoose|Quick Attack|p1a: Solgaleo
+|-resisted|p1a: Solgaleo
+|-damage|p1a: Solgaleo|108/325
+|move|p1a: Solgaleo|Close Combat|p2a: Zangoose
+|-supereffective|p2a: Zangoose
+|-damage|p2a: Zangoose|0 fnt
+|-unboost|p1a: Solgaleo|def|1
+|-unboost|p1a: Solgaleo|spd|1
+|faint|p2a: Zangoose
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Dunsparce|Dunsparce, L86, F|312/312
+|turn|11
+|
+|t:|1794291502
+|switch|p1a: Dudunsparce|Dudunsparce-Three-Segment, L83, F|343/343
+|switch|p2a: Pincurchin|Pincurchin, M|258/258
+|-fieldstart|move: Electric Terrain|[from] ability: Electric Surge|[of] p2a: Pincurchin
+|
+|upkeep
+|turn|12
+|
+|t:|1794291502
+|move|p1a: Dudunsparce|Boomburst|p2a: Pincurchin
+|-damage|p2a: Pincurchin|141/258
+|move|p2a: Pincurchin|Liquidation|p1a: Dudunsparce
+|-damage|p1a: Dudunsparce|253/343
+|
+|-heal|p1a: Dudunsparce|274/343|[from] item: Leftovers
+|-heal|p2a: Pincurchin|157/258|[from] item: Leftovers
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p1a: Dudunsparce|Toxic|p2a: Pincurchin|[miss]
+|-miss|p1a: Dudunsparce|p2a: Pincurchin
+|move|p2a: Pincurchin|Recover|p2a: Pincurchin
+|-heal|p2a: Pincurchin|258/258
+|
+|-heal|p1a: Dudunsparce|295/343|[from] item: Leftovers
+|upkeep
+|turn|14
+|
+|t:|1794291502
+|move|p1a: Dudunsparce|Toxic|p2a: Pincurchin
+|-status|p2a: Pincurchin|tox
+|move|p2a: Pincurchin|Liquidation|p1a: Dudunsparce
+|-damage|p1a: Dudunsparce|193/343
+|
+|-heal|p1a: Dudunsparce|214/343|[from] item: Leftovers
+|-damage|p2a: Pincurchin|242/258 tox|[from] psn
+|upkeep
+|turn|15
+|
+|t:|1794291502
+|move|p1a: Dudunsparce|Earthquake|p2a: Pincurchin
+|-supereffective|p2a: Pincurchin
+|-damage|p2a: Pincurchin|132/258 tox
+|move|p2a: Pincurchin|Liquidation|p1a: Dudunsparce
+|-damage|p1a: Dudunsparce|116/343
+|-unboost|p1a: Dudunsparce|def|1
+|
+|-heal|p1a: Dudunsparce|137/343|[from] item: Leftovers
+|-heal|p2a: Pincurchin|148/258 tox|[from] item: Leftovers
+|-damage|p2a: Pincurchin|116/258 tox|[from] psn
+|-fieldend|move: Electric Terrain
+|upkeep
+|turn|16
+|
+|t:|1794291502
+|move|p1a: Dudunsparce|Toxic|p2a: Pincurchin|[miss]
+|-miss|p1a: Dudunsparce|p2a: Pincurchin
+|move|p2a: Pincurchin|Liquidation|p1a: Dudunsparce
+|-damage|p1a: Dudunsparce|0 fnt
+|faint|p1a: Dudunsparce
+|
+|-heal|p2a: Pincurchin|132/258 tox|[from] item: Leftovers
+|-damage|p2a: Pincurchin|84/258 tox|[from] psn
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Iron Bundle|Iron Bundle, L78|215/215
+|turn|17
+|
+|t:|1794291502
+|move|p1a: Iron Bundle|Ice Beam|p2a: Pincurchin
+|-damage|p2a: Pincurchin|0 fnt
+|faint|p2a: Pincurchin
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Bellossom|Bellossom, L84, F|263/263
+|turn|18
+|
+|t:|1794291502
+|move|p1a: Iron Bundle|Ice Beam|p2a: Bellossom
+|-supereffective|p2a: Bellossom
+|-damage|p2a: Bellossom|9/263
+|move|p2a: Bellossom|Strength Sap|p1a: Iron Bundle
+|-unboost|p1a: Iron Bundle|atk|1
+|-heal|p2a: Bellossom|179/263
+|
+|-heal|p2a: Bellossom|195/263|[from] item: Leftovers
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|move|p1a: Iron Bundle|Ice Beam|p2a: Bellossom
+|-supereffective|p2a: Bellossom
+|-damage|p2a: Bellossom|0 fnt
+|faint|p2a: Bellossom
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Dunsparce|Dunsparce, L86, F|312/312
+|turn|20
+|
+|t:|1794291502
+|move|p1a: Iron Bundle|Ice Beam|p2a: Dunsparce
+|-damage|p2a: Dunsparce|191/312
+|move|p2a: Dunsparce|Coil|p2a: Dunsparce
+|-boost|p2a: Dunsparce|atk|1
+|-boost|p2a: Dunsparce|def|1
+|-boost|p2a: Dunsparce|accuracy|1
+|
+|upkeep
+|turn|21
+|
+|t:|1794291502
+|move|p1a: Iron Bundle|Ice Beam|p2a: Dunsparce
+|-damage|p2a: Dunsparce|56/312
+|move|p2a: Dunsparce|Body Slam|p1a: Iron Bundle
+|-damage|p1a: Iron Bundle|125/215
+|-status|p1a: Iron Bundle|par
+|
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|-end|p1a: Iron Bundle|Quark Drive|[silent]
+|switch|p1a: Solgaleo|Solgaleo, L74|108/325
+|move|p2a: Dunsparce|Earthquake|p1a: Solgaleo
+|-supereffective|p1a: Solgaleo
+|-damage|p1a: Solgaleo|0 fnt
+|faint|p1a: Solgaleo
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Iron Bundle|Iron Bundle, L78|125/215 par
+|turn|23
+|
+|t:|1794291502
+|switch|p2a: Salazzle|Salazzle, L83, F|29/249
+|move|p1a: Iron Bundle|Flip Turn|p2a: Salazzle
+|-supereffective|p2a: Salazzle
+|-damage|p2a: Salazzle|0 fnt
+|faint|p2a: Salazzle
+|
+|t:|1794291502
+|-end|p1a: Iron Bundle|Quark Drive|[silent]
+|switch|p1a: Mimikyu|Mimikyu, L79, M|216/216|[from] Flip Turn
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Dunsparce|Dunsparce, L86, F|56/312
+|turn|24
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Shadow Claw|p2a: Dunsparce
+|-immune|p2a: Dunsparce
+|move|p2a: Dunsparce|Body Slam|p1a: Mimikyu
+|-immune|p1a: Mimikyu
+|
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Swords Dance|p1a: Mimikyu
+|-boost|p1a: Mimikyu|atk|2
+|move|p2a: Dunsparce|Body Slam|p1a: Mimikyu
+|-immune|p1a: Mimikyu
+|
+|upkeep
+|turn|26
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Shadow Claw|p2a: Dunsparce
+|-immune|p2a: Dunsparce
+|move|p2a: Dunsparce|Coil|p2a: Dunsparce
+|-boost|p2a: Dunsparce|atk|1
+|-boost|p2a: Dunsparce|def|1
+|-boost|p2a: Dunsparce|accuracy|1
+|
+|upkeep
+|turn|27
+|
+|t:|1794291502
+|move|p1a: Mimikyu|Swords Dance|p1a: Mimikyu
+|-boost|p1a: Mimikyu|atk|2
+|move|p2a: Dunsparce|Earthquake|p1a: Mimikyu
+|-activate|p1a: Mimikyu|ability: Disguise
+|-damage|p1a: Mimikyu|216/216
+|detailschange|p1a: Mimikyu|Mimikyu-Busted, L79, M
+|-damage|p1a: Mimikyu|189/216|[from] pokemon: Mimikyu-Busted
+|
+|upkeep
+|turn|28
+|
+|t:|1794291502
+|switch|p1a: Ceruledge|Ceruledge, L78, M|245/245
+|move|p2a: Dunsparce|Coil|p2a: Dunsparce
+|-boost|p2a: Dunsparce|atk|1
+|-boost|p2a: Dunsparce|def|1
+|-boost|p2a: Dunsparce|accuracy|1
+|
+|upkeep
+|turn|29
+|
+|t:|1794291502
+|move|p1a: Ceruledge|Shadow Sneak|p2a: Dunsparce
+|-immune|p2a: Dunsparce
+|move|p2a: Dunsparce|Coil|p2a: Dunsparce
+|-boost|p2a: Dunsparce|atk|1
+|-boost|p2a: Dunsparce|def|1
+|-boost|p2a: Dunsparce|accuracy|1
+|
+|upkeep
+|turn|30
+|
+|t:|1794291502
+|move|p1a: Ceruledge|Bitter Blade|p2a: Dunsparce
+|-damage|p2a: Dunsparce|25/312
+|move|p2a: Dunsparce|Body Slam|p1a: Ceruledge
+|-immune|p1a: Ceruledge
+|
+|upkeep
+|turn|31
+|
+|t:|1794291502
+|move|p1a: Ceruledge|Bitter Blade|p2a: Dunsparce
+|-damage|p2a: Dunsparce|0 fnt
+|faint|p2a: Dunsparce
+|
+|win|Policy1

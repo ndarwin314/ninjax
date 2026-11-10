@@ -1,0 +1,500 @@
+|t:|1794291502
+|gametype|singles
+|player|p1|Policy1||
+|player|p2|Policy2||
+|gen|9
+|tier|[Gen 9] Random Battle
+|rule|Species Clause: Limit one of each Pokemon
+|rule|HP Percentage Mod: HP is shown in percentages
+|rule|Sleep Clause Mod: Limit one foe put to sleep
+|rule|Illusion Level Mod: Illusion disguises the Pokemon's true level
+|
+|t:|1794291502
+|teamsize|p1|6
+|teamsize|p2|6
+|start
+|switch|p1a: Cinderace|Cinderace, L77, F|249/249
+|switch|p2a: Girafarig|Girafarig, L89, F|269/269
+|turn|1
+|
+|t:|1794291502
+|switch|p2a: Plusle|Plusle, L95, M|268/268
+|move|p1a: Cinderace|Court Change||[still]
+|-start|p1a: Cinderace|typechange|Normal|[from] ability: Libero
+|-fail|p1a: Cinderace
+|
+|upkeep
+|turn|2
+|
+|t:|1794291502
+|move|p2a: Plusle|Alluring Voice|p1a: Cinderace
+|-damage|p1a: Cinderace|145/249
+|-damage|p2a: Plusle|242/268|[from] item: Life Orb
+|move|p1a: Cinderace|U-turn|p2a: Plusle
+|-damage|p2a: Plusle|170/268
+|
+|t:|1794291502
+|switch|p1a: Pyroar|Pyroar, L88, M|295/295|[from] U-turn
+|-ability|p1a: Pyroar|Unnerve
+|
+|upkeep
+|turn|3
+|
+|t:|1794291502
+|move|p1a: Pyroar|Will-O-Wisp|p2a: Plusle|[miss]
+|-miss|p1a: Pyroar|p2a: Plusle
+|move|p2a: Plusle|Alluring Voice|p1a: Pyroar
+|-resisted|p1a: Pyroar
+|-damage|p1a: Pyroar|250/295
+|-damage|p2a: Plusle|144/268|[from] item: Life Orb
+|
+|upkeep
+|turn|4
+|
+|t:|1794291502
+|move|p1a: Pyroar|Will-O-Wisp|p2a: Plusle
+|-status|p2a: Plusle|brn
+|move|p2a: Plusle|Encore|p1a: Pyroar
+|-start|p1a: Pyroar|Encore
+|
+|-damage|p2a: Plusle|128/268 brn|[from] brn
+|upkeep
+|turn|5
+|
+|t:|1794291502
+|move|p1a: Pyroar|Will-O-Wisp|p2a: Plusle|[miss]
+|-miss|p1a: Pyroar|p2a: Plusle
+|move|p2a: Plusle|Nasty Plot|p2a: Plusle
+|-boost|p2a: Plusle|spa|2
+|
+|-damage|p2a: Plusle|112/268 brn|[from] brn
+|upkeep
+|turn|6
+|
+|t:|1794291502
+|move|p1a: Pyroar|Will-O-Wisp|p2a: Plusle
+|-fail|p2a: Plusle|brn
+|move|p2a: Plusle|Thunderbolt|p1a: Pyroar
+|-damage|p1a: Pyroar|0 fnt
+|faint|p1a: Pyroar
+|-damage|p2a: Plusle|86/268 brn|[from] item: Life Orb
+|
+|-damage|p2a: Plusle|70/268 brn|[from] brn
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Latias|Latias, L79, F|256/256
+|turn|7
+|
+|t:|1794291502
+|move|p2a: Plusle|Encore||[still]
+|-fail|p2a: Plusle
+|move|p1a: Latias|Draco Meteor|p2a: Plusle
+|-damage|p2a: Plusle|0 fnt
+|-unboost|p1a: Latias|spa|2
+|faint|p2a: Plusle
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Great Tusk|Great Tusk, L77|304/304
+|turn|8
+|
+|t:|1794291502
+|switch|p1a: Eiscue|Eiscue, L88, M|274/274
+|move|p2a: Great Tusk|Rapid Spin|p1a: Eiscue
+|-activate|p1a: Eiscue|ability: Ice Face
+|-damage|p1a: Eiscue|274/274
+|-boost|p2a: Great Tusk|spe|1
+|detailschange|p1a: Eiscue|Eiscue-Noice, L88, M
+|
+|upkeep
+|turn|9
+|
+|t:|1794291502
+|-end|p2a: Great Tusk|Protosynthesis|[silent]
+|switch|p2a: Metagross|Metagross, L79|256/256
+|move|p1a: Eiscue|Ice Spinner|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|224/256
+|
+|upkeep
+|turn|10
+|
+|t:|1794291502
+|switch|p1a: Lumineon|Lumineon, L93, M|279/279
+|move|p2a: Metagross|Psychic Fangs|p1a: Lumineon
+|-damage|p1a: Lumineon|183/279
+|
+|upkeep
+|turn|11
+|
+|t:|1794291502
+|move|p1a: Lumineon|Ice Beam|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|181/256
+|-damage|p1a: Lumineon|156/279|[from] item: Life Orb
+|move|p2a: Metagross|Heavy Slam|p1a: Lumineon
+|-resisted|p1a: Lumineon
+|-damage|p1a: Lumineon|78/279
+|
+|upkeep
+|turn|12
+|
+|t:|1794291502
+|move|p1a: Lumineon|Ice Beam|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|138/256
+|-damage|p1a: Lumineon|51/279|[from] item: Life Orb
+|move|p2a: Metagross|Agility|p2a: Metagross
+|-boost|p2a: Metagross|spe|2
+|
+|upkeep
+|turn|13
+|
+|t:|1794291502
+|move|p2a: Metagross|Heavy Slam|p1a: Lumineon
+|-resisted|p1a: Lumineon
+|-damage|p1a: Lumineon|0 fnt
+|faint|p1a: Lumineon
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Cinderace|Cinderace, L77, F|145/249
+|turn|14
+|
+|t:|1794291502
+|switch|p2a: Glastrier|Glastrier, L86|311/311
+|move|p1a: Cinderace|U-turn|p2a: Glastrier
+|-start|p1a: Cinderace|typechange|Bug|[from] ability: Libero
+|-damage|p2a: Glastrier|262/311
+|
+|t:|1794291502
+|switch|p1a: Smeargle|Smeargle, L95, F|258/258|[from] U-turn
+|
+|upkeep
+|turn|15
+|
+|t:|1794291502
+|move|p1a: Smeargle|Spore|p2a: Glastrier
+|-status|p2a: Glastrier|slp|[from] move: Spore
+|cant|p2a: Glastrier|slp
+|
+|upkeep
+|turn|16
+|
+|t:|1794291502
+|switch|p1a: Cinderace|Cinderace, L77, F|145/249
+|switch|p2a: Great Tusk|Great Tusk, L77|304/304
+|
+|upkeep
+|turn|17
+|
+|t:|1794291502
+|move|p1a: Cinderace|Pyro Ball|p2a: Great Tusk
+|-damage|p2a: Great Tusk|198/304
+|move|p2a: Great Tusk|Stone Edge|p1a: Cinderace
+|-supereffective|p1a: Cinderace
+|-crit|p1a: Cinderace
+|-damage|p1a: Cinderace|0 fnt
+|faint|p1a: Cinderace
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Latias|Latias, L79, F|256/256
+|turn|18
+|
+|t:|1794291502
+|move|p1a: Latias|Recover||[still]
+|-fail|p1a: Latias|heal
+|move|p2a: Great Tusk|Close Combat|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|187/256
+|-unboost|p2a: Great Tusk|def|1
+|-unboost|p2a: Great Tusk|spd|1
+|
+|upkeep
+|turn|19
+|
+|t:|1794291502
+|-end|p2a: Great Tusk|Protosynthesis|[silent]
+|switch|p2a: Metagross|Metagross, L79|138/256
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|
+|upkeep
+|turn|20
+|
+|t:|1794291502
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|move|p2a: Metagross|Agility|p2a: Metagross
+|-boost|p2a: Metagross|spe|2
+|
+|upkeep
+|turn|21
+|
+|t:|1794291502
+|switch|p2a: Glastrier|Glastrier, L86|262/311 slp
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|256/256
+|
+|upkeep
+|turn|22
+|
+|t:|1794291502
+|move|p1a: Latias|Recover||[still]
+|-fail|p1a: Latias|heal
+|cant|p2a: Glastrier|slp
+|
+|upkeep
+|turn|23
+|
+|t:|1794291502
+|switch|p2a: Primarina|Primarina, L83, F|268/268
+|move|p1a: Latias|Draco Meteor|p2a: Primarina
+|-immune|p2a: Primarina
+|
+|upkeep
+|turn|24
+|
+|t:|1794291502
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|move|p2a: Primarina|Hydro Pump|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|221/256
+|
+|upkeep
+|turn|25
+|
+|t:|1794291502
+|move|p1a: Latias|Draco Meteor|p2a: Primarina
+|-immune|p2a: Primarina
+|move|p2a: Primarina|Hydro Pump|p1a: Latias|[miss]
+|-miss|p2a: Primarina|p1a: Latias
+|
+|upkeep
+|turn|26
+|
+|t:|1794291502
+|move|p1a: Latias|Psyshock|p2a: Primarina
+|-damage|p2a: Primarina|0 fnt
+|faint|p2a: Primarina
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Great Tusk|Great Tusk, L77|198/304
+|turn|27
+|
+|t:|1794291502
+|-end|p2a: Great Tusk|Protosynthesis|[silent]
+|switch|p2a: Metagross|Metagross, L79|138/256
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|
+|upkeep
+|turn|28
+|
+|t:|1794291502
+|move|p1a: Latias|Psyshock|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|81/256
+|move|p2a: Metagross|Earthquake|p1a: Latias
+|-immune|p1a: Latias|[from] ability: Levitate
+|
+|upkeep
+|turn|29
+|
+|t:|1794291502
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|256/256
+|move|p2a: Metagross|Heavy Slam|p1a: Latias
+|-damage|p1a: Latias|111/256
+|
+|upkeep
+|turn|30
+|
+|t:|1794291502
+|switch|p1a: Smeargle|Smeargle, L95, F|258/258
+|move|p2a: Metagross|Psychic Fangs|p1a: Smeargle
+|-damage|p1a: Smeargle|96/258
+|
+|upkeep
+|turn|31
+|
+|t:|1794291502
+|move|p1a: Smeargle|Sticky Web|p2a: Metagross
+|-sidestart|p2: Policy2|move: Sticky Web
+|move|p2a: Metagross|Heavy Slam|p1a: Smeargle
+|-damage|p1a: Smeargle|0 fnt
+|faint|p1a: Smeargle
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Latias|Latias, L79, F|111/256
+|turn|32
+|
+|t:|1794291502
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|239/256
+|move|p2a: Metagross|Earthquake|p1a: Latias
+|-immune|p1a: Latias|[from] ability: Levitate
+|
+|upkeep
+|turn|33
+|
+|t:|1794291502
+|switch|p2a: Girafarig|Girafarig, L89, F|269/269
+|-activate|p2a: Girafarig|move: Sticky Web
+|-unboost|p2a: Girafarig|spe|1
+|move|p1a: Latias|Psyshock|p2a: Girafarig
+|-resisted|p2a: Girafarig
+|-damage|p2a: Girafarig|227/269
+|
+|upkeep
+|turn|34
+|
+|t:|1794291502
+|move|p1a: Latias|Draco Meteor|p2a: Girafarig
+|-damage|p2a: Girafarig|91/269
+|-unboost|p1a: Latias|spa|2
+|move|p2a: Girafarig|Nasty Plot|p2a: Girafarig
+|-boost|p2a: Girafarig|spa|2
+|
+|upkeep
+|turn|35
+|
+|t:|1794291502
+|switch|p1a: Eiscue|Eiscue-Noice, L88, M|274/274
+|move|p2a: Girafarig|Psyshock|p1a: Eiscue
+|-damage|p1a: Eiscue|78/274
+|-enditem|p1a: Eiscue|Sitrus Berry|[eat]
+|-heal|p1a: Eiscue|146/274|[from] item: Sitrus Berry
+|
+|upkeep
+|turn|36
+|
+|t:|1794291502
+|move|p1a: Eiscue|Liquidation|p2a: Girafarig
+|-damage|p2a: Girafarig|43/269
+|-unboost|p2a: Girafarig|def|1
+|move|p2a: Girafarig|Psyshock|p1a: Eiscue
+|-damage|p1a: Eiscue|0 fnt
+|faint|p1a: Eiscue
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p1a: Latias|Latias, L79, F|239/256
+|turn|37
+|
+|t:|1794291502
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|256/256
+|move|p2a: Girafarig|Hyper Voice|p1a: Latias
+|-damage|p1a: Latias|94/256
+|
+|upkeep
+|turn|38
+|
+|t:|1794291502
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|222/256
+|move|p2a: Girafarig|Psyshock|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|129/256
+|
+|upkeep
+|turn|39
+|
+|t:|1794291502
+|move|p1a: Latias|Recover|p1a: Latias
+|-heal|p1a: Latias|256/256
+|move|p2a: Girafarig|Hyper Voice|p1a: Latias
+|-damage|p1a: Latias|106/256
+|
+|upkeep
+|turn|40
+|
+|t:|1794291502
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|move|p2a: Girafarig|Nasty Plot|p2a: Girafarig
+|-boost|p2a: Girafarig|spa|2
+|
+|upkeep
+|turn|41
+|
+|t:|1794291502
+|move|p1a: Latias|Calm Mind|p1a: Latias
+|-boost|p1a: Latias|spa|1
+|-boost|p1a: Latias|spd|1
+|move|p2a: Girafarig|Thunderbolt|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|68/256
+|
+|upkeep
+|turn|42
+|
+|t:|1794291502
+|move|p1a: Latias|Draco Meteor|p2a: Girafarig
+|-damage|p2a: Girafarig|0 fnt
+|-unboost|p1a: Latias|spa|2
+|faint|p2a: Girafarig
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Metagross|Metagross, L79|81/256
+|-activate|p2a: Metagross|move: Sticky Web
+|-fail|p2a: Metagross|unboost|[from] ability: Clear Body|[of] p2a: Metagross
+|turn|43
+|
+|t:|1794291502
+|move|p1a: Latias|Psyshock|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|63/256
+|move|p2a: Metagross|Psychic Fangs|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|18/256
+|
+|upkeep
+|turn|44
+|
+|t:|1794291502
+|move|p1a: Latias|Draco Meteor|p2a: Metagross
+|-resisted|p2a: Metagross
+|-damage|p2a: Metagross|0 fnt
+|-unboost|p1a: Latias|spa|2
+|faint|p2a: Metagross
+|
+|upkeep
+|
+|t:|1794291502
+|switch|p2a: Glastrier|Glastrier, L86|262/311 slp
+|-activate|p2a: Glastrier|move: Sticky Web
+|-unboost|p2a: Glastrier|spe|1
+|turn|45
+|
+|t:|1794291502
+|move|p1a: Latias|Psyshock|p2a: Glastrier
+|-damage|p2a: Glastrier|223/311 slp
+|-curestatus|p2a: Glastrier|slp|[msg]
+|move|p2a: Glastrier|Close Combat|p1a: Latias
+|-resisted|p1a: Latias
+|-damage|p1a: Latias|0 fnt
+|-unboost|p2a: Glastrier|def|1
+|-unboost|p2a: Glastrier|spd|1
+|faint|p1a: Latias
+|
+|win|Policy2
