@@ -15,12 +15,18 @@ For a generic status-category move (`move_type=MoveType.STATUS`), configure:
 | `weather_effect` | A `WeatherEnum` value; zero leaves weather unchanged. |
 | `terrain_effect` | A `TerrainEnum` value; zero leaves terrain unchanged. |
 | `hazard_effect` | 1 Stealth Rock, 2 Sticky Web, 3 Spikes, 4 Toxic Spikes; zero disables it. |
+| `healing_fraction` | Fraction of the selected target's maximum HP to restore; zero disables it. |
 
 Weather and terrain effects set a five-turn duration. Spikes and Toxic Spikes
 stack to three and two layers respectively. Hazard effects apply to the selected
 side, normally the opponent. These are generic primitives, not a complete move
 database or complete coverage of move-specific exceptions. They currently apply
 to status-category moves, not secondary effects of damaging moves.
+
+For a runnable, explicitly limited trace-derived sandbox, see the
+[prototype command](../../README.md#minimal-trace-derived-sandbox). It preserves
+recorded stats/types while reporting unsupported moves and neutralized items and
+abilities. This is separate from claiming parity for the full captured games.
 
 For example, configure `boost_stat=StatEnum.ATTACK`, `boost_stages=2`,
 `target_self=True`, and `move_type=MoveType.STATUS` for a generic self Attack

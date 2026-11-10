@@ -72,7 +72,7 @@ class Pokemon(ArrayTree):
 
     # TODO: this method doesnt seem to work properly for stacked pokemon
     def is_type(self, t: Type):
-        return jnp.any(self.type_list==t)
+        return jnp.any(self.type_list==t, axis=-1, keepdims=True)
 
     @property
     def is_floating(self):
@@ -86,7 +86,7 @@ class Pokemon(ArrayTree):
 
     @property
     def is_sand_immune(self):
-        return triple_or(self.is_type(Type.STEEL), Type.GROUND, Type.ROCK)
+        return triple_or(self.is_type(Type.STEEL), self.is_type(Type.GROUND), self.is_type(Type.ROCK))
 
     @property
     def is_poison_immune(self):
@@ -137,14 +137,17 @@ class Pokemon(ArrayTree):
     def level(self):
         return self.stat_table.level
 
-    def is_immune_to_move(self, move):
-        type_immunity = calculate_effectiveness_multiplier(move.type, self.type_list) == 0
+    def is_immune_to_move(self, move, gravity_active=False):
+        types = jnp.where(jnp.asarray(gravity_active) & (move.type == Type.GROUND) &
+                          (self.type_list == Type.FLYING), Type.NONE, self.type_list)
+        type_immunity = calculate_effectiveness_multiplier(move.type, types) == 0
+        levitate_immunity = (self.ability == AbilityEnum.LEVITATE) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active)
         return jnp.any(jnp.stack(jnp.broadcast_arrays(
             jnp.logical_and(self.is_powder_immune, move.powder),
             jnp.logical_and(self.is_sound_immune, move.sound),
             jnp.logical_and(self.is_bulletproof, move.bullet),
             jnp.logical_and(self.is_status_immune, move.move_type==MoveType.STATUS),
-            type_immunity)))
+            type_immunity, levitate_immunity)))
 
 
 

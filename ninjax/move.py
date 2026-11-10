@@ -23,6 +23,7 @@ class Move(ArrayTree):
     crit_stage: jax.Array
     move_flags: jax.Array = field(default_factory=lambda: jnp.array([0]))
     recoil_percent: jax.Array = field(default_factory=lambda: jnp.array([0]))
+    healing_fraction: jax.Array = field(default_factory=lambda: jnp.array([0.]))
     disabled: jax.Array = field(default_factory=lambda: jnp.array([False]))
     self_ko: jax.Array = field(default_factory=lambda: jnp.array([False]))
     perish_effect: jax.Array = field(default_factory=lambda: jnp.array([False]))
@@ -42,7 +43,7 @@ class Move(ArrayTree):
         shape = jnp.shape(self.current_pp)
         for item in fields(self):
             name = item.name
-            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect') else (jnp.float32 if name in ('accuracy', 'recoil_percent') else jnp.int32)
+            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):

@@ -390,3 +390,78 @@ class TestDamage:
         )
         key, state = do_damaging_move(key, state, 0, move, 0, 0)
         assert state.active[1].current_hp[0] == damage
+
+
+def test_ability_speed_and_marvel_scale_are_per_pokemon(neutral_type):
+    from ninjax.enum_types import Weather
+    key, state = neutral_type
+    abilities = state.team.ability.at[0, 0, 0].set(AbilityEnum.CHLOROPHYLL)
+    abilities = abilities.at[1, 0, 0].set(AbilityEnum.MARVEL_SCALE)
+    statuses = state.team.status.at[1, 0, 0].set(Status.BURN)
+    state = state.replace(team=state.team.replace(ability=abilities, status=statuses),
+                          weather=Weather(WeatherEnum.SUN, jnp.int32(5)))
+    raw = state.active.stats
+    stats = jax.jit(lambda s: s.boosted_stats)(state)
+    assert stats[0, StatEnum.SPEED] == 2 * raw[0, StatEnum.SPEED]
+    assert stats[1, StatEnum.SPEED] == raw[1, StatEnum.SPEED]
+    assert stats[1, StatEnum.DEFENSE] == jnp.floor(raw[1, StatEnum.DEFENSE] * 1.5)
+    assert stats[1, StatEnum.SPECIAL_DEFENSE] == raw[1, StatEnum.SPECIAL_DEFENSE]
+    batched = jax.jit(jax.vmap(lambda s: s.boosted_stats))(stack([state, state]))
+    assert jnp.array_equal(batched, jnp.stack([stats, stats]))
+
+
+def test_damage_ability_effectiveness_and_gravity(neutral_type):
+    from ninjax.damage import compute_damage_multipliers
+    from ninjax.enum_types import Weather
+    key, state = neutral_type
+    attacker, defender = state.active[0], state.active[1]
+    move = attacker.moves[0]
+    def damage(attacker, defender, move, gravity):
+        return compute_damage_multipliers(key, attacker, defender, Weather(0, 0), move,
+                                          jnp.array([100]), jnp.array([False]), 1., gravity)[0]
+    damage = jax.jit(damage)
+    water = move.replace(type=jnp.array([Type.WATER]))
+    fire = defender.replace(type_list=jnp.array([Type.FIRE, Type.NONE]))
+    grass = defender.replace(type_list=jnp.array([Type.GRASS, Type.NONE]))
+    assert damage(attacker, fire, water, False) == 200
+    assert damage(attacker, fire.replace(ability=jnp.array([AbilityEnum.FILTER])), water, False) == 150
+    assert damage(attacker.replace(ability=jnp.array([AbilityEnum.NEUROFORCE])), fire, water, False) == 250
+    assert damage(attacker, grass, water, False) == 50
+    assert damage(attacker.replace(ability=jnp.array([AbilityEnum.TINTED_LENS])), grass, water, False) == 100
+    ground = move.replace(type=jnp.array([Type.GROUND]))
+    levitate = defender.replace(type_list=jnp.array([Type.NORMAL, Type.NONE]), ability=jnp.array([AbilityEnum.LEVITATE]))
+    assert damage(attacker, levitate, ground, False) == 0
+    assert damage(attacker, levitate, ground, True) == 100
+    flying = levitate.replace(type_list=jnp.array([Type.FLYING, Type.NONE]), ability=jnp.array([0]))
+    assert damage(attacker, flying, ground, False) == 0
+    assert damage(attacker, flying, ground, True) == 100
+
+
+def test_levitate_blocks_ground_moves_unless_gravity_is_active(neutral_type):
+    key, state = neutral_type
+    team = state.team.replace(
+        moves=state.team.moves.replace(type=jnp.full_like(state.team.moves.type, Type.GROUND)),
+        ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.LEVITATE))
+    state = state.replace(team=team)
+    apply = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
+    assert apply(state).active.current_hp[1, 0] == state.active.current_hp[1, 0]
+    grounded = apply(state.replace(gravity_duration=jnp.int32(3)))
+    assert grounded.active.current_hp[1, 0] < state.active.current_hp[1, 0]
+
+
+@pytest.mark.parametrize('ability,move_type', [(AbilityEnum.STORM_DRAIN, Type.WATER),
+                                               (AbilityEnum.LIGHTNING_ROD, Type.ELECTRIC)])
+def test_redirect_abilities_belong_to_defender(neutral_type, ability, move_type):
+    key, state = neutral_type
+    moves = state.team.moves.replace(type=jnp.full_like(state.team.moves.type, move_type))
+    team = state.team.replace(moves=moves, ability=state.team.ability.at[1, 0, 0].set(ability))
+    state = state.replace(team=team)
+    apply = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
+    result = apply(state)
+    assert result.active.current_hp[1, 0] == state.active.current_hp[1, 0]
+    assert result.boosts.normal_boosts[1, StatEnum.SPECIAL_ATTACK] == 1
+    # The attacker's own ability must not redirect its move.
+    team = team.replace(ability=team.ability.at[1, 0, 0].set(0).at[0, 0, 0].set(ability))
+    ordinary = apply(state.replace(team=team))
+    assert ordinary.active.current_hp[1, 0] < state.active.current_hp[1, 0]
+    assert ordinary.boosts.normal_boosts[1, StatEnum.SPECIAL_ATTACK] == 0

@@ -139,7 +139,8 @@ def compute_base_damage(
     )
 
 
-    base_damage = jnp.floor(((2 * level / 5 + 2) * power * offensive_stat) / (defensive_stat * 50) + 2)
+    level_factor = jnp.floor(2 * level / 5) + 2
+    base_damage = jnp.floor(jnp.floor(level_factor * power * offensive_stat / defensive_stat) / 50) + 2
     return base_damage
 
 
@@ -151,7 +152,8 @@ def compute_damage_multipliers(
         move: Move,
         base_damage,
         is_crit,
-        damage_roll
+        damage_roll,
+        gravity_active=False
 ) -> Array:
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
@@ -183,23 +185,23 @@ def compute_damage_multipliers(
     base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
     # Type effectiveness, when we get around to implementing observations
     # it should include does not affect, not very effective, or super effective
-    effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
+    defending_types = jnp.where(jnp.asarray(gravity_active) & (move.type == Type.GROUND) &
+                                (defender.type_list == Type.FLYING), Type.NONE, defender.type_list)
+    effectiveness = calculate_effectiveness_multiplier(move.type, defending_types)
     is_levitate = defender.ability==AbilityEnum.LEVITATE
-    effectiveness = effectiveness * 1-jnp.logical_and(is_levitate, move.type==Type.GROUND)
-    is_tinted_lens = jnp.logical_and(jnp.less_equal(effectiveness, 1), attacker.ability==AbilityEnum.TINTED_LENS)
-    is_filter = jnp.logical_and(jnp.greater_equal(effectiveness, 1), defender.ability==AbilityEnum.FILTER)
-    is_neuroforce = jnp.logical_and(jnp.greater_equal(effectiveness, 1), defender.ability==AbilityEnum.NEUROFORCE)
-    effectiveness = conditional_mult_prod(
-        effectiveness,
-        jnp.array([2, 3/4, 1.25]),
-        jnp.array([is_tinted_lens, is_filter, is_neuroforce]).squeeze()
-    )
+    effectiveness = effectiveness * (1-jnp.logical_and(jnp.logical_and(is_levitate, move.type==Type.GROUND), ~jnp.asarray(gravity_active)))
+    is_tinted_lens = (effectiveness > 0) & (effectiveness < 1) & (attacker.ability==AbilityEnum.TINTED_LENS)
+    is_filter = (effectiveness > 1) & (defender.ability==AbilityEnum.FILTER)
+    is_neuroforce = (effectiveness > 1) & (attacker.ability==AbilityEnum.NEUROFORCE)
     base_damage = jnp.trunc(base_damage * effectiveness)
     # burn
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
     is_guts = attacker.ability == AbilityEnum.GUTS
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
+    base_damage = conditional_mult_round(base_damage, 2, is_tinted_lens)
+    base_damage = conditional_mult_round(base_damage, 0.75, is_filter)
+    base_damage = conditional_mult_round(base_damage, 1.25, is_neuroforce)
 
     return base_damage
 
@@ -301,9 +303,10 @@ def compute_offensive_stat(
 def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
 
     # marvel scale
-    stats = conditional_mult_round(
-        starting_stats[StatEnum.SPECIAL_DEFENSE], 1.5,
-        jnp.logical_and(defender_ability == AbilityEnum.MARVEL_SCALE, status!=Status.NONE))
+    stat = conditional_mult_round(
+        starting_stats[stat_idx], 1.5,
+        triple_and(defender_ability == AbilityEnum.MARVEL_SCALE,
+                   status!=Status.NONE, stat_idx == StatEnum.DEFENSE))
 
     # eviolite and assault vest
-    return stats[stat_idx]
+    return stat

@@ -89,7 +89,8 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
         move,
         base_damage,
         is_crit,
-        damage_roll
+        damage_roll,
+        state.gravity_duration > 0
     )
 
     damage = damage_post_modifiers(damage, defender.ability, move)
@@ -124,6 +125,7 @@ def do_recoil(state: BattleState, attacker_idx: int, damage) -> BattleState:
 
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
+    state = take_damage_percent(state, target, -move.healing_fraction)
     key, state = jax.lax.cond(move.status_effect[0] != Status.NONE,
         lambda k, s: set_status(k, s, target, move.status_effect),
         lambda k, s: (k, s), key, state)
@@ -390,17 +392,7 @@ def _apply_move_effects(key, state, attacker_index, move_index):
     move = move.replace(base_power=new_power, type=new_type)
 
     # check for accuracy bypasses
-    storm_drain = jnp.logical_and(AbilityEnum.STORM_DRAIN == attacker_ability, Type.WATER == move.type)
-    lighting_rod = jnp.logical_and(attacker_ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC)
-    draw_in = jnp.logical_or(storm_drain, lighting_rod)
-
-
-    key, state = jax.lax.cond(
-        draw_in.reshape(()),
-        lambda k, s, a, m, stat: do_stat_boost_from_move(k, s, a, s.active[a].moves[m], stat, 1), move_not_drawn_in,
-        key, state, attacker_index, move_index, StatEnum.SPECIAL_ATTACK
-    )
-    return key, state
+    return move_not_drawn_in(key, state, attacker_index, move_index, StatEnum.SPECIAL_ATTACK)
 
 
 def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
@@ -431,6 +423,7 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         jnp.equal(defender_ability, AbilityEnum.NO_GUARD),
         jnp.equal(attacker_ability, AbilityEnum.NO_GUARD))
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
+    accuracy = jnp.where(move.target_self, 1., accuracy)
 
     # choose function based on if move hits
     return jax.lax.cond(
@@ -460,7 +453,9 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
                 do_healing_from_move,
                 is_immune]
     is_flash_fire = jnp.logical_and(ability==AbilityEnum.FLASH_FIRE, move.type==Type.FIRE)
-    is_spa_boost = False
+    is_spa_boost = jnp.logical_or(
+        jnp.logical_and(ability==AbilityEnum.STORM_DRAIN, move.type==Type.WATER),
+        jnp.logical_and(ability==AbilityEnum.LIGHTNING_ROD, move.type==Type.ELECTRIC))
     # this is redundant
     """is_spa_boost = jnp.logical_or(
         jnp.logical_and(AbilityEnum.STORM_DRAIN==ability, Type.WATER==move.type),
@@ -477,7 +472,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     # all of this is hacky and inelegant and probably could be simplified
     is_stat_boost = quad_or(is_speed_boost, is_attack_boost, is_spa_boost, is_def_boost)
     not_bypass_move = triple_or(is_flash_fire, is_stat_boost, is_heal)
-    immune = defender.is_immune_to_move(move)
+    immune = defender.is_immune_to_move(move, state.gravity_duration > 0)
     immune = jnp.logical_and(immune, ~not_bypass_move)
     is_status = jnp.logical_and(move.move_type == MoveType.STATUS, ~not_bypass_move & ~immune)
     # this feels really hacky way to compute this but :shrug:
@@ -488,6 +483,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
             is_heal * 4 +
             immune * 5
     )
+    branch_index = jnp.where(move.target_self & (move.move_type == MoveType.STATUS), 1, branch_index)
     boost_value = 1 + (ability==AbilityEnum.WELL_BAKED_BODY)
 
     # i think using a switch means we skip evaluating the branches we don't need
@@ -499,7 +495,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
         state,
         attacker_index,
         move,
-        is_attack_boost + 2 * is_def_boost + 4 * is_spa_boost + 6 * is_speed_boost,
+        is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE +
+        is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED,
         boost_value
     )
     requested = move.switch_out[0] & (branch_index[0] <= 1)

@@ -109,9 +109,9 @@ class BattleState(struct.PyTreeNode):
         # its probably going to be helpful to use this in other places
 
         # marvel scale
-        temp = conditional_mult_round(stats[...,StatEnum.SPECIAL_DEFENSE], 1.5,
+        temp = conditional_mult_round(stats[...,StatEnum.DEFENSE], 1.5,
                                       jnp.logical_and(ability==AbilityEnum.MARVEL_SCALE, active.has_status).squeeze())
-        stats = stats.at[..., StatEnum.SPECIAL_DEFENSE].set(temp)
+        stats = stats.at[..., StatEnum.DEFENSE].set(temp)
 
         # surge surfer
         terrain = self.terrain.terrain
@@ -137,7 +137,7 @@ class BattleState(struct.PyTreeNode):
         temp = conditional_mult_round(
             stats[..., StatEnum.SPEED],
             2,
-            jnp.any(arr))
+            jnp.any(arr, axis=0))
 
 
         # paralyzed
@@ -325,15 +325,15 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
 def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
     # this probably works
     boosts = boosts.normal_boosts
-    boosts = jnp.minimum(boosts, 13 - 7 * ignore_boosts)
-    boosts = jnp.maximum(boosts, 6 * ignore_drops)
+    boosts = jnp.minimum(boosts, jnp.where(ignore_boosts, 0, 6))
+    boosts = jnp.maximum(boosts, jnp.where(ignore_drops, 0, -6))
     return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + boosts])
 
 def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defender_unaware, is_crit):
     attacker_stats = raw_stats[attacker_idx]
     defender_stats = raw_stats[1 - attacker_idx]
     attacker_boosts = boosts[attacker_idx]
-    defender_boosts = boosts[attacker_idx]
+    defender_boosts = boosts[1 - attacker_idx]
     attacker_stats = boosted_stats_helper(
         attacker_stats,
         attacker_boosts,
@@ -352,7 +352,8 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array) -
         for i in range(2):
             state = take_damage_percent(state, i, jnp.broadcast_to(percent, (2, 1))[i])
         return state
-    damage = jnp.round(state.active.max_hp[defender_idx] * percent).astype(int)
+    amount = state.active.max_hp[defender_idx] * percent
+    damage = (jnp.sign(amount) * jnp.maximum(1, jnp.floor(jnp.abs(amount)))).astype(jnp.int32)
     return take_damage_value(state, defender_idx, damage, False)
 
 
