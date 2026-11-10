@@ -11,17 +11,20 @@ Reference: the local Pokémon Showdown checkout at commit
 | Levitate | Block single-target Ground attacks; Gravity suppresses that immunity. |
 | Tinted Lens, Filter, Neuroforce | Apply only to the appropriate resistance or weakness; Neuroforce belongs to the attacker. |
 | Storm Drain, Lightning Rod | The target absorbs the matching move and gains Special Attack; the attacker's ability does not redirect its own move. |
+| Flash Fire | Absorbs opposing Fire moves and activates a non-stacking Fire offensive boost that clears on switch-out. |
+| Sturdy | Survives a lethal attack from full HP with one HP; does not protect against indirect damage. |
+| Multiscale | Halves attack damage only at full HP; indirect damage is unaffected. |
 
 The regression tests in `unit_tests/test_battle.py` cover these conditions,
-including non-triggering cases, JIT, and a vmapped speed check. Gravity's effect
-on Flying-type Ground immunity is covered as well.
+including non-triggering cases, JIT, a vmapped speed check, and Flash Fire under
+`vmap` and `scan`. Gravity's effect on Flying-type Ground immunity is covered as well.
 
 ## Follow-up findings
 
-- Flash Fire absorbs Fire moves but its accumulated Fire damage boost is not
-  represented in state yet.
-- Sturdy's current HP clamp does not ensure that a Pokémon at full HP survives
-  an otherwise lethal attack with one HP.
+- Flash Fire's switch reset is implemented, but ability-loss/suppression hooks
+  are not yet represented. Confusion and Transform have reserved volatile fields;
+  their mechanics and Transform's original-state restoration are not implemented.
+- Sturdy's separate immunity to one-hit knockout moves is not implemented.
 - Clear Body's current reduction helper does not distinguish self-inflicted
   drops from opposing drops, and its Defiant/Competitive ordering needs review.
 - Several move-type-changing abilities compute a modified move that is not passed

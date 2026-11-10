@@ -23,6 +23,9 @@ from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, 
                                move_used, step_moody)
 
 
+from ninjax.events import EventBuffer, EventKind, Cause, emit, capture_conditions
+from ninjax.observations import Observation, observe, observation_spec
+
 Binary = (0,1)
 
 class BattleAction(struct.PyTreeNode):
@@ -100,27 +103,10 @@ class Battle(Environment):
 
     @cached_property
     def observation_spec(self):
-        return specs.Array((2, 2, 6, 22), jnp.dtype("float32"), "observation")
+        return observation_spec()
 
     def observe(self, state):
-        team = state.battle.team
-        mode = self.params.information_mode
-        visible = state.revealed
-        species_visible = visible | (mode != InformationMode.HIDDEN)
-        sheet = jnp.full((2, 6), mode == InformationMode.OPEN_SHEET)
-        # Features: species, HP fraction, status, ability, item, nature (2),
-        # six stats, four move IDs, then five explicit visibility indicators.
-        data = jnp.concatenate((team.species, team.hp_percent[..., None], team.status,
-            team.ability, team.item, team.stat_table.nature.increased, team.stat_table.nature.decreased,
-            team.stat_table.stats, team.moves.identifier[..., 0]), axis=-1).astype(jnp.float32)
-        opponent_mask = jnp.concatenate((species_visible[..., None],
-            jnp.broadcast_to(visible[..., None], (2, 6, 2)),
-            jnp.broadcast_to(sheet[..., None], (2, 6, 4)), jnp.zeros((2, 6, 6), bool),
-            state.revealed_moves | sheet[..., None]), axis=-1)
-        own = jnp.concatenate((data, jnp.ones((2, 6, 5))), axis=-1)
-        flags = jnp.stack((species_visible, visible, sheet, sheet, sheet), axis=-1)
-        other = jnp.concatenate((jnp.where(opponent_mask, data, 0), flags), axis=-1)
-        return jnp.stack((own, other[::-1]), axis=1)
+        return observe(self, state)
 
     @cached_property
     def reward_spec(self):
@@ -150,7 +136,7 @@ class Battle(Environment):
         return jnp.where(state.acting_player_mask[:, None], mask,
                          jnp.arange(15)[None, :] == 14)
 
-    def reset(self, key: jax.Array) -> tuple[EpisodeState, TimeStep[jax.Array]]:
+    def reset(self, key: jax.Array) -> tuple[EpisodeState, TimeStep[Observation]]:
         if self.teams is None:
             raise ValueError("Battle requires caller-provided teams for reset")
         state = EpisodeState(key=key, battle=BattleState(team=self.teams), turn=jnp.int32(0),
@@ -162,7 +148,8 @@ class Battle(Environment):
         state = state.replace(phase=jnp.int32(Phase.TEAM_SELECTION if self.params.team_preview else Phase.TURN))
         return state, restart(self.observe(state), shape=(2,), extras=self._extras(state))
 
-    def step(self, state: EpisodeState, action: chex.Array | BattleAction) -> tuple[EpisodeState, TimeStep[jax.Array]]:
+    def step(self, state: EpisodeState, action: chex.Array | BattleAction) -> tuple[EpisodeState, TimeStep[Observation]]:
+        state = state.replace(battle=state.battle.replace(events=EventBuffer.empty()))
         if isinstance(action, BattleAction):
             selection = action.selection.astype(bool)
             selecting = state.phase == Phase.TEAM_SELECTION
@@ -230,6 +217,7 @@ class Battle(Environment):
                 key, battle = lax.cond(current.acting_player_mask[player],
                     lambda k, b: step_switch(k, b, player, actions[player] - 8, False),
                     lambda k, b: (k, b), current.key, current.battle)
+                battle = capture_conditions(current.battle, battle)
                 current = current.replace(key=key, battle=battle)
             return current.replace(acting_player_mask=jnp.zeros(2, bool))
 
@@ -247,9 +235,12 @@ class Battle(Environment):
                 key, battle = lax.cond(can_act,
                     lambda k, b: step_action(k, b, chosen, player),
                     lambda k, b: (k, b), current.key, current.battle)
+                battle = capture_conditions(current.battle, battle)
                 slot = current.battle.active_index[player, 0]
                 known = current.revealed_moves.at[player, slot, jnp.clip(chosen, 0, 3)].set(
-                    current.revealed_moves[player, slot, jnp.clip(chosen, 0, 3)] | ((chosen < 4) & can_act))
+                    current.revealed_moves[player, slot, jnp.clip(chosen, 0, 3)] | ((chosen < 4) & can_act &
+                    (battle.team.moves.current_pp[player, slot, jnp.clip(chosen, 0, 3), 0] <
+                     current.battle.team.moves.current_pp[player, slot, jnp.clip(chosen, 0, 3), 0])))
                 has_bench = jnp.any(current.selected[player] & (battle.team.current_hp[player, :, 0] > 0) &
                                    (jnp.arange(6) != battle.active_index[player, 0]))
                 pivot = battle.switch_requested[player] & (battle.active.current_hp[player, 0] > 0) & has_bench
@@ -262,7 +253,9 @@ class Battle(Environment):
 
         state = lax.fori_loop(0, 2, resolve, state)
         def finish(current):
-            key, battle = step_field(current.key, current.battle)
+            before = current.battle.replace(event_source=jnp.int32(-1), event_move=jnp.int32(0), event_cause=jnp.int32(Cause.FIELD))
+            key, battle = step_field(current.key, before)
+            battle = capture_conditions(before, battle)
             return current.replace(key=key, battle=battle, turn=current.turn + 1, field_pending=jnp.bool_(False))
         state = lax.cond((state.cursor == 2) & ~jnp.any(state.acting_player_mask) & ~finished_replacement,
                          finish, lambda c: c, state)
@@ -423,8 +416,12 @@ def step_action(
     action: int | jax.Array,
     player_index: int | jax.Array
 ) -> tuple[jax.Array, BattleState]:
+    state = state.replace(event_source=jnp.asarray(player_index, jnp.int32),
+        event_cause=jnp.int32(Cause.MOVE), event_move=jnp.int32(0))
     # this will execute whatever move is selected
     def struggle(k, b):
+        b = b.replace(event_move=jnp.int32(-1))
+        b = emit(b, EventKind.MOVE, player_index, detail=-1)
         move = Move(move_type=jnp.array([0]), max_pp=jnp.array([1]), current_pp=jnp.array([1]),
                     type=jnp.array([Type.NONE]), base_power=jnp.array([50]), accuracy=jnp.array([1.]),
                     priority=jnp.array([0]), offensive_stat=jnp.array([StatEnum.ATTACK]),
@@ -432,6 +429,13 @@ def step_action(
         k, b = do_damaging_move(k, b, player_index, move, 0, 0)
         actor = b.active[player_index]
         hp = jnp.maximum(0, actor.current_hp - jnp.maximum(1, jnp.round(actor.max_hp / 4)))
+        b = b.replace(event_cause=jnp.int32(Cause.RECOIL))
+        b = emit(b, EventKind.HP, player_index, before=actor.current_hp, after=hp,
+                 hp_change=hp-actor.current_hp,
+                 hp_fraction_change=(jnp.ceil(hp / actor.max_hp * 100) -
+                                     jnp.ceil(actor.current_hp / actor.max_hp * 100)) / 100,
+                 enabled=hp != actor.current_hp)
+        b = emit(b, EventKind.FAINT, player_index, enabled=(actor.current_hp > 0) & (hp == 0))
         b = update_active(b, player_index, actor.replace(current_hp=hp, is_alive=hp > 0))
         b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player_index, b.winner))
         return k, b

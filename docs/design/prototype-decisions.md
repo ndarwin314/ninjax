@@ -1,8 +1,9 @@
 # Working prototype: decisions and examples
 
 These questions supplement the project instructions. The current implementation
-is still a prototype: its observations are placeholders and some battle mechanics
-are incomplete. The prompts below are questions, not established rules.
+is still a prototype with incomplete battle mechanics. The current observation
+contract is documented in [observations and events](observations.md). The prompts
+below are questions, not established rules.
 
 ## Decisions with the most impact
 

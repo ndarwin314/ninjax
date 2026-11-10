@@ -1,3 +1,10 @@
+"""Battle transition helpers for moves, switching, and end-of-turn effects.
+
+Functions return new battle state rather than modifying it in place. Random
+transitions accept an explicit JAX key and generally return the advanced key.
+The current implementation targets singles and covers only part of the rules.
+"""
+
 from typing import Tuple
 
 import jax
@@ -21,11 +28,20 @@ from ninjax.utils import (
     conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
 
+from ninjax.events import EventKind, Cause, emit
+
 Array = chex.Array
 
 
 
 def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    """Resolve one damaging hit and its represented recoil and post-hit effects.
+
+    ``attacker_idx`` is a player index in a singles battle; ``stat_index`` and
+    ``boost_value`` are unused operands shared with the other hit branches.
+    Critical-hit and damage-roll keys are split independently. Multi-hit moves
+    and some damage-triggered effects are not yet implemented.
+    """
     active = state.active
     attacker = active[attacker_idx]
     defender = active[1-attacker_idx]
@@ -46,13 +62,11 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
                   3*jnp.logical_and(attacker.ability==AbilityEnum.MERCILESS, defender.is_poisoned))
     crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
     is_crit = random.uniform(one) < crit_chance
+    state = emit(state, EventKind.CRITICAL, 1-attacker_idx, enabled=is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
 
-    # base damage pre multipliers
-    # so the problem is that body press which does damage based on defence, ignores the defence reduction of sword of ruin
-    # when it calculated the offensive stat, but doesn't ignore it as a modifier of defensive stats
-    # but it also does get boosted by modifiers like choice band, huge power, and guts because this game is made with spaghetti code
-    # so i have to implement that and i think this is probably the least stupid way to do that
+    # Select stage-adjusted stats before computing offensive and defensive
+    # modifiers. Moves such as Body Press can select a nonstandard attack stat.
     raw_stats = state.active.stats
     boosts = state.boosts
     attacker_stats, defender_stats = raw_boosted_stats(
@@ -75,7 +89,8 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
         move,
         power,
         attacker.status,
-        defender.status
+        defender.status,
+        state.volatile_status.flash_fire[attacker_idx]
     )
 
     # there is a specific order to the multipliers that i will preserve since rounding is done
@@ -99,7 +114,7 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
     state = take_damage_value(state, 1 - attacker_idx, damage, True)
 
 
-    # recoil
+    # lax.cond keeps both branches compatible with traced move and ability data.
     state = jax.lax.cond(
         jnp.logical_and(move.recoil, attacker.ability!=AbilityEnum.ROCK_HEAD)[0],
         do_recoil, lambda s, p, d: s,
@@ -113,6 +128,8 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
     state = jax.lax.cond(move.self_ko[0],
         lambda s: take_damage_value(s, attacker_idx, s.active[attacker_idx].current_hp, False),
         lambda s: s, state)
+    # Retain the cause-dependent winner for a simultaneous final knockout;
+    # the environment uses this value when it constructs the terminal reward.
     both_out = ~jnp.any((state.team.current_hp[..., 0] > 0) & state.roster)
     winner = jnp.where(move.self_ko[0], 1-attacker_idx, attacker_idx)
     state = state.replace(winner=jnp.where(both_out, winner, state.winner))
@@ -120,10 +137,19 @@ def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: 
     return key, state
 
 def do_recoil(state: BattleState, attacker_idx: int, damage) -> BattleState:
-    state = take_damage_value(state, attacker_idx, damage, False)
+    """Apply the supplied indirect recoil damage to the attacker."""
+    original_cause = state.event_cause
+    state = take_damage_value(state.replace(event_cause=jnp.int32(Cause.RECOIL)), attacker_idx, damage, False)
+    state = state.replace(event_cause=original_cause)
     return state
 
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    """Apply the generic status-move fields and return the key and state.
+
+    The selected target can receive healing, status, stat stages, and hazards;
+    weather, terrain, and Perish Song update field-wide state. Effect coverage
+    is partial, and field durations are currently fixed at five turns.
+    """
     target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
     state = take_damage_percent(state, target, -move.healing_fraction)
     key, state = jax.lax.cond(move.status_effect[0] != Status.NONE,
@@ -140,6 +166,8 @@ def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Mo
     state = set_terrain(state, move.terrain_effect[0], 5)
     state = state.replace(perish_turns=jnp.where(move.perish_effect[0] & (state.perish_turns < 0),
                                                 4, state.perish_turns))
+    # Hazard IDs encode none, Stealth Rock, Sticky Web, Spikes, and Toxic
+    # Spikes. Layered hazards are capped at their represented maximum.
     hazard = move.hazard_effect[0]
     state = state.replace(
         stealth_rocks=state.stealth_rocks.at[target].set(state.stealth_rocks[target] | (hazard == 1)),
@@ -150,19 +178,28 @@ def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Mo
 
 # this is for when water absorb or volt absorb is triggered
 def do_healing_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    """Heal the defending active by a quarter of max HP for an absorb ability."""
     state = take_damage_percent(state, 1-attacker_idx, -1/4)
     return key,state
 
 def do_stat_boost_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
+    """Apply an absorption ability's stage change to the defending active."""
     state = add_boosts(state, 1-attacker_idx, stat_index, boost_value)
     return key, state
 
 
 def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    # TODO: i dont want to do volatile status
-    return key, state
+    """Activate the defending active's switch-cleared Flash Fire flag."""
+    volatile = state.volatile_status.replace(
+        flash_fire=state.volatile_status.flash_fire.at[1-attacker_idx].set(True))
+    return key, state.replace(volatile_status=volatile)
 
 def end_turn_damage(state: BattleState) -> BattleState:
+    """Apply the represented weather, terrain, ability, and status HP effects.
+
+    Both sides are updated through ``take_damage_percent``. The exact ordering,
+    including speed-dependent ordering and simultaneous knockouts, is incomplete.
+    """
     # TODO: the order of all these updates is probably incorrect
     # i think it should be like sand, sand, grass, grass
     # whereas this is currently sand, grass, sand grass,
@@ -180,33 +217,35 @@ def end_turn_damage(state: BattleState) -> BattleState:
 
     # sand damage
     sand_damage = (1 - is_sand_immune) / 16 * (state.weather.weather == WeatherEnum.SANDSTORM)
-    state = take_damage_percent(state, idx, sand_damage)
 
     # rain abilities
     rain_healing = ((active.ability==AbilityEnum.RAIN_DISH) + 2 * (active.ability==AbilityEnum.DRY_SKIN)) / 16 * (state.weather.weather == WeatherEnum.RAIN)
     # why is this one an int but the others arent
-    state = take_damage_percent(state, idx, -rain_healing)
 
     # sun abilities
     sun_damage = ((active.ability==AbilityEnum.DRY_SKIN) + (active.ability==AbilityEnum.SOLAR_POWER)) / 8 * (state.weather.weather == WeatherEnum.SUN)
-    state = take_damage_percent(state, idx, sun_damage)
 
     # snow abilities
     snow_healing = (active.ability==AbilityEnum.ICE_BODY) / 16 * (state.weather.weather == WeatherEnum.SNOW)
-    state = take_damage_percent(state, idx, -snow_healing)
 
 
     # grassy terrain healing
     grass_healing = (is_floating - 1) / 16 * (state.terrain.terrain == TerrainEnum.GRASSY)
-    state = take_damage_percent(state, idx, grass_healing)
 
     # status damage
     # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
     status_damage = (1 / 8 * (active.status==Status.POISON) +
                      1 / 16 * (active.status==Status.BURN) +
                      state.toxic_counter / 16 * (active.status==Status.TOXIC))
-    state = take_damage_percent(state, idx, status_damage)
-    return state
+    # Preserve effect-major, then player-major ordering while compiling one
+    # shared HP-update body. All fractions use the original active snapshot.
+    fractions = jnp.stack((sand_damage, -rain_healing, sun_damage,
+                           -snow_healing, grass_healing, status_damage))
+    causes = jnp.array([Cause.WEATHER] * 4 + [Cause.TERRAIN, Cause.STATUS], jnp.int32)
+    def apply_effect(s, effect):
+        percent, cause = effect
+        return take_damage_percent(s, idx, percent, cause=cause), None
+    return jax.lax.scan(apply_effect, state, (fractions, causes))[0]
 
 # TODO: at some point probably factor out part of this into like
 # just swapping out to implement baton pass idk
@@ -216,12 +255,23 @@ def swap_out(
     side_idx,
     new_active: int | jax.Array
 ) -> BattleState:
+    """Switch one side to a team slot and apply represented entry effects.
+
+    Stages, volatile state, toxic count, and Perish Song count are reset before
+    hazards and switch-in abilities run. A Pokémon fainting to entry hazards
+    does not run ``swap_is_alive``. Switch and hazard coverage is incomplete.
+
+    The supplied key is used for status effects; this helper currently returns
+    only state, so its caller must manage key consumption separately.
+    """
     # swaps the active pokemon and does appropriate things like
     # 1. clearing volatile statuses
     # 2. resting boosts
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
 
+    state = state.replace(event_source=jnp.asarray(side_idx, jnp.int32), event_move=jnp.int32(0), event_cause=jnp.int32(Cause.SWITCH))
+    state = emit(state, EventKind.SWITCH, side_idx, before=state.active_index[side_idx, 0], after=new_active)
     # clear boosts and volatile status from active pokemon, maybe add baton pass check here?
     state = clear_volatile_status(clear_boosts(state, side_idx), side_idx)
 
@@ -280,6 +330,7 @@ def swap_out(
 def swap_is_alive(
     state: BattleState,
     side_idx) -> BattleState:
+    """Apply represented weather, terrain, and Intimidate switch-in abilities."""
     active = state.active
     attacker = active[side_idx]
     defender_ability = active[1-side_idx].ability
@@ -318,6 +369,7 @@ def step_side_conditions(
     key: chex.PRNGKey,
     state: BattleState,
 ) -> Tuple[chex.PRNGKey, BattleState]:
+    """Decrement side timers and update toxic counters; return the unchanged key."""
     toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
     state = state.replace(
         reflect=jnp.maximum(state.reflect - 1, 0),
@@ -332,7 +384,10 @@ def step_moody(
     key: chex.PRNGKey,
     state: BattleState,
 ) -> Tuple[chex.PRNGKey, BattleState]:
-    # i think this needs to be a loop to make the random choices function work
+    """Apply represented Moody stage changes, splitting one key per side.
+
+    The fixed two-iteration loop is unrolled when tracing a singles battle.
+    """
     abilities = state.active.ability
     for i in range(2):
         key, sub_key = random.split(key, 2)
@@ -348,12 +403,21 @@ def step_moody(
 
 
 def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+    """Return unchanged key and state for an interrupted move (placeholder)."""
     # TODO: eventually we will need to figure out we handle observations and include it here
-    return key, state
+    return key, emit(state, EventKind.INTERRUPTED, attacker_index)
 
 def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+    """Consume one PP and dispatch the move if its implementation is enabled.
+
+    Unsupported moves consume PP but otherwise take the no-effect branch. The
+    caller is responsible for ensuring the selected move has PP remaining.
+    """
     move = state.active[attacker_index].moves[move_index]
 
+    state = state.replace(event_source=jnp.asarray(attacker_index, jnp.int32),
+                          event_move=move.identifier[0], event_cause=jnp.int32(Cause.MOVE))
+    state = emit(state, EventKind.MOVE, attacker_index, detail=move.identifier[0])
     # decrement pp
     # theoretically the legal action mask should prevent us from using the move if its at 0 so we dont need to clip
     move = move.replace(current_pp=move.current_pp-1)
@@ -367,6 +431,11 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
 
 def _apply_move_effects(key, state, attacker_index, move_index):
+    """Prepare a supported move and pass it to the accuracy stage.
+
+    Type-changing ability handling is incomplete: the locally modified move is
+    not yet passed to the downstream helper, which reloads it from state.
+    """
     move = state.active[attacker_index].moves[move_index]
     attacker_ability = state.active[attacker_index].ability
 
@@ -396,6 +465,11 @@ def _apply_move_effects(key, state, attacker_index, move_index):
 
 
 def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
+    """Sample accuracy and dispatch a hit or miss, returning the advanced key.
+
+    The calculation includes represented accuracy stages and abilities. The
+    final ``unused`` operand is retained for compatibility with branch calls.
+    """
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     active = state.active
@@ -423,6 +497,8 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         jnp.equal(defender_ability, AbilityEnum.NO_GUARD),
         jnp.equal(attacker_ability, AbilityEnum.NO_GUARD))
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
+    flash_fire = (defender_ability == AbilityEnum.FLASH_FIRE) & (move.type == Type.FIRE) & ~move.target_self
+    accuracy = jnp.where(flash_fire, 1., accuracy)
     accuracy = jnp.where(move.target_self, 1., accuracy)
 
     # choose function based on if move hits
@@ -432,15 +508,22 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
         key, state, attacker_index, move_index)
 
 def is_immune(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value):
-    return key, state
+    """Return unchanged state for the currently represented immunity branch."""
+    return key, emit(state, EventKind.IMMUNE, 1-attacker_idx)
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+    """Dispatch an implemented move after an accuracy check, or do nothing."""
     move = state.active[attacker_index].moves[move_index]
     return jax.lax.cond(move.implemented[0], _move_hits, move_misses,
                         key, state, attacker_index, move_index)
 
 
 def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+    """Select the represented hit outcome and record a pending pivot switch.
+
+    Ability and type immunities, status moves, and damaging moves share one
+    branch signature so ``lax.switch`` can trace each possible outcome.
+    """
 
     # decide branch to execute based on ability immunities
     defender = state.active[1 - attacker_index]
@@ -475,7 +558,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     immune = defender.is_immune_to_move(move, state.gravity_duration > 0)
     immune = jnp.logical_and(immune, ~not_bypass_move)
     is_status = jnp.logical_and(move.move_type == MoveType.STATUS, ~not_bypass_move & ~immune)
-    # this feels really hacky way to compute this but :shrug:
+    # Encode the selected outcome for lax.switch. Self-targeted status moves
+    # explicitly select the status branch instead of defender immunity branches.
     branch_index = (
             is_status +
             is_stat_boost * 2 +
@@ -503,7 +587,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
-    return key, state
+    """Return unchanged key and state for a miss or unsupported move."""
+    return key, emit(state, EventKind.MISS, 1-attacker_index, detail=state.active[attacker_index].moves[move_index].implemented[0])
 
 
 

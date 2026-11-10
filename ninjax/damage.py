@@ -103,7 +103,8 @@ def compute_base_damage(
         move: Move,
         power,
         attacker_status,
-        defender_status
+        defender_status,
+        flash_fire_boosted=False
 ) -> Array:
 
     offensive_stat = compute_offensive_stat(
@@ -115,6 +116,8 @@ def compute_base_damage(
         attacker_status
     )
 
+    offensive_stat = conditional_mult_round(offensive_stat, 1.5,
+        triple_and(jnp.asarray(flash_fire_boosted), attacker_ability == AbilityEnum.FLASH_FIRE, move.type == Type.FIRE))
     defensive_stat = compute_defensive_stat(defender_stats, defender_ability, defender_status, move.defensive_stat)
     # ruin abilities
     sword_of_ruin = attacker_ability==AbilityEnum.SWORD_OF_RUIN

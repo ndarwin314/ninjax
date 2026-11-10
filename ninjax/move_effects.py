@@ -18,6 +18,8 @@ from ninjax.utils import (
     in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
     conditional_mult_prod_round, conditional_mult_prod, one_point_three)
 
+from ninjax.events import Cause
+
 Array = chex.Array
 
 
@@ -88,7 +90,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
 
     # defender triggers
     is_rough_skin = (defender.ability == AbilityEnum.ROUGH_SKIN)[0]
-    state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin)
+    state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin, cause=Cause.CONTACT)
     is_static = defender.ability==AbilityEnum.STATIC
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
     is_point = defender.ability==AbilityEnum.POISON_POINT
