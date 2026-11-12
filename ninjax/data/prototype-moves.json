@@ -1,4 +1,5 @@
 {
+  "Protect": {"id": "protect", "num": 182, "type": "Normal", "category": "Status", "power": 0, "accuracy": 1, "priority": 4, "pp": 10, "contact": false},
   "Earthquake": {
     "id": "earthquake",
     "num": 89,
@@ -196,5 +197,82 @@
     "priority": 0,
     "pp": 5,
     "contact": false
+  },
+  "Bullet Seed": {
+    "id": "bulletseed",
+    "num": 331,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 25,
+    "accuracy": 1.0,
+    "priority": 0,
+    "pp": 30,
+    "contact": false
+  },
+  "Scale Shot": {
+    "id": "scaleshot",
+    "num": 799,
+    "type": "Dragon",
+    "category": "Physical",
+    "power": 25,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 20,
+    "contact": false
+  },
+  "Tail Slap": {
+    "id": "tailslap",
+    "num": 541,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 25,
+    "accuracy": 0.85,
+    "priority": 0,
+    "pp": 10,
+    "contact": true
+  },
+  "Rock Blast": {
+    "id": "rockblast",
+    "num": 350,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 25,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 10,
+    "contact": false
+  },
+  "Triple Axel": {
+    "id": "tripleaxel",
+    "num": 813,
+    "type": "Ice",
+    "category": "Physical",
+    "power": 20,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 10,
+    "contact": true
+  },
+  "Surging Strikes": {
+    "id": "surgingstrikes",
+    "num": 818,
+    "type": "Water",
+    "category": "Physical",
+    "power": 25,
+    "accuracy": 1.0,
+    "priority": 0,
+    "pp": 5,
+    "contact": true
+  },
+  "Population Bomb": {
+    "id": "populationbomb",
+    "num": 860,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 20,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 10,
+    "contact": true
   }
 }

@@ -19,6 +19,7 @@ class Pokemon(ArrayTree):
     """Team leaves use (2 players, 6 slots, features); moves add a move axis."""
     type_list: jax.Array
     moves: Move
+    base_types: jax.Array = None
     species: jax.Array = field(default_factory=lambda: jnp.int32([0]))
     item: jax.Array = field(default_factory=lambda: jnp.int32([0]))
     encore_move: jax.Array = field(default_factory=lambda: jnp.int32([-1]))
@@ -40,6 +41,7 @@ class Pokemon(ArrayTree):
     def __post_init__(self):
         batch = jnp.shape(self.type_list)[:-1]
         object.__setattr__(self, 'type_list', jnp.asarray(self.type_list, jnp.int32))
+        object.__setattr__(self, 'base_types', jnp.asarray(self.type_list if self.base_types is None else self.base_types, jnp.int32))
         object.__setattr__(self, 'stat_table', broadcast_tree(self.stat_table, batch))
         for name in ('species', 'item', 'encore_move', 'tera_type', 'is_alive', 'gender', 'is_terastallized', 'status', 'ability', 'sleep_counter', 'current_hp'):
             value = getattr(self, name)
@@ -86,7 +88,8 @@ class Pokemon(ArrayTree):
 
     @property
     def is_sand_immune(self):
-        return triple_or(self.is_type(Type.STEEL), self.is_type(Type.GROUND), self.is_type(Type.ROCK))
+        """Type immunity and Sand Force both prevent sandstorm chip damage."""
+        return triple_or(self.is_type(Type.STEEL), self.is_type(Type.GROUND), self.is_type(Type.ROCK)) | (self.ability == AbilityEnum.SAND_FORCE)
 
     @property
     def is_poison_immune(self):

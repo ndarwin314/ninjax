@@ -174,7 +174,9 @@ def test_stat_helper(neutral_type):
     status_helper(key, state.active[0], jnp.ones(1))
 
 
+@pytest.mark.jit
 def test_compiled_episode_reset_and_timeout(neutral_type):
+    """Compile reset and step through a terminal timeout decision."""
     key, battle_state = neutral_type
     env = Battle(teams=battle_state.team, params=BattleParams(max_steps_in_episode=1))
     state, first = jax.jit(env.reset)(key)
@@ -186,7 +188,9 @@ def test_compiled_episode_reset_and_timeout(neutral_type):
     assert next_state.turn == 1
 
 
+@pytest.mark.jit
 def test_compiled_damage_transforms(neutral_type):
+    """Validate damage transitions under actual jit, vmap, and scan."""
     key, state = neutral_type
 
     def hit(key, state):
@@ -558,7 +562,9 @@ def test_multiscale_reduces_attacks_only_at_full_hp(neutral_type):
     assert hit(state, 100, False).active.current_hp[1, 0] == hp - 100
 
 
+@pytest.mark.jit
 def test_flash_fire_activation_under_vmap_and_scan(neutral_type):
+    """Compile switch-cleared ability state across batched and scanned hits."""
     key, state = neutral_type
     moves = state.team.moves.replace(type=jnp.full_like(state.team.moves.type, Type.FIRE))
     team = state.team.replace(moves=moves, ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.FLASH_FIRE))
@@ -627,7 +633,9 @@ def test_transition_buffer_bounds_and_hp_clipping(neutral_type):
     assert jnp.all(full.events.valid)
 
 
+@pytest.mark.jit
 def test_full_observation_rollout_transforms(neutral_type):
+    """Compile full observations and terminal transitions in batched rollouts."""
     key, battle = neutral_type
     env = Battle(battle.team, BattleParams(max_steps_in_episode=1))
     def episode(key):

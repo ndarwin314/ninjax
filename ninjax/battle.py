@@ -122,12 +122,21 @@ class Battle(Environment):
                 "invalid_action": jnp.bool_(False)}
 
     def legal_action_mask(self, state):
+        """Mask moves and switches for the phase, including represented trapping."""
         battle = state.battle
         alive = (battle.team.current_hp[..., 0] > 0) & state.selected
         switches = alive & (jnp.arange(6)[None, :] != battle.active_index)
         active = battle.active
         moves = (active.moves.current_pp[..., 0] > 0) & ~active.moves.disabled[..., 0]
         moves &= (active.encore_move < 0) | (jnp.arange(4)[None, :] == active.encore_move)
+        from ninjax.enum_types import ItemEnum
+        items = active.item[:, 0]
+        choice = (items == ItemEnum.CHOICE_BAND) | (items == ItemEnum.CHOICE_SPECS)
+        lock = battle.volatile_status.choice_lock[:, 0]
+        moves &= ~choice[:, None] | (lock[:, None] < 0) | (jnp.arange(4)[None, :] == lock[:, None])
+        moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (active.moves.move_type[..., 0] != MoveType.STATUS)
+        trapped = (active.ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (active.current_hp[::-1, 0] > 0) & (active.ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(active.type_list == Type.GHOST, axis=1)
+        switches &= ~trapped[:, None] | (state.phase != Phase.TURN)
         forced = ~jnp.any(moves, axis=1) & (state.phase == Phase.TURN)
         moves &= state.phase == Phase.TURN
         mask = jnp.concatenate((moves, jnp.concatenate((forced[:, None], jnp.zeros((2, 3), bool)), axis=1), switches,
@@ -146,7 +155,18 @@ class Battle(Environment):
                              revealed=jnp.zeros((2, 6), bool).at[:, 0].set(not self.params.team_preview),
                              revealed_moves=jnp.zeros((2, 6, 4), bool))
         state = state.replace(phase=jnp.int32(Phase.TEAM_SELECTION if self.params.team_preview else Phase.TURN))
+        if not self.params.team_preview:
+            state = self._activate_entry_abilities(state)
         return state, restart(self.observe(state), shape=(2,), extras=self._extras(state))
+
+    def _activate_entry_abilities(self, state):
+        """Resolve initial abilities in speed order, including team preview starts."""
+        from ninjax.game_logic import swap_is_alive
+        from ninjax.held_effects import refresh_paradox
+        first, second = action_order(state.key, state.battle, jnp.zeros(2, jnp.int32))
+        battle = swap_is_alive(state.battle, first)
+        battle = swap_is_alive(battle, second)
+        return state.replace(battle=refresh_paradox(battle))
 
     def step(self, state: EpisodeState, action: chex.Array | BattleAction) -> tuple[EpisodeState, TimeStep[Observation]]:
         state = state.replace(battle=state.battle.replace(events=EventBuffer.empty()))
@@ -164,8 +184,9 @@ class Battle(Environment):
                 indices = jnp.argmax(selection, axis=1).astype(jnp.int32)
                 battle = current.battle.replace(active_index=indices[:, None], roster=selection)
                 revealed = jnp.zeros((2, 6), bool).at[jnp.arange(2), indices].set(True)
-                return current.replace(battle=battle, selected=selection, revealed=revealed,
-                                       phase=jnp.int32(Phase.TURN))
+                current = current.replace(battle=battle, selected=selection, revealed=revealed,
+                                          phase=jnp.int32(Phase.TURN))
+                return self._activate_entry_abilities(current)
             if self.params.team_preview:
                 return lax.cond(selecting,
                     lambda: (lax.cond(valid_selection, choose, lambda x: x, state),
@@ -217,6 +238,8 @@ class Battle(Environment):
                 key, battle = lax.cond(current.acting_player_mask[player],
                     lambda k, b: step_switch(k, b, player, actions[player] - 8, False),
                     lambda k, b: (k, b), current.key, current.battle)
+                from ninjax.held_effects import refresh_paradox
+                battle = refresh_paradox(battle)
                 battle = capture_conditions(current.battle, battle)
                 current = current.replace(key=key, battle=battle)
             return current.replace(acting_player_mask=jnp.zeros(2, bool))
@@ -235,6 +258,8 @@ class Battle(Environment):
                 key, battle = lax.cond(can_act,
                     lambda k, b: step_action(k, b, chosen, player),
                     lambda k, b: (k, b), current.key, current.battle)
+                from ninjax.held_effects import refresh_paradox
+                battle = refresh_paradox(battle)
                 battle = capture_conditions(current.battle, battle)
                 slot = current.battle.active_index[player, 0]
                 known = current.revealed_moves.at[player, slot, jnp.clip(chosen, 0, 3)].set(
@@ -463,6 +488,8 @@ def step_field(
     # weather, terrain, status, items (leftovers etc)
     state = end_turn_damage(state)
 
+    from ninjax.held_effects import leftovers, refresh_paradox
+    state = leftovers(state)
     key, state = step_moody(key, state)
     # Perish Song resolves at the end of the turn, using effective speed order.
     speeds = state.boosted_stats[:, StatEnum.SPEED]
@@ -485,4 +512,4 @@ def step_field(
         gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
     )
 
-    return key, state
+    return key, refresh_paradox(state)

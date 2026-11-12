@@ -36,6 +36,12 @@ class Move(ArrayTree):
     boost_stages: jax.Array = field(default_factory=lambda: jnp.array([0]))
     weather_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
     terrain_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
+    # 1 = one hit; 2 = Gen 9 two-to-five distribution; 3 = fixed three;
+    # 4 = Population Bomb's ten attempts. Accuracy is independently specified.
+    hit_rule: jax.Array = field(default_factory=lambda: jnp.array([1]))
+    per_hit_accuracy: jax.Array = field(default_factory=lambda: jnp.array([False]))
+    escalating_power: jax.Array = field(default_factory=lambda: jnp.array([False]))
+    always_crit: jax.Array = field(default_factory=lambda: jnp.array([False]))
     # 0 none, 1 Stealth Rock, 2 Sticky Web, 3 Spikes, 4 Toxic Spikes.
     hazard_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
 
@@ -43,7 +49,7 @@ class Move(ArrayTree):
         shape = jnp.shape(self.current_pp)
         for item in fields(self):
             name = item.name
-            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction') else jnp.int32)
+            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):

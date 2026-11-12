@@ -4,6 +4,7 @@ python -m ninjax.prototype --reference unit_tests/fixtures/showdown/battle-1.jso
 """
 import argparse
 import json
+from functools import lru_cache
 from pathlib import Path
 
 import jax
@@ -21,12 +22,25 @@ STAT_NAMES = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
 
 
 def make_move(name):
+    """Create a supported sandbox move or an unavailable placeholder."""
     data = CATALOGUE.get(name)
     supported = data is not None
     data = data or dict(type='Normal', category='Status', power=0, accuracy=1., priority=0, pp=0, num=0, contact=False)
     category = MoveType[data['category'].upper()]
     physical = category == MoveType.PHYSICAL
     effects = {}
+    if name in ('Bullet Seed', 'Scale Shot', 'Tail Slap', 'Rock Blast'):
+        effects['hit_rule'] = jnp.array([2])
+    if name in ('Triple Axel', 'Surging Strikes'):
+        effects['hit_rule'] = jnp.array([3])
+    if name == 'Population Bomb':
+        effects['hit_rule'] = jnp.array([4])
+    if name in ('Triple Axel', 'Population Bomb'):
+        effects['per_hit_accuracy'] = jnp.array([True])
+    if name == 'Triple Axel':
+        effects['escalating_power'] = jnp.array([True])
+    if name == 'Surging Strikes':
+        effects['always_crit'] = jnp.array([True])
     if name in ('U-turn', 'Volt Switch'):
         effects['switch_out'] = jnp.array([True])
     if name in ('Swords Dance', 'Nasty Plot'):
@@ -43,13 +57,16 @@ def make_move(name):
         effects.update(target_self=jnp.array([True]), terrain_effect=jnp.array([TerrainEnum.GRASSY]))
     if name == 'Recover':
         effects.update(target_self=jnp.array([True]), healing_fraction=jnp.array([.5]))
+    if name == 'Protect':
+        effects['target_self'] = jnp.array([True])
     pp = data['pp'] * 8 // 5
+    flags = (int(MoveFlags.CONTACT) if data['contact'] else 0) | (int(MoveFlags.BULLET) if name in ('Bullet Seed', 'Rock Blast') else 0) | (int(MoveFlags.PUNCHING) if name == 'Surging Strikes' else 0)
     return Move(move_type=jnp.array([int(category)]), max_pp=jnp.array([pp]), current_pp=jnp.array([pp]),
                 type=jnp.array([int(Type[data['type'].upper()])]), base_power=jnp.array([data['power']]),
                 accuracy=jnp.array([data['accuracy']]), priority=jnp.array([data['priority']]),
                 offensive_stat=jnp.array([1 if physical else 3]), defensive_stat=jnp.array([2 if physical else 4]),
                 crit_stage=jnp.array([0]), identifier=jnp.array([data['num']]),
-                move_flags=jnp.array([int(MoveFlags.CONTACT) if data['contact'] else 0]),
+                move_flags=jnp.array([flags]),
                 implemented=jnp.array([supported]), **effects)
 
 
@@ -101,10 +118,22 @@ def random_actions(key, mask):
 def run(reference_path, seed=0, max_decisions=1000):
     reference = json.loads(Path(reference_path).read_text())
     teams, omissions = make_sandbox_teams(reference)
-    env = Battle(teams, BattleParams())
+    result = _run_teams(teams, omissions, seed, max_decisions)
+    return {'reference_revision': reference['revision'], **result}
+
+
+@lru_cache(maxsize=4)
+def _sandbox_step(max_turns):
+    # Teams live in the dynamic state, so different samples share compilation.
+    env = Battle(params=BattleParams(max_steps_in_episode=max_turns))
+    return jax.jit(env.step)
+
+
+def _run_teams(teams, omissions, seed, max_decisions, max_turns=100):
+    env = Battle(teams, BattleParams(max_steps_in_episode=max_turns))
     key, battle_key = jax.random.split(jax.random.key(seed))
     state, timestep = env.reset(battle_key)
-    step = jax.jit(env.step)
+    step = _sandbox_step(max_turns)
     decisions = []
     for _ in range(max_decisions):
         if bool(timestep.last()):
@@ -119,17 +148,46 @@ def run(reference_path, seed=0, max_decisions=1000):
                           'hp': state.battle.active.current_hp[:, 0].tolist()})
     if not bool(timestep.last()):
         raise RuntimeError('Decision cap reached without termination')
-    return {'reference_revision': reference['revision'], 'seed': seed, 'sandbox': 'neutral abilities/items; unsupported moves unavailable',
+    return {'seed': seed, 'sandbox': 'neutral abilities/items; unsupported moves unavailable',
             'omissions': omissions, 'turns': int(state.turn), 'reward': timestep.reward.tolist(), 'decisions': decisions}
+
+
+
+def run_curated(path=None, seed=0, max_decisions=1000, max_turns=100, abilities=False, items=False):
+    """Generate and run two teams from curated exports, reporting all omissions."""
+    from ninjax.curated import DEFAULT_SETS, load_sets, make_sandbox_pool, make_ability_pool, make_item_pool, sample_teams
+    path = Path(path) if path is not None else DEFAULT_SETS
+    sets = load_sets(path)
+    pool, reports = make_item_pool(sets, abilities=abilities) if items else (make_ability_pool if abilities else make_sandbox_pool)(sets)
+    teams, indices = sample_teams(jax.random.fold_in(jax.random.key(seed), 0), pool)
+    chosen = indices.tolist()
+    omissions = [reports[i] for side in chosen for i in side]
+    result = _run_teams(teams, omissions, seed, max_decisions, max_turns)
+    if abilities:
+        result['sandbox'] = 'verified curated abilities enabled; neutral items; unsupported moves/abilities omitted'
+    if items:
+        result['sandbox'] = ('represented curated items enabled; ' +
+            ('represented abilities enabled' if abilities else 'neutral abilities') +
+            '; unsupported effects omitted')
+    return {**result, 'curated_source': str(path), 'set_indices': chosen,
+            'teams': [[sets[i].species for i in side] for side in chosen]}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--reference', required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--reference')
+    source.add_argument('--curated', nargs='?', const=str(Path(__file__).parent / 'data' / 'curated-sets.txt'))
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--output', default=None)
+    parser.add_argument('--abilities', action='store_true', help='Enable verified abilities with --curated')
+    parser.add_argument('--items', action='store_true', help='Enable represented items with --curated')
     args = parser.parse_args()
-    result = run(args.reference, args.seed)
+    if args.abilities and not args.curated:
+        parser.error('--abilities requires --curated')
+    if args.items and not args.curated:
+        parser.error('--items requires --curated')
+    result = run_curated(args.curated, args.seed, abilities=args.abilities, items=args.items) if args.curated else run(args.reference, args.seed)
     if args.output:
         Path(args.output).write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: v for k, v in result.items() if k not in ('decisions', 'omissions')}))

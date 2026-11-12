@@ -30,11 +30,12 @@ def after_every_hit(
         move: Move,
         is_crit: bool
 ):
+    """Apply the represented ability and contact effects after one hit."""
     defender_idx = 1 - attacker_idx
     defender = state.active[defender_idx]
     attacker = state.active[attacker_idx]
     #stamina
-    is_stamina = jnp.logical_and(defender.ability == AbilityEnum.STAMINA, defender.is_alive)
+    is_stamina = (defender.ability == AbilityEnum.STAMINA) & defender.is_alive
     state = conditional_add_boosts(state, defender_idx, is_stamina, StatEnum.DEFENSE, 1)
     # cotton down
     is_cotton_down = (defender.ability == AbilityEnum.COTTON_DOWN)
@@ -45,7 +46,7 @@ def after_every_hit(
     state = conditional_add_boosts(
         state,
         defender_idx,
-        jnp.logical_and(defender.ability==AbilityEnum.WEAK_ARMOR, move.move_type==MoveType.PHYSICAL),
+        (defender.ability==AbilityEnum.WEAK_ARMOR) & defender.is_alive & (move.move_type==MoveType.PHYSICAL),
         (StatEnum.DEFENSE, StatEnum.SPEED), (-1, 2)
     )
     # anger point
@@ -56,7 +57,7 @@ def after_every_hit(
     state = conditional_add_boosts(
         state,
         defender_idx,
-        jnp.logical_and(defender.ability==AbilityEnum.WEAK_ARMOR, move.type==Type.FIRE),
+        (defender.ability==AbilityEnum.THERMAL_EXCHANGE) & defender.is_alive & (move.type==Type.FIRE),
         StatEnum.ATTACK, 1
     )
     # do on contact effects
@@ -89,12 +90,15 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
     key, def_key, attack_key = random.split(key, 3)
 
     # defender triggers
+    from ninjax.enum_types import ItemEnum
+    helmet = (defender.item == ItemEnum.ROCKY_HELMET)[0]
+    state = take_damage_percent(state, attacker_idx, helmet / 6, cause=Cause.CONTACT)
     is_rough_skin = (defender.ability == AbilityEnum.ROUGH_SKIN)[0]
     state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin, cause=Cause.CONTACT)
     is_static = defender.ability==AbilityEnum.STATIC
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
     is_point = defender.ability==AbilityEnum.POISON_POINT
-    is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-defender.is_powder_immune)
+    is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-attacker.is_powder_immune)
     r = random.uniform(def_key)
     triggered = jnp.less_equal(r, 0.3)
     status = (effect_spore_status(r) * is_effect_spore +

@@ -385,3 +385,22 @@ class AbilityEnum(JaxEnum):
     TOXIC_DEBRIS = auto()
 
 
+
+
+class ItemEnum(JaxEnum):
+    NONE = 0
+    LIFE_ORB = auto()
+    HEAVY_DUTY_BOOTS = auto()
+    CHOICE_SPECS = auto()
+    ASSAULT_VEST = auto()
+    WEAKNESS_POLICY = auto()
+    LIGHT_CLAY = auto()
+    LOADED_DICE = auto()
+    ROCKY_HELMET = auto()
+    LEFTOVERS = auto()
+    MENTAL_HERB = auto()
+    FOCUS_SASH = auto()
+    BOOSTER_ENERGY = auto()
+    CHOICE_BAND = auto()
+    SITRUS_BERRY = auto()
+    THROAT_SPRAY = auto()

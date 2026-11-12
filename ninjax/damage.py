@@ -25,7 +25,8 @@ def compute_base_power(
         attacker: Pokemon,
         defender: Pokemon,
         move: Move,
-        terrain: Terrain) -> chex.Array:
+        terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False) -> chex.Array:
+    """Calculate represented power modifiers, including grounded terrain effects."""
     power = move.base_power
     ability = attacker.ability
     #TODO: tera boost
@@ -44,6 +45,10 @@ def compute_base_power(
     power = conditional_mult_round(power, 3/4, jnp.logical_and(aura, aura_break))
 
 
+    from ninjax.held_effects import conditional_mult_round as fixed_modifier
+    power = fixed_modifier(power, 5325/4096,
+        (ability == AbilityEnum.SAND_FORCE) & (weather == WeatherEnum.SANDSTORM) &
+        ((move.type == Type.ROCK) | (move.type == Type.GROUND) | (move.type == Type.STEEL)))
     #technician
     is_technician = ability==AbilityEnum.TECHNICIAN
     is_technician_boosted = jnp.logical_and(
@@ -66,7 +71,7 @@ def compute_base_power(
     )
     power = conditional_mult(power, 1.5, is_flare_boosted)
 
-    is_grounded = 1 - attacker.is_floating
+    is_grounded = ~attacker.is_floating | jnp.asarray(gravity_active)
     t = terrain.terrain
     terrain_boosted = triple_or(
         jnp.logical_and(move.type==Type.GRASS, t==TerrainEnum.GRASSY),
@@ -75,6 +80,11 @@ def compute_base_power(
     )
     terrain_boosted = jnp.logical_and(terrain_boosted, is_grounded)
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, terrain_boosted)
+    grounded_target = ~defender.is_floating | jnp.asarray(gravity_active)
+    # Earthquake (Showdown move ID 89) is weakened by Grassy Terrain.
+    weakened = ((t == TerrainEnum.GRASSY) & (move.identifier == 89)) | (
+        (t == TerrainEnum.MISTY) & (move.type == Type.DRAGON))
+    power = conditional_mult_round(power, .5, grounded_target & weakened)
 
     ability = attacker.ability
     # TODO: similar to with the low health abilities, we could put the conditions in an array and put mults in array
@@ -106,7 +116,7 @@ def compute_base_damage(
         defender_status,
         flash_fire_boosted=False
 ) -> Array:
-
+    """Compute base damage using selected stats and represented Ruin modifiers."""
     offensive_stat = compute_offensive_stat(
         attacker_stats[move.offensive_stat],
         attacker_ability,
@@ -119,20 +129,21 @@ def compute_base_damage(
     offensive_stat = conditional_mult_round(offensive_stat, 1.5,
         triple_and(jnp.asarray(flash_fire_boosted), attacker_ability == AbilityEnum.FLASH_FIRE, move.type == Type.FIRE))
     defensive_stat = compute_defensive_stat(defender_stats, defender_ability, defender_status, move.defensive_stat)
+    from ninjax.held_effects import conditional_mult_round as fixed_modifier
     # ruin abilities
-    sword_of_ruin = attacker_ability==AbilityEnum.SWORD_OF_RUIN
-    beads_of_ruin = attacker_ability == AbilityEnum.BEADS_OF_RUIN
-    defensive_stat = conditional_mult_round(
+    sword_of_ruin = (attacker_ability==AbilityEnum.SWORD_OF_RUIN) & (defender_ability != AbilityEnum.SWORD_OF_RUIN)
+    beads_of_ruin = (attacker_ability == AbilityEnum.BEADS_OF_RUIN) & (defender_ability != AbilityEnum.BEADS_OF_RUIN)
+    defensive_stat = fixed_modifier(
         defensive_stat,
         0.75,
         jnp.logical_or(
-            jnp.logical_and(sword_of_ruin, defensive_stat==StatEnum.DEFENSE),
-            jnp.logical_and(beads_of_ruin, defensive_stat==StatEnum.SPECIAL_DEFENSE)
+            jnp.logical_and(sword_of_ruin, move.defensive_stat==StatEnum.DEFENSE),
+            jnp.logical_and(beads_of_ruin, move.defensive_stat==StatEnum.SPECIAL_DEFENSE)
         ))
     # i hate body press so much why is it so stupid
-    vessel_of_ruin = defender_ability==AbilityEnum.VESSEL_OF_RUIN
-    tablets_of_ruin = defender_ability==AbilityEnum.TABLETS_OF_RUIN
-    offensive_stat = conditional_mult_round(
+    vessel_of_ruin = (defender_ability==AbilityEnum.VESSEL_OF_RUIN) & (attacker_ability != AbilityEnum.VESSEL_OF_RUIN)
+    tablets_of_ruin = (defender_ability==AbilityEnum.TABLETS_OF_RUIN) & (attacker_ability != AbilityEnum.TABLETS_OF_RUIN)
+    offensive_stat = fixed_modifier(
         offensive_stat,
         0.75,
         jnp.logical_or(
@@ -141,6 +152,13 @@ def compute_base_damage(
         )
     )
 
+
+    # A defending Sword of Ruin also lowers the attacker's Defense when
+    # Body Press selects Defense as its offensive stat. Holders are exempt.
+    offensive_stat = fixed_modifier(offensive_stat, .75,
+        (defender_ability == AbilityEnum.SWORD_OF_RUIN) &
+        (attacker_ability != AbilityEnum.SWORD_OF_RUIN) &
+        (move.offensive_stat == StatEnum.DEFENSE))
 
     level_factor = jnp.floor(2 * level / 5) + 2
     base_damage = jnp.floor(jnp.floor(level_factor * power * offensive_stat / defensive_stat) / 50) + 2

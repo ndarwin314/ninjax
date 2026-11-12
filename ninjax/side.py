@@ -30,6 +30,12 @@ class VolatileStatus(struct.PyTreeNode):
 
     Confusion and Transform fields reserve state; their mechanics are not yet implemented.
     """
+    paradox_stat: Array = field(default_factory=lambda: -jnp.ones((2, 1), dtype=jnp.int32))
+    paradox_booster: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    choice_lock: Array = field(default_factory=lambda: -jnp.ones((2, 1), dtype=jnp.int32))
+    protected: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    protect_chain: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    libero_used: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
     flash_fire: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
     confusion_turns: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     transformed: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
@@ -53,9 +59,12 @@ class BattleState(struct.PyTreeNode):
     batched by applying ``jax.vmap`` outside these player axes.
 
     ``winner`` is -1 until set, otherwise a player index; ``perish_turns`` uses
-    -1 for an inactive counter. This state stores mechanics, not observations.
+    -1 for an inactive counter. Mechanics and public item-reveal memory live
+    here; player-relative observations are constructed separately.
     """
     team: Pokemon
+    # Publicly revealed held items by owner and team slot; -1 means unknown.
+    known_items: Array = field(default_factory=lambda: -jnp.ones((2, 6), dtype=jnp.int32))
     events: EventBuffer = field(default_factory=EventBuffer.empty)
     event_source: Array = field(default_factory=lambda: jnp.int32(-1))
     event_cause: Array = field(default_factory=lambda: jnp.int32(0))
@@ -207,7 +216,9 @@ class BattleState(struct.PyTreeNode):
         stats = stats.at[..., StatEnum.SPEED].set(temp)
 
 
-        return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
+        from ninjax.held_effects import modify_stats
+        stats = jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
+        return jax.vmap(lambda i, values: modify_stats(self, i, values))(jnp.arange(2), stats)
 
     @property
     def accuracy_boosts(self):
@@ -301,16 +312,23 @@ def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val, boun
                         lambda state, side_idx, idx, val, bounceable: state,
                         state, side_idx, idx, val, bounceable)
 
+# Reuse this update graph across hit, item, and status branches during tracing.
+@jax.jit
 def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState:
     """Write a modified active Pokémon back into its team's current slot."""
-    new_team = state.team.replace_row((side_idx, state[side_idx].active_index), new_mon)
-    old = state.active.status[side_idx, 0]
+    # Index only the needed leaves, rather than constructing a complete side
+    # view and gathering every active Pokémon field on every update.
+    slot = state.active_index[side_idx]
+    new_team = state.team.replace_row((side_idx, slot), new_mon)
+    old = state.team.status[side_idx, state.active_index[side_idx, 0], 0]
     state = state.replace(team=new_team)
     return emit(state, EventKind.STATUS, side_idx, before=old, after=new_mon.status[0], enabled=old != new_mon.status[0])
 
 def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     """Reset all represented switch-cleared effects for one active side."""
     volatile = jax.tree.map(lambda value: value.at[side_idx].set(jnp.zeros_like(value[side_idx])), state.volatile_status)
+    volatile = volatile.replace(paradox_stat=volatile.paradox_stat.at[side_idx].set(-1),
+                                choice_lock=volatile.choice_lock.at[side_idx].set(-1))
     return state.replace(volatile_status=volatile)
 
 
@@ -354,7 +372,7 @@ def status_helper(key, active, status: Status):
 def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> Tuple[chex.PRNGKey, BattleState]:
     """Attempt a major status, returning the key and updated battle state.
 
-    Existing status, the represented type/ability immunities, and a NONE status
+    Existing status, represented terrain/type/ability immunities, and a NONE status
     prevent the update. A key is consumed only when ``status_helper`` runs.
     """
     active = state.active[side_idx]
@@ -366,7 +384,12 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         jnp.logical_and(status==Status.BURN, active.is_burn_immune),
         jnp.logical_and(status==Status.FREEZE, active.is_freeze_immune),
         jnp.logical_and(status==Status.SLEEP, active.is_sleep_immune),
-        is_comatose
+        is_comatose,
+        # Misty Terrain prevents major status on grounded targets; Electric
+        # Terrain specifically prevents sleep. Gravity grounds Flying/Levitate.
+        ((~active.is_floating | (state.gravity_duration > 0)) &
+         ((state.terrain.terrain == TerrainEnum.MISTY) |
+          ((state.terrain.terrain == TerrainEnum.ELECTRIC) & (status == Status.SLEEP))))
     ]))
     key, active = jax.lax.cond(
         triple_or(already_statused, is_immune, status==Status.NONE)[0],
@@ -375,6 +398,9 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         key, active, status)
     return key, update_active(state, side_idx, active)
 
+# Damage is invoked by many residual/contact branches. Outlining the shared
+# operation avoids retracing its complete ability/item/event graph at each call.
+@jax.jit
 def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage) -> BattleState:
     """Apply signed HP damage to an active Pokémon and return updated state.
 
@@ -398,7 +424,13 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
     over_half = jnp.greater_equal(old_health/defender.max_hp, 0.5)
     new_health = jax.lax.clamp(0, old_health-damage, jnp.asarray(defender.max_hp).reshape(()))
     sturdy_survives = health_full & is_sturdy & jnp.asarray(is_attack_damage) & (damage > 0) & (new_health == 0)
-    new_health = jnp.maximum(new_health, sturdy_survives.astype(new_health.dtype))
+    from ninjax.enum_types import ItemEnum
+    sash = health_full & (defender.item == ItemEnum.FOCUS_SASH) & jnp.asarray(is_attack_damage) & (damage > 0) & (new_health == 0) & ~sturdy_survives
+    new_health = jnp.maximum(new_health, (sturdy_survives | sash).astype(new_health.dtype))
+    state = emit(state, EventKind.ITEM, defender_idx, detail=ItemEnum.FOCUS_SASH, enabled=sash)
+    from ninjax.ability_effects import remember_item
+    state = remember_item(state, defender_idx, ItemEnum.NONE, sash)
+    defender = defender.replace(item=jnp.where(sash, ItemEnum.NONE, defender.item))
     under_half = jnp.less(new_health/defender.max_hp, 0.5)
 
     # check to make sure we don't accidentally revive a pokemon
@@ -442,7 +474,8 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
     # this keeps active the same if current_hp!=0 and sets field as empty otherwise
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
-    return update_active(state, defender_idx, defender)
+    from ninjax.held_effects import after_hp_change
+    return after_hp_change(update_active(state, defender_idx, defender), defender_idx)
 
 def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
     """Apply stages after optionally ignoring negative or positive stages."""

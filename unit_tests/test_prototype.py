@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import jax
+import pytest
 import jax.numpy as jnp
 import numpy as np
 
@@ -50,7 +51,9 @@ def test_damage_boosts_use_each_players_stages():
     assert defense[2] == 100
 
 
+@pytest.mark.jit
 def test_complete_trace_derived_sandbox():
+    """Complete the reference-projected acceptance battle with compilation."""
     result = run(REFERENCE, seed=0)
     assert 0 < result['turns'] <= 100
     assert len(result['decisions']) < 1000

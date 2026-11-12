@@ -1,0 +1,272 @@
+
+
+Koraidon @ Life Orb
+Ability: Orichalcum Pulse
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Flare Blitz
+- Close Combat
+- Scale Shot
+- Swords Dance
+
+Pelipper @ Heavy-Duty Boots
+Ability: Drizzle
+EVs: 248 HP / 252 Def / 8 SpA
+Bold Nature
+- Weather Ball
+- Hurricane
+- U-turn
+- Roost
+
+Miraidon @ Choice Specs
+Ability: Hadron Engine
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+- Electro Drift
+- Draco Meteor
+- Volt Switch
+- Parabolic Charge
+
+Archaludon @ Assault Vest
+Ability: Stamina
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+- Electro Shot
+- Body Press
+- Dragon Pulse
+- Flash Cannon
+
+Tyranitar @ Weakness Policy
+Ability: Sand Stream
+EVs: 4 HP / 252 Atk / 252 Spe
+Adamant Nature
+- Knock Off
+- Rock Slide
+- Low Kick
+- Dragon Dance
+
+Ninetales-Alola @ Light Clay
+Ability: Snow Warning
+EVs: 252 HP / 4 SpA / 252 Spe
+Timid Nature
+- Aurora Veil
+- Blizzard
+- Disable
+- Encore
+
+Rillaboom @ Loaded Dice
+Ability: Grassy Surge
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Bullet Seed
+- Grassy Glide
+- Earthquake
+- U-turn
+
+Indeedee @ Rocky Helmet
+Ability: Psychic Surge
+EVs: 252 HP / 4 Atk / 252 SpD
+Sassy Nature
+- Expanding Force
+- Trick Room
+- Fake Out
+- Trick
+
+Weezing-Galar @ Leftovers
+Ability: Misty Surge
+EVs: 252 HP / 4 Atk / 252 SpD
+Careful Nature
+- Destiny Bond
+- Explosion
+- Will-O-Wisp
+- Haze
+
+Cinderace @ Life Orb
+Ability: Libero
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Pyro Ball
+- Court Change
+- Gunk Shot
+- High Jump Kick
+
+Altaria @ Mental Herb
+Ability: Cloud Nine
+EVs: 252 HP / 4 Def / 252 SpD
+Calm Nature
+- Will-O-Wisp
+- Tailwind
+- Defog
+- Perish Song
+
+Smeargle @ Focus Sash
+Ability: Moody
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Ceaseless Edge
+- Sticky Web
+- Stone Axe
+- Extreme Speed
+
+Flutter Mane @ Booster Energy
+Ability: Protosynthesis
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+- Moonblast
+- Shadow Ball
+- Night Shade
+- Psyshock
+
+Chi-Yu @ Choice Specs
+Ability: Beads of Ruin
+EVs: 252 SpA / 4 SpD / 252 Spe
+Timid Nature
+- Dark Pulse
+- Ruination
+- Overheat
+- Flamethrower
+
+Chien-Pao @ Choice Band
+Ability: Sword of Ruin
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Sucker Punch
+- Icicle Crash
+- Crunch
+- Sacred Sword
+
+Ting-Lu @ Sitrus Berry
+Ability: Vessel of Ruin
+EVs: 252 HP / 4 Atk / 252 Def
+Relaxed Nature
+- Ruination
+- Spikes
+- Whirlwind
+- Stomping Tantrum
+
+Iron Treads @ Booster Energy
+Ability: Quark Drive
+EVs: 4 Atk / 252 SpA / 252 Spe
+Naive Nature
+- Rapid Spin
+- Volt Switch
+- Earth Power
+- Heavy Slam
+
+Amoonguss @ Rocky Helmet
+Ability: Regenerator
+EVs: 248 HP / 252 SpA / 8 SpD
+Modest Nature
+- Spore
+- Giga Drain
+- Clear Smog
+- Foul Play
+
+Excadrill @ Life Orb
+Ability: Sand Force
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Earthquake
+- Iron Head
+- Brick Break
+- Stealth Rock
+
+Gothitelle @ Leftovers
+Ability: Shadow Tag
+EVs: 252 HP / 252 SpA / 4 SpD
+Modest Nature
+- Rest
+- Sleep Talk
+- Calm Mind
+- Stored Power
+
+Espathra @ Leftovers
+Ability: Frisk
+EVs: 252 HP / 4 Atk / 252 Spe
+Hasty Nature
+- Lumina Crash
+- Quick Attack
+- Substitute
+- Light Screen
+
+Sylveon @ Throat Spray
+Ability: Pixilate
+EVs: 252 HP / 4 Atk / 252 SpA
+Quiet Nature
+- Hyper Voice
+- Hyper Beam
+- Quick Attack
+- Psyshock
+
+Urshifu-Rapid-Strike @ Protective Pads
+Ability: Unseen Fist
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Surging Strikes
+- Ice Spinner
+- Taunt
+- Protect
+
+Maushold @ King's Rock
+Ability: Friend Guard
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Population Bomb
+- Beat Up
+- Super Fang
+- Switcheroo
+
+Meowscarada
+Ability: Protean
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Triple Axel
+- Flower Trick
+- Worry Seed
+- Acrobatics
+
+Cinccino @ Heavy-Duty Boots
+Ability: Skill Link
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Bullet Seed
+- Tail Slap
+- Triple Axel
+- Rock Blast
+
+Cinccino @ Focus Sash
+Ability: Technician
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Bullet Seed
+- Triple Axel
+- Tail Slap
+- Endeavor
+
+Gastrodon @ Absorb Bulb
+Ability: Storm Drain
+EVs: 252 HP / 4 Def / 252 SpD
+Calm Nature
+IVs: 0 Atk
+- Pain Split
+- Memento
+- Recover
+- Spikes
+
+Ogerpon-Wellspring (F) @ Wellspring Mask
+Ability: Water Absorb
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Ivy Cudgel
+- Horn Leech
+- Encore
+- Spiky Shield
+
+Ceruledge @ Weakness Policy
+Ability: Weak Armor
+EVs: 252 Atk / 4 SpD / 252 Spe
+Jolly Nature
+- Poltergeist
+- Bitter Blade
+- Destiny Bond
+- Disable

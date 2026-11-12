@@ -14,6 +14,9 @@
 - Use explicit PRNG keys for randomness.
 - Aim for parity with gen 9 scarlet and violet mechanics
 - Look towards future compatibility with slightly different versions of mechanics
+- Add docstrings to functions you modify or create
+- Add comments to code in difficult to understand locations
+- Add comments to explain what mechanic different parts of the code are implementing
 
 ## Workflow
 - Inspect existing code before making changes.
