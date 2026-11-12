@@ -36,6 +36,7 @@ class Cause(IntEnum):
     TERRAIN = 8
     STATUS = 9
     PERISH = 10
+    CONFUSION = 11
 
 @struct.dataclass
 class TransitionEvents:
@@ -150,7 +151,9 @@ def capture_conditions(before, after):
     """Record field/side changes not already emitted by HP/status/stage helpers.
 
     CONDITION detail IDs: hazards 0..3, screens 4..6, tailwind 7,
-    Perish Song 8, Flash Fire 9, Trick Room 10, gravity 11.
+    Perish Song 8, Flash Fire 9, Trick Room 10, gravity 11, confusion 12,
+    Substitute 13, charging move ID 14, recharge 15. Volatile lifecycle events
+    are emitted directly by their corresponding helpers.
     """
     kinds, targets, details, old, new = [], [], [], [], []
     def add(kind, target, detail, a, b):

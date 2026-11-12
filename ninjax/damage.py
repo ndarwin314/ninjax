@@ -9,7 +9,7 @@ import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import boosted_stats_helper
+from ninjax.side import boosted_stats_helper, is_floating
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.utils import (
@@ -27,7 +27,12 @@ def compute_base_power(
         move: Move,
         terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False) -> chex.Array:
     """Calculate represented power modifiers, including grounded terrain effects."""
-    power = move.base_power
+    from ninjax.held_effects import conditional_mult_round as fixed_modifier
+    power = fixed_modifier(move.base_power, 1.5,
+        (move.identifier == 797) & (terrain.terrain == TerrainEnum.PSYCHIC) &
+        (~is_floating(attacker) | jnp.asarray(gravity_active)))
+    power = fixed_modifier(power, 5461/4096,
+        (move.identifier == 879) & (calculate_effectiveness_multiplier(move.type, defender.type_list) > 1))
     ability = attacker.ability
     #TODO: tera boost
     # TODO at some point test if this can be optimized by putting all the values in arrays and doing one conditional mult round
@@ -71,7 +76,7 @@ def compute_base_power(
     )
     power = conditional_mult(power, 1.5, is_flare_boosted)
 
-    is_grounded = ~attacker.is_floating | jnp.asarray(gravity_active)
+    is_grounded = ~is_floating(attacker) | jnp.asarray(gravity_active)
     t = terrain.terrain
     terrain_boosted = triple_or(
         jnp.logical_and(move.type==Type.GRASS, t==TerrainEnum.GRASSY),
@@ -80,7 +85,7 @@ def compute_base_power(
     )
     terrain_boosted = jnp.logical_and(terrain_boosted, is_grounded)
     power = conditional_mult_round(power, TERRAIN_MULTIPLIER, terrain_boosted)
-    grounded_target = ~defender.is_floating | jnp.asarray(gravity_active)
+    grounded_target = ~is_floating(defender) | jnp.asarray(gravity_active)
     # Earthquake (Showdown move ID 89) is weakened by Grassy Terrain.
     weakened = ((t == TerrainEnum.GRASSY) & (move.identifier == 89)) | (
         (t == TerrainEnum.MISTY) & (move.type == Type.DRAGON))

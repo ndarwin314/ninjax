@@ -17,6 +17,7 @@
 - Add docstrings to functions you modify or create
 - Add comments to code in difficult to understand locations
 - Add comments to explain what mechanic different parts of the code are implementing
+- Skip compiled steps unless requested or major changes have been made
 
 ## Workflow
 - Inspect existing code before making changes.
