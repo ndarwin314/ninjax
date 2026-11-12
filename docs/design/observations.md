@@ -4,15 +4,19 @@
 boolean, or floating-point types. Each leaf starts with the observer axis `(2,)`;
 `vmap` over battles adds an outer batch axis. Side axes are always self, opponent.
 
-- `team`: arrays `(2, 2, 6, ...)` for species, types, HP, status, stats,
+- `team`: arrays `(2, 2, 6, ...)` for species, form, types, HP, status, stats,
   nature, ability, item, move IDs, PP, disabled flags, and participation.
-  `species_known`, `hp_known`, `item_known`, `sheet_known`, and `moves_known` mark visibility.
+  `species_known`, `hp_known`, `ability_known`, `item_known`, `sheet_known`, and `moves_known` mark visibility.
   Own information is available in full. Hidden opponents reveal species, HP,
-  status, types, and used moves through the existing reveal tracking. Species
+  form, status, types, and used moves through the existing reveal tracking. Form
+  follows species visibility; zero means no represented special form. Species
   preview reveals all species; open sheets additionally reveal ability, item,
   nature, and moves. Opponent exact HP, stats, PP, and participation are zeroed.
 - `active`: active team slots `(2, 2)`, normal stages `(2, 2, 6)`, accuracy/evasion
-  stages `(2, 2, 2)`, Flash Fire flags and Perish Song counters `(2, 2)`.
+  stages `(2, 2, 2)`, Flash Fire flags, Perish Song counters and confusion
+  flags and Substitute presence `(2, 2)`. Confusion duration and remaining
+  Substitute HP are hidden from observations. Charging move IDs and recharge
+  flags are public `(2, 2)` leaves; their lifecycle events use details 14 and 15.
 - `sides`: public hazards and screen/tailwind counters, each `(2, 2)`.
 - `field`: turn, weather, terrain, durations, Trick Room and gravity, each `(2,)`.
 - `decision`: phase, acting flag, legacy legal-action mask `(2, 15)` and team
@@ -53,7 +57,9 @@ Weather/terrain and other represented public condition changes are recorded at
 action/replacement/field boundaries, after that boundary's primitive events.
 Their before/after values describe the net change at that boundary, not every
 internal callback. Conditions include hazards, screens, tailwind, Perish Song,
-Flash Fire, Trick Room and gravity; detail IDs are documented in `events.py`.
+Flash Fire, Trick Room and gravity; confusion start/end uses condition detail
+12 without exposing its duration; Substitute uses detail 13 without exposing
+remaining HP. Other detail IDs are documented in `events.py`.
 Move use, misses, immunities and interrupted moves also generate events. An
 unsupported move follows the existing no-effect path, with MISS detail 0;
 an ordinary miss has detail 1. The log does not imply additional mechanics exist.

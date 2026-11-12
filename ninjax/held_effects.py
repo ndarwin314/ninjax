@@ -15,8 +15,9 @@ def conditional_mult_round(value, multiplier, enabled):
 
 
 def effective_weather(state):
-    suppressed = jnp.any(((state.active.ability == A.CLOUD_NINE) |
-                          (state.active.ability == A.AIR_LOCK)) & (state.active.current_hp > 0))
+    """Return weather after active effective ability suppression is applied."""
+    suppressed = jnp.any(((state.ability == A.CLOUD_NINE) |
+                          (state.ability == A.AIR_LOCK)) & (state.active.current_hp > 0))
     return jnp.where(suppressed, W.NONE, state.weather.weather)
 
 
@@ -39,7 +40,7 @@ def modify_stats(state, player, stats):
     """
     from ninjax.enum_types import Type
     mon = state.active[player]
-    item, ability = mon.item[0], mon.ability[0]
+    item, ability = mon.item[0], state.ability[player, 0]
     indices = jnp.arange(6)
     weather = effective_weather(state)
     choice = ((indices == S.ATTACK) & (item == I.CHOICE_BAND)) | ((indices == S.SPECIAL_ATTACK) & (item == I.CHOICE_SPECS))
@@ -60,7 +61,7 @@ def modify_stats(state, player, stats):
 
 def refresh_paradox(state):
     """Activate once per field effect, retaining the chosen stat until it ends."""
-    ability = state.active.ability[:, 0]
+    ability = state.ability[:, 0]
     field = ((ability == A.PROTOSYNTHESIS) & (effective_weather(state) == W.SUN)) | (
              (ability == A.QUARK_DRIVE) & (state.terrain.terrain == T.ELECTRIC))
     eligible = (ability == A.PROTOSYNTHESIS) | (ability == A.QUARK_DRIVE)

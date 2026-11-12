@@ -119,7 +119,7 @@ def make_sandbox_pool(sets):
             moves=[re.sub('[^a-z0-9]', '', m.lower()) for m in config.moves],
             evs=dict(zip(STAT_NAMES, config.evs)), ivs=dict(zip(STAT_NAMES, config.ivs))),
             nature=dict(plus=plus, minus=minus), baseStats=species['baseStats'],
-            types=species['types']))
+            types=species['types'], weight_hg=round(species['weightkg'] * 10)))
     if len(records) < 6:
         raise ValueError('At least six curated sets are required')
     # Reuse the prototype projection so omissions have identical semantics.
@@ -195,6 +195,8 @@ CURATED_ITEMS = {
     'Leftovers': 'LEFTOVERS', 'Focus Sash': 'FOCUS_SASH',
     'Booster Energy': 'BOOSTER_ENERGY', 'Sitrus Berry': 'SITRUS_BERRY',
     'Throat Spray': 'THROAT_SPRAY',
+    'Light Clay': 'LIGHT_CLAY',
+    'Mental Herb': 'MENTAL_HERB',
 }
 
 

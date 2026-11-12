@@ -85,7 +85,9 @@ def test_curated_item_projection():
     i = next(i for i, s in enumerate(sets) if s.species == 'Flutter Mane')
     assert pool.ability[i, 0] == AbilityEnum.PROTOSYNTHESIS
     i = next(i for i, s in enumerate(sets) if s.species == 'Altaria')
-    assert pool.item[i, 0] == ItemEnum.NONE and reports[i]['item'] == 'Mental Herb'
+    assert pool.item[i, 0] == ItemEnum.MENTAL_HERB and reports[i]['item'] is None
+    i = next(i for i, s in enumerate(sets) if s.species == 'Gastrodon')
+    assert pool.item[i, 0] == ItemEnum.NONE and reports[i]['item'] == 'Absorb Bulb'
     teams, indices = jax.jit(sample_teams)(jax.random.key(3), pool)
     assert jnp.array_equal(teams.item, pool.item[indices])
 

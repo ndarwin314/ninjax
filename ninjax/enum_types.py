@@ -12,6 +12,14 @@ class JaxEnum(IntEnum):
     def __hash__(self):
         return self.value
 
+class FormEnum(JaxEnum):
+    """Stable battle form IDs; zero covers forms without special move rules."""
+    DEFAULT = 0
+    OGERPON_WELLSPRING = 1
+    OGERPON_HEARTHFLAME = 2
+    OGERPON_CORNERSTONE = 3
+
+
 class Type(JaxEnum):
     NONE = 0
     NORMAL = auto()
@@ -88,6 +96,8 @@ class MoveFlags(IntFlag):
     HEALING = auto()
     BITING = auto()
     POWDER = auto()
+    DEFROST = auto()
+    BYPASS_SUBSTITUTE = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
@@ -131,7 +141,6 @@ class AbilityEnum(JaxEnum):
     COMPOUND_EYES = auto() # done
     NO_GUARD = auto() # done
     INSOMNIA = auto() # done
-    VITAL_SPIRIT = INSOMNIA
     COLOR_CHANGE = auto()
     IMMUNITY = auto() # done
     SHIELD_DUST = auto()
@@ -383,6 +392,9 @@ class AbilityEnum(JaxEnum):
     SUPREME_OVERLORD = auto()
     COSTAR = auto()
     TOXIC_DEBRIS = auto()
+    VITAL_SPIRIT = auto()
+    TERA_SHIFT = auto()
+    INFILTRATOR = auto()
 
 
 
@@ -404,3 +416,4 @@ class ItemEnum(JaxEnum):
     CHOICE_BAND = auto()
     SITRUS_BERRY = auto()
     THROAT_SPRAY = auto()
+    ABILITY_SHIELD = auto()
