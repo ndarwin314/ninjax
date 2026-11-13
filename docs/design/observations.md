@@ -17,6 +17,12 @@ boolean, or floating-point types. Each leaf starts with the observer axis `(2,)`
   flags and Substitute presence `(2, 2)`. Confusion duration and remaining
   Substitute HP are hidden from observations. Charging move IDs and recharge
   flags are public `(2, 2)` leaves; their lifecycle events use details 14 and 15.
+  Destiny Bond is a public boolean leaf with condition detail 16. Its direct
+  retaliation uses `Cause.DESTINY_BOND`. Pending faint records remain internal.
+  The `roost` boolean reports the temporary Flying-type removal; stored team
+  types are unchanged and the flag clears at the end of the turn.
+  `active_move_actions` counts attempts since entry and `previous_move_result`
+  uses the `MoveResult` enum. Queued move categories remain private.
 - `sides`: public hazards and screen/tailwind counters, each `(2, 2)`.
 - `field`: turn, weather, terrain, durations, Trick Room and gravity, each `(2,)`.
 - `decision`: phase, acting flag, legacy legal-action mask `(2, 15)` and team
@@ -60,7 +66,8 @@ internal callback. Conditions include hazards, screens, tailwind, Perish Song,
 Flash Fire, Trick Room and gravity; confusion start/end uses condition detail
 12 without exposing its duration; Substitute uses detail 13 without exposing
 remaining HP. Other detail IDs are documented in `events.py`.
-Move use, misses, immunities and interrupted moves also generate events. An
+Move use, misses, immunities, interrupted moves and explicit Fake Out/Sucker
+Punch failures also generate events. An
 unsupported move follows the existing no-effect path, with MISS detail 0;
 an ordinary miss has detail 1. The log does not imply additional mechanics exist.
 

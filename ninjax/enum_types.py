@@ -20,6 +20,27 @@ class FormEnum(JaxEnum):
     OGERPON_CORNERSTONE = 3
 
 
+class ProtectionKind(JaxEnum):
+    """Turn-scoped protection variants sharing the consecutive-use counter."""
+    NONE = 0
+    PROTECT = 1
+    SPIKY_SHIELD = 2
+
+
+class MoveResult(JaxEnum):
+    """A Pokémon's whole-move outcome for the current or previous turn."""
+    NOT_ATTEMPTED = 0
+    FAILED = 1
+    SUCCEEDED = 2
+    SKIPPED = 3
+
+
+class OffensiveStatOwner(JaxEnum):
+    """Active Pokémon supplying the raw offensive stat and its stages."""
+    USER = 0
+    TARGET = 1
+
+
 class Type(JaxEnum):
     NONE = 0
     NORMAL = auto()
@@ -417,3 +438,7 @@ class ItemEnum(JaxEnum):
     SITRUS_BERRY = auto()
     THROAT_SPRAY = auto()
     ABILITY_SHIELD = auto()
+    # Represented for transfer restrictions; mask damage boosts remain separate.
+    WELLSPRING_MASK = auto()
+    HEARTHFLAME_MASK = auto()
+    CORNERSTONE_MASK = auto()

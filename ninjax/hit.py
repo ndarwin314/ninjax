@@ -13,6 +13,8 @@ class HitOutcome(IntEnum):
     MISS = 2
     IMMUNE = 3
     BLOCKED = 4
+    FAILED = 5
+    PROTECTED = 6
 
 
 class HitRecipient(IntEnum):

@@ -23,6 +23,7 @@ class EventKind(IntEnum):
     ITEM = 14
     ABILITY = 15
     ITEM_REVEALED = 16
+    MOVE_FAILED = 17
 
 class Cause(IntEnum):
     OTHER = 0
@@ -37,6 +38,8 @@ class Cause(IntEnum):
     STATUS = 9
     PERISH = 10
     CONFUSION = 11
+    DESTINY_BOND = 12
+    SELF_KO = 13
 
 @struct.dataclass
 class TransitionEvents:
@@ -152,7 +155,7 @@ def capture_conditions(before, after):
 
     CONDITION detail IDs: hazards 0..3, screens 4..6, tailwind 7,
     Perish Song 8, Flash Fire 9, Trick Room 10, gravity 11, confusion 12,
-    Substitute 13, charging move ID 14, recharge 15. Volatile lifecycle events
+    Substitute 13, charging move ID 14, recharge 15, Destiny Bond 16. Volatile lifecycle events
     are emitted directly by their corresponding helpers.
     """
     kinds, targets, details, old, new = [], [], [], [], []

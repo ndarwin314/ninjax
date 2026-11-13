@@ -12,13 +12,14 @@ from jumanji.types import TimeStep, restart, transition, truncation, termination
 import jax.numpy as jnp
 
 
-from ninjax.side import BattleState, update_active
+from ninjax.side import BattleState, update_active, resolve_faints, clear_destiny_bond
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.game_logic import do_damaging_move
 from ninjax.side import take_damage_value
 from ninjax.utils import triple_and, triple_or
-from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType
+from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType, MoveResult
+from ninjax.hit import HitOutcome
 from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, move_interrupted,
                                move_used, step_moody)
 
@@ -117,6 +118,7 @@ class EpisodeState(struct.PyTreeNode):
     phase: jax.Array
     acting_player_mask: jax.Array
     pending_actions: BattleAction
+    queued_actor_slot: jax.Array
     order: jax.Array
     cursor: jax.Array
     field_pending: jax.Array
@@ -211,6 +213,7 @@ class Battle(Environment):
         state = EpisodeState(key=key, battle=BattleState(team=self.teams), turn=jnp.int32(0),
                              phase=jnp.int32(Phase.TURN), acting_player_mask=jnp.ones(2, bool),
                              pending_actions=BattleAction.from_legacy(jnp.full((2,), 14, jnp.int32)),
+                             queued_actor_slot=jnp.zeros((2,), jnp.int32),
                              order=jnp.arange(2, dtype=jnp.int32), cursor=jnp.int32(2), field_pending=jnp.bool_(False), selected=jnp.ones((2, 6), bool),
                              revealed=jnp.zeros((2, 6), bool).at[:, 0].set(not self.params.team_preview),
                              revealed_moves=jnp.zeros((2, 6, 4), bool))
@@ -295,7 +298,7 @@ class Battle(Environment):
             v = current.battle.volatile_status
             battle = current.battle.replace(volatile_status=v.replace(
                 queued_priority=priorities[:, None], queued_priority_valid=(((actions.move_type == ActionType.ATTACK) & (actions.index < 4)) | continuing)[:, None]))
-            return current.replace(key=key, battle=battle, pending_actions=actions,
+            return current.replace(key=key, battle=battle, pending_actions=actions, queued_actor_slot=current.battle.active_index[:, 0],
                                    order=jnp.stack((first, second)), cursor=jnp.int32(0), field_pending=jnp.bool_(True),
                                    acting_player_mask=jnp.zeros(2, bool))
 
@@ -323,11 +326,18 @@ class Battle(Environment):
                 other = 1-player
                 other_action = current.pending_actions.move_type[other]
                 pending = (current.cursor == 0) & ((other_action == ActionType.ATTACK) | ((other_action == ActionType.CONTINUED) &
-                    (current.battle.volatile_status.charging_move_id[other, 0] != 0))) & (current.battle.active.current_hp[other, 0] > 0)
+                    (current.battle.volatile_status.charging_move_id[other, 0] != 0))) & (current.battle.active.current_hp[other, 0] > 0) & (current.queued_actor_slot[other] == current.battle.active_index[other, 0])
                 volatile = current.battle.volatile_status
+                other_index = current.pending_actions.index[other]
+                charged_index = jnp.argmax(current.battle.active.moves.identifier[other, :, 0] == volatile.charging_move_id[other, 0])
+                other_index = jnp.where(other_action == ActionType.CONTINUED, charged_index, jnp.clip(other_index, 0, 3))
+                category = current.battle.active.moves.move_type[other, other_index, 0]
+                category = jnp.where((other_action == ActionType.ATTACK) & (current.pending_actions.index[other] == 4), MoveType.PHYSICAL, category)
                 battle_with_context = current.battle.replace(volatile_status=volatile.replace(
-                    pending_move=volatile.pending_move.at[:, 0].set(False).at[other, 0].set(pending)))
-                can_act = current.battle.active.current_hp[player, 0] > 0
+                    pending_move=volatile.pending_move.at[:, 0].set(False).at[other, 0].set(pending),
+                    pending_move_type=volatile.pending_move_type.at[other, 0].set(category),
+                    pending_actor_slot=volatile.pending_actor_slot.at[other, 0].set(current.queued_actor_slot[other])))
+                can_act = (current.battle.active.current_hp[player, 0] > 0) & (current.queued_actor_slot[player] == current.battle.active_index[player, 0])
                 key, battle = lax.cond(can_act,
                     lambda k, b: step_action(k, b, chosen, player),
                     lambda k, b: (k, b), current.key, battle_with_context)
@@ -336,7 +346,9 @@ class Battle(Environment):
                 battle = capture_conditions(current.battle, battle)
                 slot = current.battle.active_index[player, 0]
                 spent = battle.team.moves.current_pp[player, slot, :, 0] < current.battle.team.moves.current_pp[player, slot, :, 0]
-                known = current.revealed_moves.at[player, slot].set(current.revealed_moves[player, slot] | spent)
+                called_id = battle.volatile_status.called_move_id[player, 0]
+                called = (called_id != 0) & (battle.team.moves.identifier[player, slot, :, 0] == called_id)
+                known = current.revealed_moves.at[player, slot].set(current.revealed_moves[player, slot] | spent | called)
                 has_bench = jnp.any(current.selected[player] & (battle.team.current_hp[player, :, 0] > 0) &
                                    (jnp.arange(6) != battle.active_index[player, 0]))
                 pivot = battle.switch_requested[player] & (battle.active.current_hp[player, 0] > 0) & has_bench
@@ -449,7 +461,7 @@ def decode_action(action):
 
 
 def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_paralysis=True,
-                restriction_blocked=False, defrost_move=False):
+                restriction_blocked=False, defrost_move=False, sleep_usable=False):
     """Resolve represented status and volatile interruptions before an action.
 
     Return the advanced key, immutable state and a scalar interruption flag.
@@ -477,7 +489,7 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
     frozen = (actor.status[0] == Status.FREEZE) & ~jnp.asarray(defrost_move).reshape(())
     key, state, freeze_blocked = lax.cond(frozen, freeze_check,
         lambda args: (args[0], args[1], jnp.bool_(False)), (key, state))
-    higher_blocked = ((state.active.status[player_idx, 0] == Status.SLEEP) | freeze_blocked |
+    higher_blocked = (((state.active.status[player_idx, 0] == Status.SLEEP) & ~jnp.asarray(sleep_usable).reshape(())) | freeze_blocked |
                       state.volatile_status.flinched[player_idx, 0] | jnp.asarray(restriction_blocked).reshape(()))
     def confusion_check(args):
         """Count down confusion and possibly apply its special self-hit."""
@@ -533,6 +545,7 @@ def step_move(
     original_index = index
     index, restriction_blocked = resolve_move(state, player_idx, index)
     v = state.volatile_status
+    v = v.replace(active_move_actions=v.active_move_actions.at[player_idx, 0].add(1))
     # Encore replaces an already ordered action without changing its priority.
     priority = jnp.where(v.queued_priority_valid[player_idx, 0], v.queued_priority[player_idx, 0],
                          state.active[player_idx].moves.priority[original_index, 0])
@@ -540,13 +553,22 @@ def step_move(
         queued_priority=v.queued_priority.at[player_idx, 0].set(priority),
         encore_overridden=v.encore_overridden.at[player_idx, 0].set(index != original_index)))
     attacker = state.active[player_idx]
-    state = update_active(state, player_idx, attacker.replace(is_terastallized=jnp.bool([is_tera])))
+    state = update_active(state, player_idx, attacker.replace(
+        is_terastallized=attacker.is_terastallized | jnp.bool([is_tera])))
+    selected_move = state.active[player_idx].moves[index]
     key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
-                                             defrost_move=state.active[player_idx].moves[index].defrost)
+        defrost_move=selected_move.defrost, sleep_usable=selected_move.identifier[0] == 214)
     key, state = jax.lax.cond(
         is_interrupted.reshape(()), move_interrupted, move_used,
         key, state, player_idx, index)
-    return key, state
+    # Protect and Spiky Shield return NOT_FAIL in Gen 9; other blocks can fail.
+    result = state.hit_results[0].outcome
+    failed = is_interrupted | (result == HitOutcome.MISS) | (result == HitOutcome.IMMUNE) | (result == HitOutcome.FAILED) | (result == HitOutcome.BLOCKED)
+    # Sleep Talk succeeds once it selects a move, even if that called move fails.
+    failed = jnp.where((selected_move.identifier[0] == 214) & state.volatile_status.sleep_talk_succeeded[player_idx, 0] & ~is_interrupted, False, failed)
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(move_result=v.move_result.at[player_idx, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
+    return key, resolve_faints(state)
 
 
 def step_switch(
@@ -576,13 +598,19 @@ def step_action(
     # this will execute whatever move is selected
     def struggle(k, b):
         """Apply before-move interruptions before a forced Struggle."""
+        v = b.volatile_status
+        b = b.replace(volatile_status=v.replace(active_move_actions=v.active_move_actions.at[player_index, 0].add(1)))
         k, b, interrupted = before_move(k, b, player_index, inclusive_paralysis=False)
-        return lax.cond(interrupted,
+        k, b = lax.cond(interrupted,
             lambda k, s: move_interrupted(k, s, player_index, 0), execute_struggle, k, b)
+        v = b.volatile_status
+        b = b.replace(volatile_status=v.replace(move_result=v.move_result.at[player_index, 0].set(jnp.where(interrupted, MoveResult.FAILED, MoveResult.SUCCEEDED))))
+        return k, b
 
     def execute_struggle(k, b):
         """Resolve Struggle and invalidate the previous move for Encore/Disable."""
         from ninjax.hit import HitResults
+        b = clear_destiny_bond(b, player_index)
         v = b.volatile_status
         b = b.replace(hit_results=HitResults.empty(),
                       volatile_status=v.replace(last_move_id=v.last_move_id.at[player_index, 0].set(0)))
@@ -605,10 +633,11 @@ def step_action(
         b = update_active(b, player_index, actor.replace(current_hp=hp, is_alive=hp > 0))
         b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player_index, b.winner))
         return k, b
-    return lax.cond(action.transformation == Transformation.NONE,
+    key, state = lax.cond(action.transformation == Transformation.NONE,
         lambda k, b: lax.cond((action.move_type == ActionType.ATTACK) & (action.index == 4), struggle,
             lambda k, b: _ordinary_action(k, b, action, player_index), k, b),
         lambda k, b: (k, b), key, state)
+    return key, resolve_faints(state)
 
 
 def _ordinary_action(key, state, action, player_index):
@@ -627,14 +656,18 @@ def step_continued(key, state, player):
     from ninjax.game_logic import _apply_move_effects
     def recharge(k, s):
         """Recharge precedes sleep, freeze, flinch, confusion and paralysis checks."""
+        s = clear_destiny_bond(s, player)
         v = s.volatile_status
         s = s.replace(hit_results=HitResults.empty(), volatile_status=v.replace(
+            active_move_actions=v.active_move_actions.at[player, 0].add(1),
+            move_result=v.move_result.at[player, 0].set(MoveResult.SKIPPED),
             recharging=v.recharging.at[player, 0].set(False),
             protect_chain=v.protect_chain.at[player, 0].set(0)))
         return k, emit(s, EventKind.CONDITION, player, detail=15, before=1, after=0)
     def resume(k, s):
         """Release a charge once, including when an interruption prevents the hit."""
         v = s.volatile_status
+        v = v.replace(active_move_actions=v.active_move_actions.at[player, 0].add(1))
         identifier = v.charging_move_id[player, 0]
         matches = (s.active[player].moves.identifier[:, 0] == identifier) & (identifier != 0)
         index = jnp.argmax(matches)
@@ -651,9 +684,14 @@ def step_continued(key, state, player):
         k, s, interrupted = before_move(k, s, player, restriction_blocked=blocked, defrost_move=move.defrost)
         def execute(k, s):
             """Record a released move and run its normal hit resolution."""
+            s = clear_destiny_bond(s, player)
             s = emit(s, EventKind.MOVE, player, detail=identifier)
             return _apply_move_effects(k, s, player, index)
-        return lax.cond(interrupted, lambda k, s: move_interrupted(k, s, player, index), execute, k, s)
+        k, s = lax.cond(interrupted, lambda k, s: move_interrupted(k, s, player, index), execute, k, s)
+        outcome = s.hit_results[0].outcome
+        failed = interrupted | (outcome == HitOutcome.MISS) | (outcome == HitOutcome.IMMUNE) | (outcome == HitOutcome.FAILED) | (outcome == HitOutcome.BLOCKED)
+        v = s.volatile_status
+        return k, s.replace(volatile_status=v.replace(move_result=v.move_result.at[player, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
     return lax.cond(state.volatile_status.recharging[player, 0], recharge,
         lambda k, s: lax.cond(s.volatile_status.charging_move_id[player, 0] != 0, resume, lambda k, s: (k, s), k, s), key, state)
 
@@ -694,6 +732,8 @@ def step_field(
         terrain=Terrain(new_terrain, terrain_duration),
         trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),
         gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
+        volatile_status=state.volatile_status.replace(roost=jnp.zeros_like(state.volatile_status.roost),
+            previous_move_result=state.volatile_status.move_result, move_result=jnp.zeros_like(state.volatile_status.move_result)),
     )
 
-    return key, refresh_paradox(state)
+    return key, resolve_faints(refresh_paradox(state))

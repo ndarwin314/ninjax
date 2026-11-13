@@ -18,6 +18,7 @@ def allowed_moves(state):
     ids = moves.identifier[..., 0]
     return (~((v.disable_turns > 0) & (ids == v.disabled_move_id)) &
             ~((v.taunt_turns > 0) & (moves.move_type[..., 0] == MoveType.STATUS)) &
+            ~((state.gravity_duration > 0) & (ids == 136)) &
             ((v.encore_turns <= 0) | (ids == v.encore_move_id)))
 
 
@@ -31,6 +32,7 @@ def resolve_move(state, player, index):
     move = moves[index]
     blocked = ((v.disable_turns[player, 0] > 0) & (move.identifier[0] == v.disabled_move_id[player, 0])) | (
         (v.taunt_turns[player, 0] > 0) & (move.move_type[0] == MoveType.STATUS))
+    blocked |= (state.gravity_duration > 0) & (move.identifier[0] == 136)
     return index, blocked
 
 

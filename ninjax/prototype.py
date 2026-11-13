@@ -62,7 +62,7 @@ def make_move(name):
         effects['recoil_percent'] = jnp.array([data['recoil'][0] / data['recoil'][1]])
     effects['ignore_defensive'] = jnp.array([data.get('ignoreDefensive', False)])
     effects['always_crit'] = jnp.array([data.get('willCrit', False)])
-    effects['always_hit'] = jnp.array([name in ('Flower Trick', 'Clear Smog', 'Pain Split')])
+    effects['always_hit'] = jnp.array([name in ('Flower Trick', 'Clear Smog', 'Pain Split', 'Whirlwind')])
     if name == 'Body Press':
         effects['offensive_stat'] = jnp.array([2])
     if name == 'Psyshock':
@@ -93,9 +93,9 @@ def make_move(name):
         effects.update(target_self=jnp.array([True]), weather_effect=jnp.array([WeatherEnum.RAIN if name == 'Rain Dance' else WeatherEnum.SUN]))
     if name == 'Grassy Terrain':
         effects.update(target_self=jnp.array([True]), terrain_effect=jnp.array([TerrainEnum.GRASSY]))
-    if name == 'Recover':
+    if name in ('Recover', 'Roost'):
         effects.update(target_self=jnp.array([True]), healing_fraction=jnp.array([.5]))
-    if name in ('Protect', 'Rest', 'Substitute'):
+    if name in ('Protect', 'Spiky Shield', 'Rest', 'Sleep Talk', 'Substitute', 'Destiny Bond'):
         effects['target_self'] = jnp.array([True])
     if name in ('Light Screen', 'Aurora Veil', 'Tailwind', 'Trick Room', 'Haze', 'Court Change', 'Perish Song'):
         effects['target_self'] = jnp.array([True])
@@ -114,6 +114,7 @@ def make_move(name):
     if 'flags' in data:
         effects['protectable'] = jnp.array([bool(data['flags'].get('protect'))])
     effects['encore_eligible'] = jnp.array([not bool(data.get('flags', {}).get('failencore'))])
+    effects['sleep_talk_eligible'] = jnp.array([not bool(data.get('flags', {}).get('nosleeptalk') or data.get('flags', {}).get('charge'))])
     offensive = effects.pop('offensive_stat', jnp.array([1 if physical else 3]))
     defensive = effects.pop('defensive_stat', jnp.array([2 if physical else 4]))
     return Move(move_type=jnp.array([int(category)]), max_pp=jnp.array([pp]), current_pp=jnp.array([pp]),

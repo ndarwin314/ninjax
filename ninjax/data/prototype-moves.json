@@ -1777,5 +1777,277 @@
       "mirror": 1,
       "metronome": 1
     }
+  },
+  "Destiny Bond": {
+    "id": "destinybond",
+    "num": 194,
+    "type": "Ghost",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "bypasssub": 1,
+      "noassist": 1,
+      "failcopycat": 1
+    }
+  },
+  "Knock Off": {
+    "id": "knockoff",
+    "num": 282,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 65,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "contact": 1
+    }
+  },
+  "Trick": {
+    "id": "trick",
+    "num": 271,
+    "type": "Psychic",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    }
+  },
+  "Switcheroo": {
+    "id": "switcheroo",
+    "num": 415,
+    "type": "Dark",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    }
+  },
+  "Roost": {
+    "id": "roost",
+    "num": 355,
+    "type": "Flying",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "heal": 1,
+      "metronome": 1
+    }
+  },
+  "High Jump Kick": {
+    "id": "highjumpkick",
+    "num": 136,
+    "type": "Fighting",
+    "category": "Physical",
+    "power": 130,
+    "accuracy": 0.9,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "gravity": 1,
+      "metronome": 1
+    }
+  },
+  "Explosion": {
+    "id": "explosion",
+    "num": 153,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 250,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
+  },
+  "Memento": {
+    "id": "memento",
+    "num": 262,
+    "type": "Dark",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
+  },
+  "Spiky Shield": {
+    "id": "spikyshield",
+    "num": 596,
+    "type": "Grass",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 4,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "noassist": 1,
+      "failcopycat": 1
+    }
+  },
+  "Fake Out": {
+    "id": "fakeout",
+    "num": 252,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "priority": 3,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "secondary": {
+      "chance": 100,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Sucker Punch": {
+    "id": "suckerpunch",
+    "num": 389,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "priority": 1,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
+  },
+  "Stomping Tantrum": {
+    "id": "stompingtantrum",
+    "num": 707,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
+  },
+  "Foul Play": {
+    "id": "foulplay",
+    "num": 492,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 95,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
+  },
+  "Beat Up": {
+    "id": "beatup",
+    "num": 251,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "allyanim": 1,
+      "metronome": 1
+    }
+  },
+  "Whirlwind": {
+    "id": "whirlwind",
+    "num": 18,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": -6,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "reflectable": 1,
+      "mirror": 1,
+      "bypasssub": 1,
+      "allyanim": 1,
+      "metronome": 1,
+      "noassist": 1,
+      "failcopycat": 1,
+      "wind": 1
+    }
+  },
+  "Sleep Talk": {
+    "id": "sleeptalk",
+    "num": 214,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "failencore": 1,
+      "nosleeptalk": 1,
+      "noassist": 1,
+      "failcopycat": 1,
+      "failmimic": 1,
+      "failinstruct": 1
+    }
   }
 }

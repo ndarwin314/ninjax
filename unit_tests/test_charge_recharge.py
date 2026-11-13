@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.battle import ActionType, Battle, BattleAction, Phase, step_action, step_move
-from ninjax.enum_types import AbilityEnum as A, Status, Weather, WeatherEnum as W
+from ninjax.enum_types import AbilityEnum as A, MoveResult, Status, Weather, WeatherEnum as W
 from ninjax.game_logic import resolve_damaging_hit, resolve_multi_hit, move_hits
 from ninjax.prototype import make_move
 from ninjax.side import clear_volatile_status, update_active
@@ -80,6 +80,7 @@ def test_hyper_beam_recharge_precedes_status_checks(neutral_type):
     hit = hit.replace(volatile_status=v.replace(confusion_turns=v.confusion_turns.at[0, 0].set(3)))
     _, out = step_action(key, hit, continued(), 0)
     assert not out.volatile_status.recharging[0, 0]
+    assert out.volatile_status.move_result[0, 0] == MoveResult.SKIPPED
     assert out.active.sleep_counter[0, 0] == 2
     assert out.volatile_status.confusion_turns[0, 0] == 3
     assert jnp.array_equal(out.active.current_hp, hit.active.current_hp)

@@ -64,6 +64,7 @@ class Move(ArrayTree):
     always_hit: jax.Array = field(default_factory=lambda: jnp.array([False]))
     protectable: jax.Array = field(default_factory=lambda: jnp.array([True]))
     encore_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
+    sleep_talk_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
 
     def __post_init__(self):
         """Normalize scalar metadata and pad stat-change arrays to seven slots.
@@ -96,7 +97,7 @@ class Move(ArrayTree):
                 padding = [(0, 0)] * (value.ndim - 1) + [(0, 7-width)]
                 object.__setattr__(self, name, jnp.pad(value, padding))
                 continue
-            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
+            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):

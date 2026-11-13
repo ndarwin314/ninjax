@@ -30,7 +30,13 @@ def direct_status_move(key, state, player, move):
             c = c.replace(toxic_counter=c.toxic_counter.at[player].set(0))
             c = emit(c, EventKind.STATUS, player, before=mon.status[0], after=Status.SLEEP)
             return take_damage_value(c, player, -mon.max_hp, False)
-        return key, jax.lax.cond(success, heal, lambda _: s, candidate)
+        result = jax.lax.cond(success, heal, lambda _: s, candidate)
+        # Rest's failure needs an explicit move outcome for Stomping Tantrum.
+        from ninjax.game_logic import record_hit
+        from ninjax.hit import HitOutcome
+        result = jax.lax.cond(success, lambda s: s,
+            lambda s: record_hit(s, 0, player, HitOutcome.FAILED), result)
+        return key, result
     def split(args):
         """Set both HP values to their original mean before reactive healing."""
         from ninjax.events import EventKind, emit
@@ -85,6 +91,12 @@ def move_overrides(state, player, move):
     weather = effective_weather(state)
     grounded = state.is_grounded(player)
     power = jnp.where((ident == 512) & (mon.item == I.NONE), 110, move.base_power)
+    from ninjax.enum_types import MoveResult
+    power = jnp.where((ident == 707) & (state.volatile_status.previous_move_result[player] == MoveResult.FAILED), power * 2, power)
+    from ninjax.held_effects import item_transfer_allowed, conditional_mult_round
+    target_item = state.active.item[1-player, 0]
+    knock_boost = (ident == 282) & (target_item != I.NONE) & item_transfer_allowed(state, 1-player, target_item)
+    power = conditional_mult_round(power, 1.5, knock_boost)
     positive = jnp.sum(jnp.maximum(state.boosts.normal_boosts[player, 1:], 0)) + jnp.sum(jnp.maximum(state.boosts.acc_boosts[player], 0))
     power = jnp.where(ident == 500, 20 + 20 * positive, power)
     target = state.effective_active[1-player]

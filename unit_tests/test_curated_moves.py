@@ -124,11 +124,19 @@ def test_curated_coverage_expanded():
     """The curated projection enables the new batch and retains complex omissions."""
     _, reports = make_sandbox_pool(load_sets())
     remaining = {move for report in reports for move in report['moves']}
-    assert len(remaining) == 16
-    assert 'Beat Up' in remaining
+    assert len(remaining) == 0
     assert not {'Encore', 'Disable', 'Taunt'} & remaining
     assert not {'Blizzard', 'Hurricane', 'Substitute'} & remaining
     assert not {'Electro Shot', 'Hyper Beam'} & remaining
+    assert 'Destiny Bond' not in remaining
+    assert not {'Knock Off', 'Trick', 'Switcheroo'} & remaining
+    assert 'Roost' not in remaining
+    assert 'High Jump Kick' not in remaining
+    assert not {'Explosion', 'Memento'} & remaining
+    assert 'Spiky Shield' not in remaining
+    assert not {'Fake Out', 'Sucker Punch', 'Stomping Tantrum'} & remaining
+    assert 'Foul Play' not in remaining
+    assert not {'Beat Up', 'Sleep Talk', 'Whirlwind'} & remaining
     assert not {'Calm Mind', 'Draco Meteor', 'Spore', 'Night Shade'} & remaining
 
 

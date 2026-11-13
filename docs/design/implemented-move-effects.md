@@ -46,15 +46,23 @@ slot leads; unselected slots remain in storage but cannot switch in or count
 toward victory. Selection does not consume a battle turn. With preview disabled
 (the compatibility default), all six participate and slot zero leads.
 
-`BattleAction` has boolean one-hot `moves` `(2, 4)` and `switches` `(2, 6)`,
-`selection` `(2, 6)`, and `tera`, `mega`, and `struggle` flags `(2,)`. During
-battle, an acting player submits exactly one move, switch, or Struggle choice.
-Transformation flags are reserved and currently rejected. Use
-`env.action_spec.generate_value()` as an all-false template. The previous integer
-encoding remains accepted; index 4 now means Struggle and is legal only when no
-move is usable. PP, `Move.disabled`, and `Pokemon.encore_move` determine usability.
-The latter is a move index or -1 for no restriction; timed Encore/Disable effects
-are not implemented yet. Struggle consumes no move PP and applies fixed HP recoil.
+`BattleAction` is an immutable PyTree with integer `index` and `move_type`
+leaves of shape `(2,)`, plus `transformation` `(2,)` and the preview
+`selection` payload `(2, 6)`. `Transformation` contains `NONE` (default),
+`MEGA`, `Z_MOVE`, `DYNAMAX`, and `TERA`; these choices are mutually exclusive.
+`ActionType` contains `ATTACK`, `SWITCH`, `CONTINUED`, and `NO_OP`.
+Attack indices 0..3 select move slots; attack index 4 selects forced Struggle.
+Switch indices 0..5 select team slots. No-op uses index zero for inactive
+players. Continued uses index zero (legacy column 5) and is the only legal
+choice during charging or recharging. Electro Shot releases without another
+PP cost or boost; Hyper Beam spends its recharge turn before status checks.
+The action spec describes these typed leaves.
+Legacy integer inputs and the 15-column legal-action mask remain supported;
+`BattleAction.encode()` maps an indexed action to its mask column. PP and
+represented move restrictions determine usability. Struggle consumes no move
+PP and applies fixed HP recoil. Non-`NONE` transformations are represented but
+rejected until their eligibility and battle lifecycle rules are implemented;
+legacy integer inputs default to `NONE`.
 
 Choose `InformationMode.HIDDEN`, `SPECIES`, or `OPEN_SHEET` using the
 `information_mode` parameter. Observations have shape `(2 players, 2 perspectives,

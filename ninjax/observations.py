@@ -57,6 +57,10 @@ class ActiveObservation(_Block):
     substitute: jax.Array
     charging_move_id: jax.Array
     recharging: jax.Array
+    destiny_bond: jax.Array
+    roost: jax.Array
+    active_move_actions: jax.Array
+    previous_move_result: jax.Array
 
 @struct.dataclass
 class SideObservation(_Block):
@@ -150,7 +154,11 @@ def observe(env, state):
                   confused=relative(b.volatile_status.confusion_turns[:, 0] > 0),
                   substitute=relative(b.volatile_status.substitute_hp[:, 0] > 0),
                   charging_move_id=relative(b.volatile_status.charging_move_id[:, 0]),
-                  recharging=relative(b.volatile_status.recharging[:, 0]))
+                  recharging=relative(b.volatile_status.recharging[:, 0]),
+                  destiny_bond=relative(b.volatile_status.destiny_bond[:, 0]),
+                  roost=relative(b.volatile_status.roost[:, 0]),
+                  active_move_actions=relative(b.volatile_status.active_move_actions[:, 0]),
+                  previous_move_result=relative(b.volatile_status.previous_move_result[:, 0]))
     sides = {name: relative(getattr(b, name)[:, 0]) for name in
         ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes', 'reflect', 'light_screen', 'aurora_veil', 'tailwind')}
     field = {name: jnp.broadcast_to(jnp.asarray(value, jnp.int32), (2,)) for name, value in dict(
@@ -186,7 +194,7 @@ def observation_spec():
         'level', 'ability', 'ability_known', 'item', 'item_known', 'sheet_known', 'selected')}
     team.update(stats=(2, 2, 6, 6), types=(2, 2, 6, 2), nature=(2, 2, 6, 2))
     team.update({name: (2, 2, 6, 4) for name in ('moves', 'moves_known', 'move_pp', 'move_max_pp', 'move_disabled')})
-    active = {name: (2, 2) for name in ('slot', 'flash_fire', 'perish_turns', 'disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns', 'confused', 'substitute', 'charging_move_id', 'recharging')}
+    active = {name: (2, 2) for name in ('slot', 'flash_fire', 'perish_turns', 'disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns', 'confused', 'substitute', 'charging_move_id', 'recharging', 'destiny_bond', 'roost', 'active_move_actions', 'previous_move_result')}
     active.update(boosts=(2, 2, 6), accuracy_evasion=(2, 2, 2))
     sides = {f.name: (2, 2) for f in fields(SideObservation)}
     field = {f.name: (2,) for f in fields(FieldObservation)}
@@ -196,7 +204,7 @@ def observation_spec():
     return specs.Spec(Observation, 'observation',
         team=block(TeamObservation, team, floats=('hp_fraction',),
                    booleans=('species_known', 'hp_known', 'ability_known', 'item_known', 'sheet_known', 'moves_known', 'move_disabled', 'selected')),
-        active=block(ActiveObservation, active, booleans=('flash_fire', 'confused', 'substitute', 'recharging')),
+        active=block(ActiveObservation, active, booleans=('flash_fire', 'confused', 'substitute', 'recharging', 'destiny_bond', 'roost')),
         sides=block(SideObservation, sides, booleans=('stealth_rocks', 'sticky_webs')),
         field=block(FieldObservation, field),
         decision=block(DecisionObservation, dict(phase=(2,), acting=(2,), legal_actions=(2, 15), legal_selection=(2, 6)),

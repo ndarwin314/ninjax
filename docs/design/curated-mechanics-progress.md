@@ -44,7 +44,7 @@ lifecycle for other moves is still unimplemented; setting an override alone
 does not run those hooks.
 
 The next move batch enables **58 additional distinct curated moves**. The
-current 30-set projection has **16 distinct unavailable moves in 17 of 120
+current 30-set projection has **0 unavailable moves in 0 of 120
 slots**, down from 87 distinct unavailable moves in 93 slots. Enabled means
 the represented singles effect runs; it does not establish complete parity.
 
@@ -112,26 +112,43 @@ Electro Shot charges with a Special Attack boost, or attacks immediately in
 effective rain. Hyper Beam forces a recharge turn after hitting. Both use the
 continued action and switch-cleared state; charge release spends no extra PP.
 
-The remaining unavailable moves are: Beat Up, Destiny Bond,
-Explosion, Fake Out, Foul Play, High Jump Kick,
-Knock Off, Memento, Roost,
-Sleep Talk, Spiky Shield, Stomping Tantrum, Sucker Punch, Switcheroo,
-Trick and Whirlwind.
+Destiny Bond uses source-aware pending faint records, resolved after a move's
+HP effects. It directly faints a surviving opposing attacker without damage
+protections. Its lifetime and consecutive-use restriction are implemented;
+the observation event buffer does not participate in mechanic resolution.
+
+Roost heals and temporarily removes Flying from effective types until the end
+of the turn. Pure Flying becomes Normal; Terastallized users retain their type.
+
+Explosion directly faints its user before target resolution unless Damp blocks
+the move. Memento lowers the target's offensive stats and directly faints its
+user when the recorded hit reaches the Pokémon, including when drops fail.
+
+Fake Out counts action attempts since entry. Sucker Punch uses the queued
+opponent action and its original active slot. Stomping Tantrum doubles power
+after a recorded previous-turn failure; protection, recharge and no action are
+distinguished from failure. Some status-move failure reporting remains partial.
+
+Foul Play selects the target's raw Attack and stages, then applies the user's
+offensive modifiers and burn rules.
+
+Beat Up uses eligible party members' species base Attack for individual hit
+power. Sleep Talk selects an eligible move without using its PP; Whirlwind
+randomly forces a legal replacement and cancels the displaced queued action.
 
 Remaining integration and mechanics include:
 
 - A full curated move catalogue with callbacks represented as JAX state changes.
-- Beat Up's eligible-party and per-member power rules; other Mental Herb effects.
-  Multi-hit recoil still needs once-per-move aggregation of actual HP lost.
+- Other Mental Herb effects and multi-hit recoil's once-per-move aggregation
+  of actual HP lost.
 - King's Rock's per-hit flinch and Protective Pads' contact protection. The
-  sandbox neutralizes both items. Initial Protect and Unseen Fist support covers
-  targeted moves and contact bypass, but failure when no actions remain and
-  other protection moves are not yet represented.
+  sandbox neutralizes both items. Protect and Spiky Shield share the protection
+  chain and support Unseen Fist bypass; failure when no actions remain and
+  additional protection variants are not yet represented.
 - Durable observation knowledge for revealed abilities and item changes from
   future item-exchange/removal move implementations.
-- Charge/recharge turns, Substitute, Sleep Talk, Destiny Bond,
-  protection-independent move failure conditions, and forced switches.
-- The Sleep Talk exception that allows a sleeping user to continue multi-hit moves.
+- Additional charge/semi-invulnerability variants, protection-independent
+  move failure conditions, and additional forced-switch interactions.
 - Item removal/exchange and the remaining variable-damage, failure-condition,
   stateful, and move-specific interactions listed above.
 - Full curated team construction with original held items and abilities enabled,
@@ -144,7 +161,6 @@ Reference source: local Showdown data and simulator files under
 
 The initial multi-hit implementation uses a ten-iteration `lax.scan` for Bullet
 Seed, Scale Shot, Tail Slap, Rock Blast, Surging Strikes, Triple Axel, and
-Population Bomb. It supports the represented Skill Link, Loaded Dice, per-hit
-accuracy, escalating power, and guaranteed-critical rules. Beat Up remains
-unavailable in the sandbox until party-specific attack power is represented.
+Population Bomb and Beat Up. It supports the represented Skill Link, Loaded
+Dice, per-hit accuracy, escalating power, and guaranteed-critical rules.
 Other unimplemented effects and ability/item interactions still limit parity.

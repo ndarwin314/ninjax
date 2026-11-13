@@ -1,8 +1,11 @@
 # Remaining curated moves: implementation choices
 
 Scarlet/Violet is the default ruleset. After implementing Disable, Encore and
-Taunt, Worry Seed, Ivy Cudgel, Blizzard, Hurricane, Substitute, Electro Shot and
-Hyper Beam, 16 distinct curated moves remain unavailable. The restriction design
+Taunt, Worry Seed, Ivy Cudgel, Blizzard, Hurricane, Substitute, Electro Shot,
+Hyper Beam, Destiny Bond, Knock Off, Trick, Switcheroo, Roost, High Jump Kick,
+Explosion, Memento, Spiky Shield, Fake Out, Sucker Punch, Stomping Tantrum and
+Foul Play, Beat Up, Sleep Talk and Whirlwind, no curated moves remain
+unavailable in the singles sandbox projection. The restriction design
 discussion below records the chosen dedicated-field approach.
 
 Actions now use `BattleAction(index, move_type)` with `ActionType.ATTACK`,
@@ -14,6 +17,38 @@ are retained as compatibility adapters.
 An independent `transformation` field uses `Transformation.NONE`, `MEGA`,
 `Z_MOVE`, `DYNAMAX`, or `TERA`. Non-`NONE` requests remain rejected until
 the corresponding battle mechanics and eligibility checks are implemented.
+
+Roost uses a turn-scoped, switch-cleared volatile flag. The effective active
+snapshot removes Flying without mutating stored types; pure Flying becomes
+Normal, while Terastallized users retain their type. The flag expires after
+end-of-turn effects and does not override abilities such as Levitate.
+
+Explosion and Memento use a shared direct-faint helper. Explosion saves the
+user's pre-faint HP for damage calculation and commits its faint before target
+resolution; Damp prevents it. Memento uses `HitResult` to require reaching the
+target, then attempts its stat drops and directly faints even if they fail.
+
+Spiky Shield shares Protect's consecutive-use counter and tracks its variant
+for blocked-contact damage. Unseen Fist bypasses it; Long Reach and Magic Guard
+prevent its retaliation. Both protection moves still share the existing
+limitation around use when no other action remains.
+
+Fake Out counts move-action attempts in switch-cleared state. The scheduler
+captures the queued actor's team slot and the pending move category for Sucker
+Punch, including Struggle and charging continuations. Stomping Tantrum reads
+the previous turn's `MoveResult`; at the turn boundary the current result is
+copied and reset. `HitOutcome.PROTECTED` is distinct from a failed or immune
+attempt. Status callbacks report represented failure conditions, though not all
+status move failures are classified yet.
+
+Destiny Bond is the first consumer of `record_faint`/`resolve_faints` in
+`side.py`. Damage records capture the actual source side and team slot, target
+slot, cause, and bond state. Resolution runs at action boundaries after recoil
+and healing, independently of the public event buffer. Retaliation directly
+faints a surviving opposing attacker; indirect damage and changed source slots
+do not qualify. Its volatile expires on the next action attempt or switch,
+and consecutive execution removes the bond and fails. Existing ability faint
+hooks remain in the damage path; consolidating those timing rules is future work.
 
 Substitute uses switch-cleared `VolatileStatus.substitute_hp`. A move's most
 recent attempts are retained in a fixed ten-entry `HitResults` buffer, with
@@ -32,9 +67,6 @@ are about the current engine, not uncertainty about the game rules.
 
 | Moves | Missing shared support | Option A | Option B | Suggested approach |
 | --- | --- | --- | --- | --- |
-| Sleep Talk | Execute another move without spending its PP, while allowing its sleeping caller to act and enforcing the callable-move exclusions. | Extract a common move executor that takes a selected `Move` plus a small execution context (called move, PP policy, sleep exception). | Add a separate Sleep Talk dispatcher into the current hit path and duplicate or bypass selected checks. | A: avoid diverging normal and called-move behavior. A full execution queue is unnecessary. |
-| Whirlwind | Pick a random legal replacement, run entry effects, and cancel the displaced Pokémon's pending action. | Switch immediately with an explicit PRNG key and attach actor identity to queued actions so stale actions are discarded. | Add an internal automatic forced-switch request resolved by the existing environment scheduler before continuing. | A is smaller; B is useful if several forced-switch families are planned. The replacement must remain random, not a player choice. |
-| Destiny Bond | Record its lifetime and consecutive-use restriction; distinguish a direct opposing-move KO from recoil, weather, status, and other indirect causes. | Add a faint-resolution hook consuming explicit damage cause/source and the active Destiny Bond state. | Inspect accumulated faint/HP events at the end of a move and infer whether retaliation applies. | A: core mechanics should not depend on observation-event capacity or reconstruct causality after the fact. |
 
 ## Bounded extensions with reusable helpers
 
@@ -42,21 +74,12 @@ These require some state or interface work, but can fit the current architecture
 
 | Moves | Option A | Option B | Suggested approach |
 | --- | --- | --- | --- |
-| Fake Out, Sucker Punch, Stomping Tantrum | Add active tenure, action-taken/selected-action context, and a previous-move result; pass the relevant pending action from `EpisodeState` into move resolution. | Put a complete action queue and move history in `BattleState`. | A. Sucker Punch needs the opponent's still-pending damaging intent; Stomping Tantrum needs an explicit success/failure result, not an HP comparison. |
-| Disable, Encore, Taunt | Dedicated switch-cleared move-ID/timer fields, checked in both legal-action masks and execution. | A fixed-size indexed volatile-condition table and generic timer/mask handling. | Implemented using dedicated fields, including Encore's queued-action override. |
-| Knock Off, Trick, Switcheroo | Shared item mutation helpers that check removability/transfer legality, update public item knowledge, and emit events atomically. | A general item lifecycle callback system with before/after mutation hooks. | Shared helpers first; include species-bound items such as masks before enabling swaps universally. |
-| Worry Seed | Save and restore the original ability when mutating the active Pokémon. | Keep the team ability as the base, with a switch-cleared override and suppression state. | Implemented using the override, move-specific eligibility, represented lifecycle cleanup and public reveal. A general ability-change lifecycle remains future work. |
-| Beat Up | Extend the existing fixed hit scan with party eligibility and per-member base power. | Introduce a reusable fixed-size hit-plan PyTree with masks and per-hit parameters. | A is enough for Beat Up; B is useful if later moves need different sources or targets per hit. |
+| Fake Out, Sucker Punch, Stomping Tantrum | Add active tenure, action-taken/selected-action context, and a previous-move result; pass the relevant pending action from `EpisodeState` into move resolution. | Put a complete action queue and move history in `BattleState`. | Implemented with switch-cleared action counts, queued actor/category context, and explicit current/previous move results. |
 
 ## Moves needing local mechanics rather than a redesign
 
 | Moves | Implementation options |
 | --- | --- |
-| Foul Play | Select the target as the offensive-stat source in the existing damage calculation, or introduce an explicit offensive-stat-owner field/callback. Preserve the separate ownership rules for stages, offensive modifiers, and the user's burn. |
-| High Jump Kick, Explosion, Memento | Add move-specific failure/self-KO hooks at the required resolution points, or introduce a small `MoveResult` and shared attempt/hit/failure/finalization phases. Their self-damage/self-KO timing differs; one unconditional end-of-move flag is insufficient. |
-| Roost | Temporarily mutate and restore types, or add a turn-scoped Roost flag to a shared effective-types helper. The effective-types approach composes better with Libero/Protean and other type changes. |
-| Ivy Cudgel | Runtime type resolution and form metadata are implemented. Mask damage modifiers and transfer restrictions remain separate item work. |
-| Spiky Shield | Add a protection-variant enum alongside existing Protect state, or add a dedicated flag and contact retaliation hook. A shared protection variant is preferable if more protection moves are expected. It should share Protect's consecutive-use counter and existing Unseen Fist rules. |
 
 A practical sequence is: explicit move results and action context; shared called-
 move execution; multi-turn continuations and action restrictions; hit routing
@@ -160,3 +183,21 @@ Implement and test Taunt first, then Disable (last-move history), then Encore
 (queued-action override and combinations). Check fast and slow application,
 switching, failed/interrupted moves, PP exhaustion, Mental Herb, existing item
 locks, overlapping Encore+Disable/Taunt, and actual `jit`/`vmap`/`scan` execution.
+
+## Item mutation helpers
+
+`held_effects.remove_item(state, holder, source, enabled=True)` and
+`swap_items(state, source, target, enabled=True)` return `(state, success)`.
+Failures leave all state unchanged; callers handle move failure messages and
+revealing an ability that blocked the effect. `can_remove_item` checks actual
+removal including effective Sticky Hold. `item_transfer_allowed` checks only
+item identity and holder binding: a damage-power rule can use it independently
+of Sticky Hold. Unknown item IDs fail closed.
+
+Swaps validate both outgoing and incoming bindings before either assignment,
+then update public item knowledge and events, clean up Choice locks, and run
+represented received-item effects (Sitrus Berry, Mental Herb and Booster Energy).
+Empty-handed exchanges are valid when at least one item exists. Same-item swaps
+are valid and reveal both items. Mask IDs are represented for Ogerpon transfer
+restrictions, but remain excluded from curated item projection until their
+other mechanics are implemented. Consumption remains a separate operation.

@@ -16,10 +16,10 @@ import jax.numpy as jnp
 
 from ninjax.stats import StatBoosts
 from ninjax.pokemon import Pokemon
-from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, AbilityEnum, Weather, Terrain, Type, MoveType
+from ninjax.enum_types import StatEnum, WeatherEnum, TerrainEnum, Status, TurnType, AbilityEnum, Weather, Terrain, Type, MoveType, OffensiveStatOwner
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, triple_or, conditional_mult_round, triple_and, calculate_effectiveness_multiplier
 
-from ninjax.events import EventBuffer, EventKind, emit
+from ninjax.events import EventBuffer, EventKind, Cause, emit
 from ninjax.hit import HitResults
 
 Array = jax.Array
@@ -93,6 +93,7 @@ class VolatileStatus(struct.PyTreeNode):
     paradox_booster: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
     choice_lock: Array = field(default_factory=lambda: -jnp.ones((2, 1), dtype=jnp.int32))
     protected: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    protection_kind: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     flinched: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
     # Actual Pokémon or Substitute HP lost on the latest attack, before healing.
     last_damage: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
@@ -105,6 +106,12 @@ class VolatileStatus(struct.PyTreeNode):
     taunt_turns: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     entry_turn: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     pending_move: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    pending_move_type: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    pending_actor_slot: Array = field(default_factory=lambda: -jnp.ones((2, 1), dtype=jnp.int32))
+    active_move_actions: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    # 0 = not attempted, 1 = failed, 2 = succeeded, 3 = skipped.
+    move_result: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    previous_move_result: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     queued_priority: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     queued_priority_valid: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
     encore_overridden: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
@@ -118,6 +125,13 @@ class VolatileStatus(struct.PyTreeNode):
     charge_target_side: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     charge_target_position: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     recharging: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    destiny_bond: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    roost: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    # Pre-faint HP for calculating an Explosion already committed this action.
+    explosion_hp: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
+    sleep_talk_active: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    sleep_talk_succeeded: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
+    called_move_id: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.int32))
     transformed: Array = field(default_factory=lambda: jnp.zeros((2, 1), dtype=jnp.bool_))
 
     def __getitem__(self, idx):
@@ -149,6 +163,13 @@ class BattleState(struct.PyTreeNode):
     known_abilities: Array = field(default_factory=lambda: -jnp.ones((2, 6), dtype=jnp.int32))
     events: EventBuffer = field(default_factory=EventBuffer.empty)
     hit_results: HitResults = field(default_factory=HitResults.empty)
+    # Pending faint records: target side is the row; slots preserve identity.
+    faint_pending: Array = field(default_factory=lambda: jnp.zeros(2, dtype=jnp.bool_))
+    faint_source: Array = field(default_factory=lambda: -jnp.ones(2, dtype=jnp.int32))
+    faint_source_slot: Array = field(default_factory=lambda: -jnp.ones(2, dtype=jnp.int32))
+    faint_target_slot: Array = field(default_factory=lambda: -jnp.ones(2, dtype=jnp.int32))
+    faint_cause: Array = field(default_factory=lambda: jnp.zeros(2, dtype=jnp.int32))
+    faint_destiny_bond: Array = field(default_factory=lambda: jnp.zeros(2, dtype=jnp.bool_))
     event_source: Array = field(default_factory=lambda: jnp.int32(-1))
     event_cause: Array = field(default_factory=lambda: jnp.int32(0))
     event_move: Array = field(default_factory=lambda: jnp.int32(0))
@@ -250,18 +271,27 @@ class BattleState(struct.PyTreeNode):
 
     @property
     def effective_active(self):
-        """Read-only active snapshots with effective abilities for pure helpers.
+        """Read-only active snapshots with effective abilities and Roost types.
 
         These snapshots must not be written back to the team: the stored team
         ability remains the original, including while an override is active.
         """
         active = self.active
-        return active.replace(ability=self.ability)
+        original_types = active.type_list
+        types = original_types
+        remove = self.volatile_status.roost & ~active.is_terastallized
+        types = jnp.where(remove & (types == Type.FLYING), Type.NONE, types)
+        # Preserve primary-type ordering for effects such as Revelation Dance.
+        types = jnp.stack((jnp.where(types[:, 0] == Type.NONE, types[:, 1], types[:, 0]),
+                           jnp.where(types[:, 0] == Type.NONE, Type.NONE, types[:, 1])), axis=1)
+        types = types.at[:, 0].set(jnp.where(remove[:, 0] & (types[:, 0] == Type.NONE), Type.NORMAL, types[:, 0]))
+        types = jnp.where(remove, types, original_types)
+        return active.replace(ability=self.ability, type_list=types)
 
     def is_status_immune(self, player, status):
         """Check represented active status immunities using the effective ability."""
         from ninjax.held_effects import effective_weather
-        mon = self.active[player]
+        mon = self.effective_active[player]
         ability = self.ability[player]
         immune = (((status == Status.POISON) | (status == Status.TOXIC)) &
                   (mon.is_type(Type.POISON) | mon.is_type(Type.STEEL) | jnp.any(POISON_IMMUNE_ABILITIES == ability)))
@@ -465,6 +495,7 @@ def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     volatile = jax.tree.map(lambda value: value.at[side_idx].set(jnp.zeros_like(value[side_idx])), state.volatile_status)
     volatile = volatile.replace(paradox_stat=volatile.paradox_stat.at[side_idx].set(-1),
                                 choice_lock=volatile.choice_lock.at[side_idx].set(-1),
+                                pending_actor_slot=volatile.pending_actor_slot.at[side_idx].set(-1),
                                 ability_override=volatile.ability_override.at[side_idx].set(-1))
     return state.replace(volatile_status=volatile)
 
@@ -525,17 +556,18 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
 # Damage is invoked by many residual/contact branches. Outlining the shared
 # operation avoids retracing its complete ability/item/event graph at each call.
 @jax.jit
-def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, fixed_damage=False) -> BattleState:
+def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, fixed_damage=False, source=-1) -> BattleState:
     """Apply signed HP damage to an active Pokémon and return updated state.
 
     Negative values heal. ``is_attack_damage`` controls the represented Sturdy,
     Multiscale, and Innards Out behavior; other damage-triggered effects remain
     incomplete. Fixed damage bypasses Multiscale but retains Sturdy/Sash.
-    Fainted Pokémon are not marked alive again by healing.
+    Fainted Pokémon are not marked alive again by healing. Direct attacks pass
+    their source side explicitly for deferred faint effects.
     """
-    return _take_damage_value(state, defender_idx, damage, is_attack_damage, True, fixed_damage)
+    return _take_damage_value(state, defender_idx, damage, is_attack_damage, True, fixed_damage, source)
 
-def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_innards, fixed_damage=False):
+def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_innards, fixed_damage=False, source=-1):
     """Implement HP updates; optionally allow a single Innards Out response."""
     active = state.active
     defender = active[defender_idx]
@@ -584,11 +616,11 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
              is_moxie * StatEnum.ATTACK +
              jnp.logical_or(is_soul_heart, is_grim_neigh) * StatEnum.SPECIAL_ATTACK)
     # yeah idk why this needs double index thingy here
-    cond = jnp.logical_and(jnp.logical_or(is_moxie, is_beast_boost), 1-alive)[0]
+    cond = (jnp.logical_or(is_moxie, is_beast_boost) & ~alive & (attacker.current_hp > 0))[0]
     state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
 
     # innards out
-    is_innards_out = triple_and(1-alive, state.ability[defender_idx]==AbilityEnum.INNARDS_OUT, is_attack_damage)
+    is_innards_out = triple_and(1-alive, state.ability[defender_idx]==AbilityEnum.INNARDS_OUT, is_attack_damage) & (attacker.current_hp > 0)
     # This flag is a static Python value: tracing the response with it disabled
     # prevents an unbounded recursive JAX trace.
     if allow_innards:
@@ -603,7 +635,86 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
     from ninjax.held_effects import after_hp_change
-    return after_hp_change(update_active(state, defender_idx, defender), defender_idx)
+    state = after_hp_change(update_active(state, defender_idx, defender), defender_idx)
+    return record_faint(state, defender_idx, source,
+        jnp.where(is_attack_damage, Cause.MOVE,
+            jnp.where(state.event_cause == Cause.MOVE, Cause.INDIRECT, state.event_cause)),
+        (old_health[0] > 0) & (new_health[0] == 0))
+
+
+def record_faint(state, target, source, cause, enabled):
+    """Save a faint's identity and cause independently of observation events."""
+    enabled = jnp.asarray(enabled).reshape(()) & ~state.faint_pending[target]
+    source = jnp.asarray(source, jnp.int32)
+    source_slot = jnp.where(source >= 0, state.active_index[jnp.maximum(source, 0), 0], -1)
+    return state.replace(
+        faint_pending=state.faint_pending.at[target].set(state.faint_pending[target] | enabled),
+        faint_source=state.faint_source.at[target].set(jnp.where(enabled, source, state.faint_source[target])),
+        faint_source_slot=state.faint_source_slot.at[target].set(jnp.where(enabled, source_slot, state.faint_source_slot[target])),
+        faint_target_slot=state.faint_target_slot.at[target].set(jnp.where(enabled, state.active_index[target, 0], state.faint_target_slot[target])),
+        faint_cause=state.faint_cause.at[target].set(jnp.where(enabled, cause, state.faint_cause[target])),
+        faint_destiny_bond=state.faint_destiny_bond.at[target].set(jnp.where(enabled, state.volatile_status.destiny_bond[target, 0], state.faint_destiny_bond[target])))
+
+
+def direct_faint(state, player, source, cause):
+    """Faint an active Pokémon without damage protections or damage callbacks."""
+    mon = state.active[player]
+    alive = mon.current_hp[0] > 0
+    previous_source, previous_cause = state.event_source, state.event_cause
+    state = state.replace(event_source=jnp.asarray(source, jnp.int32), event_cause=jnp.asarray(cause, jnp.int32))
+    state = emit(state, EventKind.HP, player, before=mon.current_hp, after=0, hp_change=-mon.current_hp,
+        hp_fraction_change=-jnp.ceil(mon.hp_percent * 100) / 100, enabled=alive)
+    state = emit(state, EventKind.FAINT, player, enabled=alive)
+    state = update_active(state, player, mon.replace(current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive)))
+    state = record_faint(state, player, source, cause, alive)
+    return state.replace(event_source=previous_source, event_cause=previous_cause)
+
+
+def clear_destiny_bond(state, player):
+    """End the active volatile when its user acts, is interrupted or switches."""
+    v = state.volatile_status
+    active = v.destiny_bond[player, 0]
+    state = state.replace(volatile_status=v.replace(destiny_bond=v.destiny_bond.at[player, 0].set(False)))
+    return emit(state, EventKind.CONDITION, player, detail=16, before=1, after=0, enabled=active)
+
+
+@jax.jit
+def resolve_faints(state):
+    """Resolve pending singles faint effects after the move's HP effects finish.
+
+    Records identify the actual source and team slots. Destiny Bond directly
+    faints a surviving opposing attacker; it is neither damage nor another
+    opposing move and therefore cannot recurse or invoke damage protections.
+    """
+    def resolve(target, s):
+        """Consume one pending faint and its captured Destiny Bond state."""
+        source = s.faint_source[target]
+        safe_source = jnp.maximum(source, 0)
+        triggers = (s.faint_pending[target] & s.faint_destiny_bond[target] &
+            (s.faint_cause[target] == Cause.MOVE) & (source >= 0) & (source != target) &
+            (s.active_index[target, 0] == s.faint_target_slot[target]) &
+            (s.active_index[safe_source, 0] == s.faint_source_slot[target]) &
+            (s.active.current_hp[safe_source, 0] > 0))
+        s = jax.lax.cond(s.faint_pending[target], lambda s: clear_destiny_bond(s, target), lambda s: s, s)
+        s = s.replace(faint_pending=s.faint_pending.at[target].set(False),
+                      faint_destiny_bond=s.faint_destiny_bond.at[target].set(False))
+        def retaliate(s):
+            """Commit the direct faint with an explicit Destiny Bond cause."""
+            old_source, old_cause, old_move = s.event_source, s.event_cause, s.event_move
+            s = s.replace(event_source=jnp.asarray(target, jnp.int32), event_cause=jnp.int32(Cause.DESTINY_BOND), event_move=jnp.int32(194))
+            mon = s.active[safe_source]
+            s = emit(s, EventKind.HP, safe_source, before=mon.current_hp, after=0,
+                hp_change=-mon.current_hp, hp_fraction_change=-jnp.ceil(mon.hp_percent * 100)/100)
+            s = emit(s, EventKind.FAINT, safe_source)
+            s = update_active(s, safe_source, mon.replace(current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive)))
+            s = clear_destiny_bond(s, target)
+            s = clear_destiny_bond(s, safe_source)
+            # In Gen 9 the last Pokémon to faint wins a simultaneous final KO.
+            both_out = ~jnp.any((s.team.current_hp[..., 0] > 0) & s.roster)
+            return s.replace(event_source=old_source, event_cause=old_cause, event_move=old_move,
+                             winner=jnp.where(both_out, source, s.winner))
+        return jax.lax.cond(triggers, retaliate, lambda s: s, s)
+    return jax.lax.fori_loop(0, 2, resolve, state)
 
 def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
     """Apply stages after optionally ignoring negative or positive stages."""
@@ -612,21 +723,27 @@ def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
     boosts = jnp.maximum(boosts, jnp.where(ignore_drops, 0, -6))
     return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + boosts])
 
-def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defender_unaware, is_crit):
-    """Return attacker and defender stats with the represented stage rules.
+def select_offensive_stats(raw_stats, boosts, attacker_idx, owner, defender_unaware, is_crit):
+    """Select an active owner's raw stats and apply offensive-stage rules.
 
-    Critical hits and Unaware alter which stages are applied. Ability coverage
-    here is incomplete; callers apply additional modifiers separately.
+    ``raw_stats`` and ``boosts`` have leading player axes of length two.
+    ``owner`` selects the user or target. The returned stat vector excludes
+    item and ability modifiers; callers apply those using the move user.
     """
-    attacker_stats = raw_stats[attacker_idx]
+    owner_idx = jnp.where(owner == OffensiveStatOwner.TARGET, 1 - attacker_idx, attacker_idx)
+    return boosted_stats_helper(raw_stats[owner_idx], boosts[owner_idx], is_crit | defender_unaware, defender_unaware)
+
+
+def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defender_unaware, is_crit,
+                      offensive_owner=OffensiveStatOwner.USER):
+    """Return offensive-owner and defender stats with represented stage rules.
+
+    Critical hits and Unaware alter which stages are applied. The offensive
+    owner defaults to the user; callers apply ability and item modifiers later.
+    """
     defender_stats = raw_stats[1 - attacker_idx]
-    attacker_boosts = boosts[attacker_idx]
     defender_boosts = boosts[1 - attacker_idx]
-    attacker_stats = boosted_stats_helper(
-        attacker_stats,
-        attacker_boosts,
-        is_crit,
-        defender_unaware)
+    attacker_stats = select_offensive_stats(raw_stats, boosts, attacker_idx, offensive_owner, defender_unaware, is_crit)
     defender_stats = boosted_stats_helper(
         defender_stats,
         defender_boosts,
