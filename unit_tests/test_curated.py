@@ -50,8 +50,7 @@ def test_sampled_teams_and_explicit_omissions():
     sets = load_sets()
     pool, omissions = make_sandbox_pool(sets)
     assert len(omissions) == len(sets)
-    assert any(report['moves'] for report in omissions)
-    assert 'Beat Up' in next(report for report in omissions if report['species'] == 'Maushold')['moves']
+    assert all(not report['moves'] for report in omissions)
     assert jnp.all(pool.ability == 0) and jnp.all(pool.item == 0)
     assert jnp.all(jnp.where(pool.moves.implemented, True, pool.moves.current_pp == 0))
     # Known defaults and stat indexing: Koraidon is Jolly with 4 HP/252 Atk/252 Spe.
@@ -75,11 +74,13 @@ def test_sampled_teams_and_explicit_omissions():
 
 
 def test_curated_item_projection():
-    """Supported items survive sampling; unimplemented items remain reported."""
+    """Every current curated item survives construction and sampling."""
     sets = load_sets()
     pool, reports = make_item_pool(sets, abilities=True)
     for species, item in [('Koraidon', ItemEnum.LIFE_ORB), ('Flutter Mane', ItemEnum.BOOSTER_ENERGY),
-                          ('Rillaboom', ItemEnum.LOADED_DICE)]:
+                          ('Rillaboom', ItemEnum.LOADED_DICE), ('Maushold', ItemEnum.KINGS_ROCK),
+                          ('Urshifu-Rapid-Strike', ItemEnum.PROTECTIVE_PADS),
+                          ('Gastrodon', ItemEnum.ABSORB_BULB), ('Ogerpon-Wellspring', ItemEnum.WELLSPRING_MASK)]:
         i = next(i for i, s in enumerate(sets) if s.species == species)
         assert pool.item[i, 0] == item and reports[i]['item'] is None
     i = next(i for i, s in enumerate(sets) if s.species == 'Flutter Mane')
@@ -87,19 +88,27 @@ def test_curated_item_projection():
     i = next(i for i, s in enumerate(sets) if s.species == 'Altaria')
     assert pool.item[i, 0] == ItemEnum.MENTAL_HERB and reports[i]['item'] is None
     i = next(i for i, s in enumerate(sets) if s.species == 'Gastrodon')
-    assert pool.item[i, 0] == ItemEnum.NONE and reports[i]['item'] == 'Absorb Bulb'
+    assert pool.item[i, 0] == ItemEnum.ABSORB_BULB and reports[i]['item'] is None
+    assert all(report['item'] is None or not report['item'] for report in reports)
     teams, indices = jax.jit(sample_teams)(jax.random.key(3), pool)
     assert jnp.array_equal(teams.item, pool.item[indices])
 
 
 @pytest.mark.parametrize('seed', [0, 17, 42])
+@pytest.mark.parametrize('enabled', [False, True], ids=['neutral', 'abilities-and-items'])
 @pytest.mark.jit
-def test_complete_curated_sandbox(seed):
-    """Complete a seeded curated battle using the shared compiled step."""
-    result = run_curated(seed=seed)
+def test_complete_curated_sandbox(seed, enabled, record_property):
+    """Complete compiled battles with neutral or enabled curated abilities/items."""
+    result = run_curated(seed=seed, abilities=enabled, items=enabled)
     assert 0 < result['turns'] <= 100
     assert result['reward'] in ([1., -1.], [-1., 1.], [0., 0.])
     assert len(result['omissions']) == 12
     assert all(len(set(side)) == 6 for side in result['set_indices'])
     assert len(result['decisions']) < 1000
     assert all(min(d['hp']) >= 0 for d in result['decisions'])
+    assert all(not report['moves'] for report in result['omissions'])
+    if enabled:
+        assert all(report['ability'] is None and not report['item'] for report in result['omissions'])
+    for name in ('seed', 'turns', 'reward'):
+        record_property(name, result[name])
+    record_property('decisions', len(result['decisions']))

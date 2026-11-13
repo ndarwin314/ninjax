@@ -1,0 +1,155 @@
+{
+  "cpu_count": 2,
+  "rss_limit_mib": 4096,
+  "virtual_limit_mib": 8192,
+  "timeout_seconds": 180,
+  "results": [
+    {
+      "target": "dispatch",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 72.903,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "dispatch",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 523.7,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "dispatch",
+          "elapsed_seconds": 4.241,
+          "peak_rss_mib": 579.0,
+          "equations": 34401,
+          "subgraphs": 334,
+          "primitives": {
+            "jit": 7842,
+            "add": 4127,
+            "lt": 3279,
+            "select_n": 3171,
+            "squeeze": 1946,
+            "reshape": 1806,
+            "broadcast_in_dim": 1533,
+            "eq": 1314,
+            "convert_element_type": 1291,
+            "and": 1160,
+            "dynamic_slice": 1032,
+            "mul": 942
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "dispatch",
+          "elapsed_seconds": 7.211,
+          "peak_rss_mib": 808.7
+        },
+        {
+          "phase": "compiled",
+          "target": "dispatch",
+          "elapsed_seconds": 40.69,
+          "peak_rss_mib": 2238.7
+        },
+        {
+          "phase": "executed",
+          "target": "dispatch",
+          "elapsed_seconds": 40.694,
+          "peak_rss_mib": 2238.7
+        },
+        {
+          "phase": "validated",
+          "target": "dispatch",
+          "elapsed_seconds": 59.138,
+          "peak_rss_mib": 2238.7,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "move",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 74.833,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "move",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 524.6,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "move",
+          "elapsed_seconds": 3.994,
+          "peak_rss_mib": 583.4,
+          "equations": 36532,
+          "subgraphs": 350,
+          "primitives": {
+            "jit": 8494,
+            "add": 4280,
+            "lt": 3409,
+            "select_n": 3296,
+            "squeeze": 2091,
+            "reshape": 1892,
+            "broadcast_in_dim": 1636,
+            "eq": 1459,
+            "convert_element_type": 1345,
+            "and": 1266,
+            "dynamic_slice": 1062,
+            "mul": 979
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "move",
+          "elapsed_seconds": 6.882,
+          "peak_rss_mib": 817.4
+        },
+        {
+          "phase": "compiled",
+          "target": "move",
+          "elapsed_seconds": 41.456,
+          "peak_rss_mib": 2163.2
+        },
+        {
+          "phase": "executed",
+          "target": "move",
+          "elapsed_seconds": 41.46,
+          "peak_rss_mib": 2163.2
+        },
+        {
+          "phase": "validated",
+          "target": "move",
+          "elapsed_seconds": 61.43,
+          "peak_rss_mib": 2163.2,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    }
+  ],
+  "recorded_at": "2026-11-13T22:53:12.221757+00:00",
+  "baseline": "compilation-components.json",
+  "change": "Common dispatcher after Sleep Talk slot selection; common hit pipeline after Explosion/Electro Shot preparation."
+}

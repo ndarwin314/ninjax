@@ -37,6 +37,33 @@ def test_ability_resolution_batches(neutral_type):
     assert values.shape == (2, 2, 1)
 
 
+@pytest.mark.jit
+def test_dynamic_active_gather_transforms(neutral_type):
+    """Shared gathers retain slots and effective abilities under jit/vmap/scan."""
+    _, state = neutral_type
+    team = state.team.replace(
+        current_hp=jnp.arange(100, 112, dtype=jnp.int32).reshape(2, 6, 1),
+        ability=jnp.arange(12, dtype=jnp.int32).reshape(2, 6, 1),
+        moves=state.team.moves.replace(identifier=jnp.arange(48, dtype=jnp.int32).reshape(2, 6, 4, 1)))
+    state = state.replace(team=team)
+    slots = jnp.array([[2, 4], [5, 1]], jnp.int32)
+    def read(indices):
+        """Read only selected leaves from a dynamic active snapshot."""
+        current = state.replace(active_index=indices[:, None])
+        active = current.active
+        return active.current_hp, active.moves.identifier, current.ability
+    expected = jax.vmap(lambda indices: (
+        team.current_hp[jnp.arange(2), indices],
+        team.moves.identifier[jnp.arange(2), indices],
+        team.ability[jnp.arange(2), indices]))(slots)
+    actual = jax.jit(jax.vmap(read))(slots)
+    _, scanned = jax.jit(lambda indices: jax.lax.scan(
+        lambda carry, row: (carry, read(row)), None, indices))(slots)
+    for wanted, batched, sequence in zip(expected, actual, scanned):
+        assert jnp.array_equal(wanted, batched)
+        assert jnp.array_equal(wanted, sequence)
+
+
 def test_status_immunity_uses_override(neutral_type):
     """A temporary Insomnia grants sleep immunity without changing the team."""
     key, state = neutral_type

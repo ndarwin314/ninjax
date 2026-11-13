@@ -24,13 +24,14 @@ expectations; this is not full battle replay or exhaustive interaction parity.
 | Storm Drain | Supported | Water immunity and one boost per intercepted move, before accuracy; self-targeted Water moves unaffected |
 | Water Absorb | Supported | Quarter-max-HP healing instead of Water damage, before accuracy; self-targeted Water moves unaffected |
 | Friend Guard | Supported in singles | No effect without another active ally. Doubles reduction remains unvalidated because doubles is not implemented |
-| Unseen Fist | Blocked | Protect/protection state is absent; cannot validate contact bypass end-to-end. Remains omitted |
+| Unseen Fist | Supported for represented protection | Contact bypass of Protect and Spiky Shield; other protection variants remain outside coverage |
 
-`unit_tests/test_remaining_abilities.py` tracks these cases. The Unseen Fist
-check is explicitly skipped with its blocking reason, rather than reporting a
-placeholder as a pass. A separately marked compiled test exercises dynamic
-ability hooks under jit/vmap/scan. The existing compiled curated battle test
-exercises the expanded ability pool through reset/step.
+`unit_tests/test_remaining_abilities.py` tracks the earlier ability audit;
+`unit_tests/test_protect.py` and `unit_tests/test_spiky_shield.py` cover the
+subsequent protection work. Separately marked compiled checks exercise dynamic
+ability hooks under jit/vmap/scan and the curated ability pool through reset/step.
+Their existence does not establish a completed compiled acceptance run for the
+latest engine changes.
 
 Validation exposed and corrected same-type Protean/Libero activation consumption,
 Ruin and Sand Force rounding, defending Sword of Ruin against Body Press, Sand
@@ -38,8 +39,9 @@ Force weather immunity, Pixilate's type-determining move exclusions, fainted
 Shadow Tag trapping, absorption occurring after accuracy, and rounding stat
 modifiers separately instead of chaining them before final rounding.
 
-The opt-in curated ability mode now recognizes 29 of the 30 named abilities in
-the current set file. Unsupported moves/items are still projected and reported;
-this limits interaction coverage. Friend Guard's doubles behavior, Unseen Fist,
-uncatalogued move callbacks and deferred transformation mechanics are not covered
-by the supported singles result above.
+The opt-in curated ability mode recognizes all 30 named abilities in the current
+set file. All curated move slots and item names are enabled in their respective
+opt-in modes, while unsupported custom entries remain projected and reported.
+Friend Guard's doubles behavior, additional protection
+variants, uncatalogued move callbacks and deferred transformation mechanics
+remain outside the supported singles scope above.

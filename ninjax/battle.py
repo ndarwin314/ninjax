@@ -12,7 +12,7 @@ from jumanji.types import TimeStep, restart, transition, truncation, termination
 import jax.numpy as jnp
 
 
-from ninjax.side import BattleState, update_active, resolve_faints, clear_destiny_bond
+from ninjax.side import BattleState, update_active_fields, resolve_faints, clear_destiny_bond
 from ninjax.pokemon import Pokemon
 from ninjax.move import Move
 from ninjax.game_logic import do_damaging_move
@@ -474,7 +474,7 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
     # Sleep decrements before acting; a counter reaching zero wakes the user.
     wakes = (sleep == 0) & (old_sleep == 1)
     actor = actor.replace(sleep_counter=sleep, status=jnp.where(wakes, Status.NONE, actor.status))
-    state = update_active(state, player_idx, actor)
+    state = update_active_fields(state, player_idx, status=actor.status, sleep_counter=actor.sleep_counter)
     # Freeze is checked before flinch and restrictions. Defrost moves bypass
     # the check but thaw only when they actually execute.
     def freeze_check(args):
@@ -484,7 +484,7 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
         mon = state.active[player_idx]
         thaw = random.uniform(subkey) < .2
         mon = mon.replace(status=jnp.where(thaw, Status.NONE, mon.status))
-        state = update_active(state, player_idx, mon)
+        state = update_active_fields(state, player_idx, status=mon.status)
         return key, state, ~thaw
     frozen = (actor.status[0] == Status.FREEZE) & ~jnp.asarray(defrost_move).reshape(())
     key, state, freeze_blocked = lax.cond(frozen, freeze_check,
@@ -519,7 +519,7 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
                     hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
                     enabled=hp[0] != mon.current_hp[0])
                 s = emit(s, EventKind.FAINT, player_idx, enabled=(mon.current_hp[0] > 0) & (hp[0] == 0))
-                s = update_active(s, player_idx, mon.replace(current_hp=hp, is_alive=mon.is_alive & (hp > 0)))
+                s = update_active_fields(s, player_idx, current_hp=hp, is_alive=mon.is_alive & (hp > 0))
                 s = after_hp_change(s, player_idx)
                 return s.replace(event_source=old_source, event_cause=old_cause)
             return key, lax.cond(hit, self_hit, lambda s: s, state), hit
@@ -553,8 +553,8 @@ def step_move(
         queued_priority=v.queued_priority.at[player_idx, 0].set(priority),
         encore_overridden=v.encore_overridden.at[player_idx, 0].set(index != original_index)))
     attacker = state.active[player_idx]
-    state = update_active(state, player_idx, attacker.replace(
-        is_terastallized=attacker.is_terastallized | jnp.bool([is_tera])))
+    state = update_active_fields(state, player_idx,
+        is_terastallized=attacker.is_terastallized | jnp.bool([is_tera]))
     selected_move = state.active[player_idx].moves[index]
     key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
         defrost_move=selected_move.defrost, sleep_usable=selected_move.identifier[0] == 214)
@@ -630,7 +630,7 @@ def step_action(
                                      jnp.ceil(actor.current_hp / actor.max_hp * 100)) / 100,
                  enabled=hp != actor.current_hp)
         b = emit(b, EventKind.FAINT, player_index, enabled=(actor.current_hp > 0) & (hp == 0))
-        b = update_active(b, player_index, actor.replace(current_hp=hp, is_alive=hp > 0))
+        b = update_active_fields(b, player_index, current_hp=hp, is_alive=hp > 0)
         b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player_index, b.winner))
         return k, b
     key, state = lax.cond(action.transformation == Transformation.NONE,

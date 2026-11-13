@@ -32,9 +32,9 @@ boolean, or floating-point types. Each leaf starts with the observer axis `(2,)`
 Opponent HP is rounded up to percentage points. Unrevealed values use zero plus
 a false known mask. Team and move slots currently retain the engine's ordering;
 there is no reveal-order remapping or inferred ability knowledge tracker. Frisk
-retains public item knowledge by owner/team slot, and public consumption updates
-that knowledge to no item. Unimplemented item exchange/removal effects must
-update this knowledge when they are added.
+retains public item knowledge by owner/team slot. Public consumption and removal
+update that knowledge to no item; Trick and Switcheroo update knowledge of both
+exchanged items. Sleep Talk reveals the called move independently of PP usage.
 
 ## Transition events
 

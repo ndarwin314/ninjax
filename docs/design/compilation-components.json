@@ -1,0 +1,1215 @@
+{
+  "cpu_count": 2,
+  "rss_limit_mib": 4096,
+  "virtual_limit_mib": 8192,
+  "timeout_seconds": 180,
+  "schema_version": 1,
+  "recorded_at": "2026-11-13T22:29:31.881901+00:00",
+  "python_version": "3.14.9",
+  "jax_version": "0.12.0.1",
+  "jaxlib_version": "0.11.2",
+  "backend": "cpu",
+  "xla_flags": "",
+  "team_seed": 0,
+  "reset_key_seed": 7,
+  "source_note": "Working tree with compilation-memory optimizations; three sequential pytest selections, one fresh process per target.",
+  "results": [
+    {
+      "target": "ability",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 12.135,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "ability",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 519.9,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "ability",
+          "elapsed_seconds": 0.01,
+          "peak_rss_mib": 520.2,
+          "equations": 39,
+          "subgraphs": 6,
+          "primitives": {
+            "jit": 10,
+            "convert_element_type": 5,
+            "select_n": 4,
+            "squeeze": 3,
+            "broadcast_in_dim": 3,
+            "max": 2,
+            "min": 2,
+            "slice": 2,
+            "lt": 2,
+            "add": 2,
+            "iota": 1,
+            "concatenate": 1
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "ability",
+          "elapsed_seconds": 0.013,
+          "peak_rss_mib": 520.2
+        },
+        {
+          "phase": "compiled",
+          "target": "ability",
+          "elapsed_seconds": 0.037,
+          "peak_rss_mib": 520.7
+        },
+        {
+          "phase": "executed",
+          "target": "ability",
+          "elapsed_seconds": 0.038,
+          "peak_rss_mib": 520.7
+        },
+        {
+          "phase": "validated",
+          "target": "ability",
+          "elapsed_seconds": 0.321,
+          "peak_rss_mib": 527.8,
+          "comparison": "compiled_vs_eager",
+          "leaves": 1
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "active",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 12.324,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "active",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 521.0,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "active",
+          "elapsed_seconds": 0.012,
+          "peak_rss_mib": 521.1,
+          "equations": 704,
+          "subgraphs": 7,
+          "primitives": {
+            "lt": 130,
+            "add": 130,
+            "select_n": 130,
+            "broadcast_in_dim": 130,
+            "concatenate": 65,
+            "gather": 65,
+            "jit": 40,
+            "convert_element_type": 4,
+            "squeeze": 3,
+            "max": 2,
+            "min": 2,
+            "slice": 2
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "active",
+          "elapsed_seconds": 0.028,
+          "peak_rss_mib": 521.4
+        },
+        {
+          "phase": "compiled",
+          "target": "active",
+          "elapsed_seconds": 0.149,
+          "peak_rss_mib": 533.6
+        },
+        {
+          "phase": "executed",
+          "target": "active",
+          "elapsed_seconds": 0.15,
+          "peak_rss_mib": 533.6
+        },
+        {
+          "phase": "validated",
+          "target": "active",
+          "elapsed_seconds": 0.558,
+          "peak_rss_mib": 534.7,
+          "comparison": "compiled_vs_eager",
+          "leaves": 65
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "update",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 12.316,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "update",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 522.9,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "update",
+          "elapsed_seconds": 0.013,
+          "peak_rss_mib": 523.4,
+          "equations": 66,
+          "subgraphs": 5,
+          "primitives": {
+            "jit": 25,
+            "lt": 7,
+            "add": 7,
+            "select_n": 7,
+            "convert_element_type": 4,
+            "squeeze": 4,
+            "max": 2,
+            "min": 2,
+            "slice": 2,
+            "dynamic_slice": 2,
+            "broadcast_in_dim": 2,
+            "concatenate": 1
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "update",
+          "elapsed_seconds": 0.024,
+          "peak_rss_mib": 523.7
+        },
+        {
+          "phase": "compiled",
+          "target": "update",
+          "elapsed_seconds": 0.073,
+          "peak_rss_mib": 532.9
+        },
+        {
+          "phase": "executed",
+          "target": "update",
+          "elapsed_seconds": 0.075,
+          "peak_rss_mib": 532.9
+        },
+        {
+          "phase": "validated",
+          "target": "update",
+          "elapsed_seconds": 0.317,
+          "peak_rss_mib": 534.3,
+          "comparison": "compiled_vs_eager",
+          "leaves": 148
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "stats",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 14.355,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "stats",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 522.9,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "stats",
+          "elapsed_seconds": 0.031,
+          "peak_rss_mib": 523.3,
+          "equations": 1610,
+          "subgraphs": 19,
+          "primitives": {
+            "add": 330,
+            "select_n": 326,
+            "lt": 318,
+            "broadcast_in_dim": 145,
+            "jit": 95,
+            "squeeze": 75,
+            "gather": 69,
+            "concatenate": 68,
+            "dynamic_slice": 68,
+            "eq": 24,
+            "convert_element_type": 20,
+            "and": 14
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "stats",
+          "elapsed_seconds": 0.062,
+          "peak_rss_mib": 523.6
+        },
+        {
+          "phase": "compiled",
+          "target": "stats",
+          "elapsed_seconds": 0.199,
+          "peak_rss_mib": 534.1
+        },
+        {
+          "phase": "executed",
+          "target": "stats",
+          "elapsed_seconds": 0.2,
+          "peak_rss_mib": 534.1
+        },
+        {
+          "phase": "validated",
+          "target": "stats",
+          "elapsed_seconds": 2.266,
+          "peak_rss_mib": 567.3,
+          "comparison": "compiled_vs_eager",
+          "leaves": 1
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "power",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 14.267,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "power",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 525.4,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "power",
+          "elapsed_seconds": 0.068,
+          "peak_rss_mib": 526.7,
+          "equations": 2142,
+          "subgraphs": 21,
+          "primitives": {
+            "select_n": 412,
+            "add": 407,
+            "lt": 404,
+            "broadcast_in_dim": 147,
+            "jit": 133,
+            "squeeze": 124,
+            "dynamic_slice": 110,
+            "concatenate": 69,
+            "gather": 69,
+            "eq": 63,
+            "convert_element_type": 58,
+            "and": 40
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "power",
+          "elapsed_seconds": 0.105,
+          "peak_rss_mib": 527.2
+        },
+        {
+          "phase": "compiled",
+          "target": "power",
+          "elapsed_seconds": 0.251,
+          "peak_rss_mib": 539.3
+        },
+        {
+          "phase": "executed",
+          "target": "power",
+          "elapsed_seconds": 0.252,
+          "peak_rss_mib": 539.3
+        },
+        {
+          "phase": "validated",
+          "target": "power",
+          "elapsed_seconds": 2.448,
+          "peak_rss_mib": 573.1,
+          "comparison": "compiled_vs_eager",
+          "leaves": 1
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "hp",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 15.756,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "hp",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 524.3,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "hp",
+          "elapsed_seconds": 0.343,
+          "peak_rss_mib": 528.8,
+          "equations": 3935,
+          "subgraphs": 36,
+          "primitives": {
+            "add": 684,
+            "lt": 533,
+            "select_n": 530,
+            "jit": 481,
+            "broadcast_in_dim": 221,
+            "squeeze": 197,
+            "reshape": 172,
+            "mul": 138,
+            "dynamic_slice": 135,
+            "convert_element_type": 133,
+            "concatenate": 91,
+            "and": 83
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "hp",
+          "elapsed_seconds": 0.466,
+          "peak_rss_mib": 534.2
+        },
+        {
+          "phase": "compiled",
+          "target": "hp",
+          "elapsed_seconds": 1.355,
+          "peak_rss_mib": 670.7
+        },
+        {
+          "phase": "executed",
+          "target": "hp",
+          "elapsed_seconds": 1.356,
+          "peak_rss_mib": 670.9
+        },
+        {
+          "phase": "validated",
+          "target": "hp",
+          "elapsed_seconds": 3.992,
+          "peak_rss_mib": 674.8,
+          "comparison": "compiled_vs_eager",
+          "leaves": 148
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "status",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 14.455,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "status",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 522.4,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "status",
+          "elapsed_seconds": 0.053,
+          "peak_rss_mib": 523.5,
+          "equations": 1768,
+          "subgraphs": 23,
+          "primitives": {
+            "select_n": 341,
+            "add": 335,
+            "lt": 332,
+            "broadcast_in_dim": 158,
+            "jit": 135,
+            "squeeze": 87,
+            "concatenate": 71,
+            "dynamic_slice": 70,
+            "gather": 69,
+            "eq": 31,
+            "or": 20,
+            "convert_element_type": 17
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "status",
+          "elapsed_seconds": 0.1,
+          "peak_rss_mib": 524.3
+        },
+        {
+          "phase": "compiled",
+          "target": "status",
+          "elapsed_seconds": 0.351,
+          "peak_rss_mib": 568.9
+        },
+        {
+          "phase": "executed",
+          "target": "status",
+          "elapsed_seconds": 0.353,
+          "peak_rss_mib": 568.9
+        },
+        {
+          "phase": "validated",
+          "target": "status",
+          "elapsed_seconds": 2.768,
+          "peak_rss_mib": 588.0,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "secondary",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 15.472,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "secondary",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 521.3,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "secondary",
+          "elapsed_seconds": 0.366,
+          "peak_rss_mib": 524.8,
+          "equations": 3672,
+          "subgraphs": 56,
+          "primitives": {
+            "add": 596,
+            "select_n": 592,
+            "lt": 588,
+            "jit": 582,
+            "squeeze": 222,
+            "broadcast_in_dim": 214,
+            "dynamic_slice": 172,
+            "concatenate": 95,
+            "reshape": 90,
+            "gather": 82,
+            "convert_element_type": 66,
+            "and": 49
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "secondary",
+          "elapsed_seconds": 0.562,
+          "peak_rss_mib": 534.9
+        },
+        {
+          "phase": "compiled",
+          "target": "secondary",
+          "elapsed_seconds": 1.519,
+          "peak_rss_mib": 685.8
+        },
+        {
+          "phase": "executed",
+          "target": "secondary",
+          "elapsed_seconds": 1.521,
+          "peak_rss_mib": 685.8
+        },
+        {
+          "phase": "validated",
+          "target": "secondary",
+          "elapsed_seconds": 3.625,
+          "peak_rss_mib": 689.4,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "contact",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 20.827,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "contact",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 525.2,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "contact",
+          "elapsed_seconds": 0.546,
+          "peak_rss_mib": 532.3,
+          "equations": 6386,
+          "subgraphs": 68,
+          "primitives": {
+            "jit": 1042,
+            "add": 959,
+            "lt": 785,
+            "select_n": 780,
+            "squeeze": 367,
+            "broadcast_in_dim": 316,
+            "reshape": 270,
+            "dynamic_slice": 229,
+            "convert_element_type": 228,
+            "eq": 182,
+            "mul": 178,
+            "and": 152
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "contact",
+          "elapsed_seconds": 0.826,
+          "peak_rss_mib": 544.1
+        },
+        {
+          "phase": "compiled",
+          "target": "contact",
+          "elapsed_seconds": 3.198,
+          "peak_rss_mib": 813.4
+        },
+        {
+          "phase": "executed",
+          "target": "contact",
+          "elapsed_seconds": 3.2,
+          "peak_rss_mib": 813.6
+        },
+        {
+          "phase": "validated",
+          "target": "contact",
+          "elapsed_seconds": 8.997,
+          "peak_rss_mib": 819.8,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "hit",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 32.044,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "hit",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 523.6,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "hit",
+          "elapsed_seconds": 1.562,
+          "peak_rss_mib": 546.6,
+          "equations": 16042,
+          "subgraphs": 155,
+          "primitives": {
+            "jit": 3137,
+            "add": 2089,
+            "lt": 1565,
+            "select_n": 1529,
+            "squeeze": 838,
+            "reshape": 816,
+            "convert_element_type": 729,
+            "broadcast_in_dim": 666,
+            "eq": 634,
+            "mul": 585,
+            "and": 564,
+            "dynamic_slice": 472
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "hit",
+          "elapsed_seconds": 2.352,
+          "peak_rss_mib": 583.7
+        },
+        {
+          "phase": "compiled",
+          "target": "hit",
+          "elapsed_seconds": 9.491,
+          "peak_rss_mib": 1187.3
+        },
+        {
+          "phase": "executed",
+          "target": "hit",
+          "elapsed_seconds": 9.494,
+          "peak_rss_mib": 1187.3
+        },
+        {
+          "phase": "validated",
+          "target": "hit",
+          "elapsed_seconds": 19.647,
+          "peak_rss_mib": 1187.3,
+          "comparison": "compiled_vs_eager",
+          "leaves": 215
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "multi_hit",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 75.195,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "multi_hit",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 524.4,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "multi_hit",
+          "elapsed_seconds": 1.826,
+          "peak_rss_mib": 552.1,
+          "equations": 18306,
+          "subgraphs": 199,
+          "primitives": {
+            "jit": 3880,
+            "add": 2309,
+            "lt": 1767,
+            "select_n": 1719,
+            "squeeze": 977,
+            "reshape": 925,
+            "convert_element_type": 798,
+            "broadcast_in_dim": 740,
+            "eq": 699,
+            "and": 636,
+            "mul": 616,
+            "dynamic_slice": 543
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "multi_hit",
+          "elapsed_seconds": 3.125,
+          "peak_rss_mib": 625.6
+        },
+        {
+          "phase": "compiled",
+          "target": "multi_hit",
+          "elapsed_seconds": 13.174,
+          "peak_rss_mib": 1324.4
+        },
+        {
+          "phase": "executed",
+          "target": "multi_hit",
+          "elapsed_seconds": 13.177,
+          "peak_rss_mib": 1324.4
+        },
+        {
+          "phase": "validated",
+          "target": "multi_hit",
+          "elapsed_seconds": 62.866,
+          "peak_rss_mib": 1324.4,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "status_move",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 31.65,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "status_move",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 522.2,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "status_move",
+          "elapsed_seconds": 1.776,
+          "peak_rss_mib": 548.7,
+          "equations": 19153,
+          "subgraphs": 159,
+          "primitives": {
+            "jit": 3734,
+            "add": 2672,
+            "lt": 2128,
+            "select_n": 2065,
+            "reshape": 1098,
+            "squeeze": 1078,
+            "broadcast_in_dim": 922,
+            "dynamic_slice": 668,
+            "convert_element_type": 646,
+            "mul": 518,
+            "eq": 517,
+            "and": 500
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "status_move",
+          "elapsed_seconds": 2.876,
+          "peak_rss_mib": 616.7
+        },
+        {
+          "phase": "compiled",
+          "target": "status_move",
+          "elapsed_seconds": 13.061,
+          "peak_rss_mib": 1562.7
+        },
+        {
+          "phase": "executed",
+          "target": "status_move",
+          "elapsed_seconds": 13.064,
+          "peak_rss_mib": 1562.7
+        },
+        {
+          "phase": "validated",
+          "target": "status_move",
+          "elapsed_seconds": 19.591,
+          "peak_rss_mib": 1562.7,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "before_move",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 14.725,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "before_move",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 525.1,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "before_move",
+          "elapsed_seconds": 0.167,
+          "peak_rss_mib": 527.9,
+          "equations": 2702,
+          "subgraphs": 41,
+          "primitives": {
+            "add": 466,
+            "select_n": 416,
+            "lt": 412,
+            "jit": 387,
+            "broadcast_in_dim": 168,
+            "squeeze": 117,
+            "reshape": 106,
+            "dynamic_slice": 93,
+            "concatenate": 74,
+            "gather": 66,
+            "convert_element_type": 59,
+            "mul": 52
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "before_move",
+          "elapsed_seconds": 0.393,
+          "peak_rss_mib": 532.6
+        },
+        {
+          "phase": "compiled",
+          "target": "before_move",
+          "elapsed_seconds": 1.262,
+          "peak_rss_mib": 665.8
+        },
+        {
+          "phase": "executed",
+          "target": "before_move",
+          "elapsed_seconds": 1.264,
+          "peak_rss_mib": 665.8
+        },
+        {
+          "phase": "validated",
+          "target": "before_move",
+          "elapsed_seconds": 2.85,
+          "peak_rss_mib": 668.5,
+          "comparison": "compiled_vs_eager",
+          "leaves": 150
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "switch",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 22.208,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "switch",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 523.1,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096
+        },
+        {
+          "phase": "traced",
+          "target": "switch",
+          "elapsed_seconds": 0.563,
+          "peak_rss_mib": 531.1,
+          "equations": 6597,
+          "subgraphs": 63,
+          "primitives": {
+            "add": 1042,
+            "jit": 940,
+            "lt": 859,
+            "select_n": 855,
+            "broadcast_in_dim": 412,
+            "squeeze": 347,
+            "reshape": 295,
+            "dynamic_slice": 241,
+            "convert_element_type": 222,
+            "mul": 191,
+            "eq": 153,
+            "and": 133
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "switch",
+          "elapsed_seconds": 0.841,
+          "peak_rss_mib": 542.1
+        },
+        {
+          "phase": "compiled",
+          "target": "switch",
+          "elapsed_seconds": 3.835,
+          "peak_rss_mib": 891.9
+        },
+        {
+          "phase": "executed",
+          "target": "switch",
+          "elapsed_seconds": 3.837,
+          "peak_rss_mib": 892.0
+        },
+        {
+          "phase": "validated",
+          "target": "switch",
+          "elapsed_seconds": 10.262,
+          "peak_rss_mib": 898.1,
+          "comparison": "compiled_vs_eager",
+          "leaves": 148
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "field",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 30.059,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "field",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 521.6,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "field",
+          "elapsed_seconds": 0.973,
+          "peak_rss_mib": 533.1,
+          "equations": 11159,
+          "subgraphs": 100,
+          "primitives": {
+            "add": 1702,
+            "jit": 1582,
+            "lt": 1337,
+            "select_n": 1333,
+            "broadcast_in_dim": 755,
+            "convert_element_type": 611,
+            "squeeze": 567,
+            "reshape": 481,
+            "mul": 350,
+            "dynamic_slice": 293,
+            "concatenate": 268,
+            "and": 264
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "field",
+          "elapsed_seconds": 1.56,
+          "peak_rss_mib": 552.6
+        },
+        {
+          "phase": "compiled",
+          "target": "field",
+          "elapsed_seconds": 5.692,
+          "peak_rss_mib": 1063.4
+        },
+        {
+          "phase": "executed",
+          "target": "field",
+          "elapsed_seconds": 5.694,
+          "peak_rss_mib": 1063.6
+        },
+        {
+          "phase": "validated",
+          "target": "field",
+          "elapsed_seconds": 18.063,
+          "peak_rss_mib": 1073.5,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "observe",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 16.2,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "observe",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 520.0,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "observe",
+          "elapsed_seconds": 0.055,
+          "peak_rss_mib": 520.9,
+          "equations": 1310,
+          "subgraphs": 28,
+          "primitives": {
+            "broadcast_in_dim": 230,
+            "select_n": 160,
+            "add": 152,
+            "lt": 143,
+            "jit": 101,
+            "squeeze": 78,
+            "concatenate": 73,
+            "gather": 68,
+            "rev": 52,
+            "stack": 50,
+            "and": 29,
+            "convert_element_type": 27
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "observe",
+          "elapsed_seconds": 0.105,
+          "peak_rss_mib": 521.4
+        },
+        {
+          "phase": "compiled",
+          "target": "observe",
+          "elapsed_seconds": 0.585,
+          "peak_rss_mib": 574.7
+        },
+        {
+          "phase": "executed",
+          "target": "observe",
+          "elapsed_seconds": 0.587,
+          "peak_rss_mib": 574.9
+        },
+        {
+          "phase": "validated",
+          "target": "observe",
+          "elapsed_seconds": 4.08,
+          "peak_rss_mib": 607.7,
+          "comparison": "compiled_vs_eager",
+          "leaves": 73
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "dispatch",
+      "status": "passed",
+      "returncode": 0,
+      "wall_seconds": 142.703,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "dispatch",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 523.8,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "dispatch",
+          "elapsed_seconds": 3.877,
+          "peak_rss_mib": 581.4,
+          "equations": 36286,
+          "subgraphs": 334,
+          "primitives": {
+            "jit": 8346,
+            "add": 4253,
+            "lt": 3381,
+            "select_n": 3271,
+            "squeeze": 2092,
+            "reshape": 1836,
+            "broadcast_in_dim": 1611,
+            "eq": 1510,
+            "convert_element_type": 1341,
+            "and": 1273,
+            "dynamic_slice": 1062,
+            "mul": 988
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "dispatch",
+          "elapsed_seconds": 7.344,
+          "peak_rss_mib": 1004.0
+        },
+        {
+          "phase": "compiled",
+          "target": "dispatch",
+          "elapsed_seconds": 111.919,
+          "peak_rss_mib": 3530.1
+        },
+        {
+          "phase": "executed",
+          "target": "dispatch",
+          "elapsed_seconds": 111.925,
+          "peak_rss_mib": 3530.1
+        },
+        {
+          "phase": "validated",
+          "target": "dispatch",
+          "elapsed_seconds": 128.844,
+          "peak_rss_mib": 3530.1,
+          "comparison": "compiled_vs_eager",
+          "leaves": 149
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "target": "move",
+      "status": "memory_limit",
+      "returncode": 137,
+      "wall_seconds": 44.915,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "move",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 523.9,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "move",
+          "elapsed_seconds": 4.126,
+          "peak_rss_mib": 584.8,
+          "equations": 38373,
+          "subgraphs": 346,
+          "primitives": {
+            "jit": 8959,
+            "add": 4406,
+            "lt": 3511,
+            "select_n": 3396,
+            "squeeze": 2237,
+            "reshape": 1922,
+            "broadcast_in_dim": 1714,
+            "eq": 1655,
+            "convert_element_type": 1393,
+            "and": 1378,
+            "dynamic_slice": 1092,
+            "mul": 1025
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "move",
+          "elapsed_seconds": 7.937,
+          "peak_rss_mib": 1053.5
+        },
+        {
+          "phase": "rss_limit_exceeded",
+          "peak_rss_mib": 4111.2,
+          "limit_mib": 4096
+        }
+      ],
+      "stderr": "{\"phase\": \"rss_limit_exceeded\", \"peak_rss_mib\": 4111.2, \"limit_mib\": 4096}\n"
+    }
+  ]
+}

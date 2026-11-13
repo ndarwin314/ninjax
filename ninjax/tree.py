@@ -4,9 +4,25 @@ import jax.numpy as jnp
 from flax import struct
 
 
+@jax.jit
+def _index_tree(tree, index):
+    """Share dynamic indexing across repeated views of the same tree shape.
+
+    Indexing inside a cached jit keeps every leaf's gather/slice operations
+    from being retraced at each Pokémon, move or stat-table read.
+    """
+    return jax.tree.map(lambda value: value[index], tree)
+
+
 class ArrayTree(struct.PyTreeNode):
     def __getitem__(self, index):
-        return jax.tree.map(lambda value: value[index], self)
+        """Index all leaves, sharing dynamic gathers and retaining slice syntax."""
+        parts = index if isinstance(index, tuple) else (index,)
+        # Slice/Ellipsis objects are static Python indexing syntax, not JAX
+        # arguments. Preserve these less frequent views without a jit boundary.
+        if any(isinstance(part, slice) or part is Ellipsis for part in parts):
+            return jax.tree.map(lambda value: value[index], self)
+        return _index_tree(self, index)
 
 
 def stack(trees, axis=0):

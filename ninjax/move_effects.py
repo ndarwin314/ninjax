@@ -84,24 +84,41 @@ def effect_spore_status(r):
             in_range(0.19, r, 0.3) * Status.SLEEP)
 
 def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[chex.PRNGKey, BattleState]:
-    """Apply represented contact effects using active effective abilities."""
+    """Apply contact effects, preserving Pads' protection and public reveals."""
     active = state.effective_active
     defender = active[1-attacker_idx]
     attacker = active[attacker_idx]
+    from ninjax.held_effects import contact_reactions_allowed
+    reacts = contact_reactions_allowed(state, attacker_idx)
     key, def_key, attack_key = random.split(key, 3)
 
     # defender triggers
     from ninjax.enum_types import ItemEnum
-    helmet = (defender.item == ItemEnum.ROCKY_HELMET)[0]
+    from ninjax.ability_effects import remember_item
+    from ninjax.events import EventKind, emit
+    # Showdown announces Pads against deterministic Rough Skin/Gooey checks,
+    # but not against Helmet or a prevented random status ability.
+    reveal = ((attacker.item[0] == ItemEnum.PROTECTIVE_PADS) &
+        (attacker.ability[0] != AbilityEnum.LONG_REACH) &
+        ((defender.ability[0] == AbilityEnum.ROUGH_SKIN) | (defender.ability[0] == AbilityEnum.GOOEY)))
+    state = remember_item(state, attacker_idx, ItemEnum.PROTECTIVE_PADS, reveal)
+    owner = 1-attacker_idx
+    slot = state.active_index[owner, 0]
+    known = state.known_abilities[owner, slot]
+    state = state.replace(known_abilities=state.known_abilities.at[owner, slot].set(
+        jnp.where(reveal, defender.ability[0], known)))
+    state = emit(state, EventKind.ABILITY, owner, detail=defender.ability[0], enabled=reveal)
+    state = emit(state, EventKind.ITEM_REVEALED, attacker_idx, detail=ItemEnum.PROTECTIVE_PADS, enabled=reveal)
+    helmet = (defender.item == ItemEnum.ROCKY_HELMET)[0] & reacts
     state = take_damage_percent(state, attacker_idx, helmet / 6, cause=Cause.CONTACT)
-    is_rough_skin = (defender.ability == AbilityEnum.ROUGH_SKIN)[0]
+    is_rough_skin = (defender.ability == AbilityEnum.ROUGH_SKIN)[0] & reacts
     state = take_damage_percent(state, attacker_idx, ROUGH_SKIN_DAMAGE * is_rough_skin, cause=Cause.CONTACT)
     is_static = defender.ability==AbilityEnum.STATIC
     is_flame = defender.ability==AbilityEnum.FLAME_BODY
     is_point = defender.ability==AbilityEnum.POISON_POINT
     is_effect_spore = jnp.logical_and(defender.ability==AbilityEnum.EFFECT_SPORE, 1-is_powder_immune(attacker))
     r = random.uniform(def_key)
-    triggered = jnp.less_equal(r, 0.3)
+    triggered = jnp.less_equal(r, 0.3) & reacts
     status = (effect_spore_status(r) * is_effect_spore +
               is_flame * Status.BURN +
               is_static * Status.PARALYZE +
@@ -117,7 +134,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
               is_toxic_chain * Status.TOXIC) * triggered
 
     # gooey, idk why i take 0 index here but it happens in some places and i think was necessary
-    is_gooey = (defender.ability==AbilityEnum.GOOEY)[0]
+    is_gooey = (defender.ability==AbilityEnum.GOOEY)[0] & reacts
     state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1, True)
 
     key, state = set_status(key, state, 1 - attacker_idx, status)

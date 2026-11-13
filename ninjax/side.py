@@ -142,6 +142,17 @@ class VolatileStatus(struct.PyTreeNode):
         """Return a copy with one side's volatile leaves replaced."""
         return jax.tree.map(lambda old, new: old.at[idx].set(new), self, new_status)
 
+@jax.jit
+def _active_pokemon(team, active_index):
+    """Gather active slots once in a shared graph instead of at every read.
+
+    The returned Pokémon remains stored state, with no ability/type overrides.
+    Keeping this gather outlined avoids duplicating every team leaf's indexing
+    operations throughout move, item and status branches during tracing.
+    """
+    return team[jnp.arange(2), jnp.squeeze(active_index)]
+
+
 class BattleState(struct.PyTreeNode):
     """State for one singles battle, without an outer environment batch axis.
 
@@ -255,8 +266,7 @@ class BattleState(struct.PyTreeNode):
         Battle mechanics should use ``ability`` or the read-only
         ``effective_active`` snapshot when evaluating ability effects.
         """
-        flattened_idx = jnp.squeeze(self.active_index)
-        return self.team[[0,1], flattened_idx]
+        return _active_pokemon(self.team, self.active_index)
 
     @property
     def ability(self):
@@ -266,7 +276,9 @@ class BattleState(struct.PyTreeNode):
         or override, so clearing it can restore the appropriate ability.
         """
         override = self.volatile_status.ability_override
-        ability = jnp.where(override >= 0, override, self.active.ability)
+        # This hot read needs one leaf, not the entire active Pokémon tree.
+        stored = self.team.ability[jnp.arange(2), self.active_index[:, 0]]
+        ability = jnp.where(override >= 0, override, stored)
         return jnp.where(self.volatile_status.ability_suppressed, AbilityEnum.NONE, ability)
 
     @property
@@ -490,6 +502,27 @@ def update_active(state: BattleState, side_idx, new_mon: Pokemon) -> BattleState
     state = state.replace(team=new_team)
     return emit(state, EventKind.STATUS, side_idx, before=old, after=new_mon.status[0], enabled=old != new_mon.status[0])
 
+
+@jax.jit
+def update_active_fields(state: BattleState, side_idx, **updates) -> BattleState:
+    """Write named active array fields without scattering unrelated team data.
+
+    Keyword names are static PyTree structure; values remain dynamic arrays.
+    This is for local HP, status, item and type mutations. Full Pokémon
+    replacement, including move/stat trees, still uses ``update_active``.
+    """
+    slot = state.active_index[side_idx, 0]
+    fields = {name: getattr(state.team, name).at[side_idx, slot].set(
+                  jnp.asarray(value, getattr(state.team, name).dtype))
+              for name, value in updates.items()}
+    old_status = state.team.status[side_idx, slot, 0]
+    state = state.replace(team=state.team.replace(**fields))
+    if 'status' in updates:
+        new_status = state.team.status[side_idx, slot, 0]
+        state = emit(state, EventKind.STATUS, side_idx, before=old_status,
+                     after=new_status, enabled=old_status != new_status)
+    return state
+
 def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     """Reset all represented switch-cleared effects for one active side."""
     volatile = jax.tree.map(lambda value: value.at[side_idx].set(jnp.zeros_like(value[side_idx])), state.volatile_status)
@@ -551,7 +584,7 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) 
         lambda k, a, s: (k, a),
         status_helper,
         key, active, status)
-    return key, update_active(state, side_idx, active)
+    return key, update_active_fields(state, side_idx, status=active.status, sleep_counter=active.sleep_counter)
 
 # Damage is invoked by many residual/contact branches. Outlining the shared
 # operation avoids retracing its complete ability/item/event graph at each call.
@@ -635,7 +668,8 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
     # there are some other conditions that should trigger emptying field like eject button
     # idk if that should be handled here or elsewhere
     from ninjax.held_effects import after_hp_change
-    state = after_hp_change(update_active(state, defender_idx, defender), defender_idx)
+    state = after_hp_change(update_active_fields(state, defender_idx,
+        current_hp=defender.current_hp, is_alive=defender.is_alive, item=defender.item), defender_idx)
     return record_faint(state, defender_idx, source,
         jnp.where(is_attack_damage, Cause.MOVE,
             jnp.where(state.event_cause == Cause.MOVE, Cause.INDIRECT, state.event_cause)),
@@ -665,7 +699,7 @@ def direct_faint(state, player, source, cause):
     state = emit(state, EventKind.HP, player, before=mon.current_hp, after=0, hp_change=-mon.current_hp,
         hp_fraction_change=-jnp.ceil(mon.hp_percent * 100) / 100, enabled=alive)
     state = emit(state, EventKind.FAINT, player, enabled=alive)
-    state = update_active(state, player, mon.replace(current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive)))
+    state = update_active_fields(state, player, current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive))
     state = record_faint(state, player, source, cause, alive)
     return state.replace(event_source=previous_source, event_cause=previous_cause)
 
@@ -706,7 +740,7 @@ def resolve_faints(state):
             s = emit(s, EventKind.HP, safe_source, before=mon.current_hp, after=0,
                 hp_change=-mon.current_hp, hp_fraction_change=-jnp.ceil(mon.hp_percent * 100)/100)
             s = emit(s, EventKind.FAINT, safe_source)
-            s = update_active(s, safe_source, mon.replace(current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive)))
+            s = update_active_fields(s, safe_source, current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive))
             s = clear_destiny_bond(s, target)
             s = clear_destiny_bond(s, safe_source)
             # In Gen 9 the last Pokémon to faint wins a simultaneous final KO.

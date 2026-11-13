@@ -7,6 +7,39 @@ import jax.numpy as jnp
 from ninjax.enum_types import ItemEnum as I, AbilityEnum as A, WeatherEnum as W, TerrainEnum as T, StatEnum as S
 from ninjax.events import EventKind, emit
 
+
+def contact_reactions_allowed(state, player):
+    """Check the user's defenses against contact reactions, not move contact.
+
+    Callers also check the move's contact flag. Pads protect against the
+    defender's reactions without removing contact bonuses or Poison Touch.
+    """
+    return ((state.ability[player, 0] != A.LONG_REACH) &
+            (state.active.item[player, 0] != I.PROTECTIVE_PADS))
+
+
+def kings_rock_flinch(key, state, player, move):
+    """Roll an independent item secondary once per hit reaching the Pokémon."""
+    from ninjax.enum_types import MoveType
+    target = 1-player
+    ability = state.ability[target, 0]
+    eligible = ((state.active.item[player, 0] == I.KINGS_ROCK) &
+        (move.move_type[0] != MoveType.STATUS) & ~move.secondary_flinch[0] &
+        # Sheer Force runs before the item adds its secondary. Its later
+        # suppression applies only when the original move earned its boost.
+        ((state.ability[player, 0] != A.SHEER_FORCE) | (move.secondary_chance[0] == 0)) &
+        (ability != A.SHIELD_DUST) & (ability != A.INNER_FOCUS) &
+        (state.active.current_hp[target, 0] > 0))
+    def roll(args):
+        """Serene Grace also doubles the item-added secondary chance."""
+        key, s = args
+        key, roll_key = jax.random.split(key)
+        chance = jnp.where(s.ability[player, 0] == A.SERENE_GRACE, .2, .1)
+        v = s.volatile_status
+        flinch = v.flinched[target, 0] | (jax.random.uniform(roll_key) < chance)
+        return key, s.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(flinch)))
+    return jax.lax.cond(eligible, roll, lambda args: args, (key, state))
+
 def conditional_mult_round(value, multiplier, enabled):
     """Showdown's 4096-based modifier, rounding exact halves down."""
     modifier = jnp.floor(jnp.asarray(multiplier) * 4096).astype(jnp.int32)
@@ -23,13 +56,13 @@ def effective_weather(state):
 
 def consume(state, player, enabled=True):
     """Consume a held item and remember its publicly visible disappearance."""
-    from ninjax.side import update_active
+    from ninjax.side import update_active_fields
     mon = state.active[player]
     used = jnp.asarray(enabled).reshape(()) & (mon.item[0] != I.NONE)
     state = emit(state, EventKind.ITEM, player, detail=mon.item[0], enabled=used)
     from ninjax.ability_effects import remember_item
     state = remember_item(state, player, I.NONE, used)
-    return update_active(state, player, mon.replace(item=jnp.where(used, I.NONE, mon.item)))
+    return update_active_fields(state, player, item=jnp.where(used, I.NONE, mon.item))
 
 
 def item_transfer_allowed(state, holder, item):
@@ -63,13 +96,13 @@ def can_remove_item(state, holder, source):
 
 def _assign_item(state, holder, item, source):
     """Commit a validated public item mutation and clean up Choice lock state."""
-    from ninjax.side import update_active
+    from ninjax.side import update_active_fields
     from ninjax.ability_effects import remember_item
     mon = state.active[holder]
     old = mon.item[0]
     old_choice = (old == I.CHOICE_BAND) | (old == I.CHOICE_SPECS)
     new_choice = (item == I.CHOICE_BAND) | (item == I.CHOICE_SPECS)
-    state = update_active(state, holder, mon.replace(item=jnp.asarray(item, jnp.int32).reshape((1,))))
+    state = update_active_fields(state, holder, item=jnp.asarray(item, jnp.int32).reshape((1,)))
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(choice_lock=v.choice_lock.at[holder, 0].set(
         jnp.where(old_choice & new_choice, v.choice_lock[holder, 0], -1))))
@@ -188,7 +221,8 @@ def refresh_paradox(state):
 
 
 def after_hp_change(state, player):
-    from ninjax.side import update_active
+    """Consume a reactive Sitrus Berry and update only the holder's HP leaf."""
+    from ninjax.side import update_active_fields
     mon = state.active[player]
     berry = (mon.item[0] == I.SITRUS_BERRY) & (mon.current_hp[0] > 0) & (mon.hp_percent <= .5)
     state = consume(state, player, berry)
@@ -197,17 +231,24 @@ def after_hp_change(state, player):
         hp_change=hp-mon.current_hp,
         hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
         enabled=hp[0] != mon.current_hp[0])
-    return update_active(state, player, state.active[player].replace(current_hp=hp))
+    return update_active_fields(state, player, current_hp=hp)
 
 
 def after_hit(state, attacker, move, damage, effectiveness):
+    """Activate represented held items after a damaging hit reaches its holder."""
     from ninjax.side import add_boosts
+    from ninjax.enum_types import Type
     target = 1-attacker
     mon = state.active[target]
     policy = (mon.item[0] == I.WEAKNESS_POLICY) & (mon.current_hp[0] > 0) & (damage > 0) & (effectiveness > 1)
     state = consume(state, target, policy)
-    return jax.lax.cond(jnp.asarray(policy).reshape(()), lambda s: add_boosts(s, target,
+    state = jax.lax.cond(jnp.asarray(policy).reshape(()), lambda s: add_boosts(s, target,
         jnp.array([S.ATTACK, S.SPECIAL_ATTACK]), jnp.array([2, 2])), lambda s: s, state)
+    bulb = ((mon.item[0] == I.ABSORB_BULB) & (mon.current_hp[0] > 0) &
+            (damage > 0) & (move.type[0] == Type.WATER))
+    state = consume(state, target, bulb)
+    return jax.lax.cond(jnp.asarray(bulb).reshape(()),
+        lambda s: add_boosts(s, target, S.SPECIAL_ATTACK, 1), lambda s: s, state)
 
 
 def after_move(state, player, move, dealt_damage):

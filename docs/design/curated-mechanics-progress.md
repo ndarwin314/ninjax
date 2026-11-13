@@ -1,8 +1,47 @@
 # Curated mechanics implementation progress
 
-The requested full curated ruleset is **not yet implemented**. The default
-curated runner still projects abilities/items away and reports unsupported moves.
-Passing sandbox battle tests is not evidence of coverage for these effects.
+The initial singles environment is implemented, and all 120 move slots in the
+30 curated sets now have supported implementations. Full Scarlet/Violet
+interaction parity is **not yet established**. The default curated runner keeps
+abilities/items neutral; opt-in modes enable all 30 curated ability names and
+all 19 curated item names. Unsupported items in custom collections remain
+explicit omissions. Moves outside the supported catalogue are still reported
+and made unavailable.
+
+Focused mechanics and environment tests passed during implementation, including
+the Beat Up, Sleep Talk, Whirlwind and final curated item additions. Compiled acceptance
+checks exist, but a complete acceptance pass for the latest expanded engine
+under `jit`, `vmap` and `scan` remains outstanding. Earlier compiled checks do
+not establish coverage of subsequent changes. The initial milestone requires a
+usable singles Jumanji environment; doubles, transformations and self-play
+training infrastructure are outside that milestone.
+
+The 2026-11-13 compiled full-battle retry used curated seed 0 with abilities and
+items enabled, two CPU cores and a 6 GiB process virtual-memory limit. It failed
+with `MemoryError: std::bad_alloc` while preparing the first compiled step
+(164.72 seconds in pytest). No compiled battle completed in that attempt.
+Reducing the whole-step compilation memory requirement remains a validation
+blocker; passing focused or eager tests does not clear this gate.
+
+The corresponding full eager run (`jax.disable_jit()`, same seed and enabled
+abilities/items, same CPU and memory limits) **passed**: 40 turns, 51 decisions,
+reward `[1.0, -1.0]`, and 2113 seconds elapsed. It reached a team-defeat terminal
+outcome before the 100-turn limit, with no invalid actions, nonnegative recorded
+HP, six distinct selected sets per side and no omitted moves, abilities or held
+items. The result validates this single eager rollout; it does not establish
+compiled, batched or scanned full-battle acceptance or exhaustive mechanics
+parity.
+
+Subsequent [compilation-memory work](compilation-performance.md) reduced the
+full-step trace from 802,117 to 70,666 equations and peak tracing RSS from
+1,801 to 619 MiB. Whole-step backend compilation still exceeds the tested
+memory budgets. Focused regression and shared-helper transformation checks
+cover the optimizations; the earlier eager rollout does not validate them.
+Isolated component compilation checks now pass for 17 of 18 components,
+including selected-move dispatch. Full move execution exceeds the 4 GiB RSS
+watchdog during backend compilation. The compilation-performance document
+records phase timings, memory checkpoints and compiled/eager comparisons;
+these checks do not clear full-battle acceptance.
 
 The first implementation batch adds:
 
@@ -22,8 +61,9 @@ The first implementation batch adds:
   mask; public consumption updates the revealed item to none.
 - Opt-in `--curated --abilities` mode for supported singles abilities,
   including entry activation after team preview and grounded terrain rules.
-- Opt-in `--curated --items` projects the 15 items with existing engine hooks;
-  it can be combined with `--abilities`. Other items remain in omissions.
+- Opt-in `--curated --items` initially projected 15 items with engine hooks;
+  the final batch below expands this to all 19 current curated item names.
+  It can be combined with `--abilities`.
 
 The [remaining-ability validation matrix](remaining-ability-validation.md)
 records the earlier follow-up audit. Unseen Fist is now enabled with initial
@@ -67,7 +107,7 @@ New shared mechanics include:
 - Catalogue move flags for contact, sound, powder, pulses, bites, healing,
   projectiles and protection. Protect now checks the move's protection flag.
 
-Focused coverage is in `unit_tests/test_curated_moves.py`, including compiled
+Focused coverage is in `unit_tests/test_curated_moves.py`, including opt-in compiled
 `jit`/`vmap`/`scan` checks for the shared callbacks. Existing engine limitations
 remain, including incomplete general ability interactions, modifier rounding,
 and damage-triggered effects. Doubles effects are not validated by this batch.
@@ -96,9 +136,12 @@ pinned Scarlet/Violet ability flags. The base ability returns on switching.
 
 Ivy Cudgel resolves its type from the user's stored form; Revelation Dance uses
 the user's current primary type or ordinary Tera type. Curated construction
-preserves the Ogerpon form separately from its shared Pokédex number. Mask item
-damage modifiers and transfer restrictions remain unimplemented, so the curated
-Wellspring Mask is still reported as an omission.
+preserves the Ogerpon form separately from its shared Pokédex number. Item
+mutation helpers enforce represented Ogerpon mask transfer restrictions. Matching
+Wellspring, Hearthflame and Cornerstone masks apply the pinned 4915/4096 power
+modifier to every damaging type. Wellspring Mask is enabled in curated teams;
+automatic form selection for arbitrary caller-provided teams remains outside
+the item hook.
 
 Blizzard and Hurricane use weather-sensitive accuracy and their freeze and
 confusion secondary effects. Freeze and confusion are resolved before actions;
@@ -136,21 +179,33 @@ Beat Up uses eligible party members' species base Attack for individual hit
 power. Sleep Talk selects an eligible move without using its PP; Whirlwind
 randomly forces a legal replacement and cancels the displaced queued action.
 
+The final curated item batch enables King's Rock, Protective Pads, Wellspring
+Mask and Absorb Bulb. King's Rock adds an independent per-hit flinch chance
+without stacking with native flinch. Protective Pads blocks represented defender
+contact reactions and Spiky Shield retaliation while preserving contact bonuses,
+Unseen Fist and Poison Touch. Prevented Rough Skin/Gooey reactions publicly
+reveal Pads and the defending ability. Absorb Bulb consumes on a surviving holder after a
+damaging Water hit reaches it and raises Special Attack once; Substitute and
+Water absorption prevent activation. Focused tests are in
+`unit_tests/test_remaining_items.py`. This enables every current curated item,
+not every interaction with those items.
+
 Remaining integration and mechanics include:
 
-- A full curated move catalogue with callbacks represented as JAX state changes.
+- Auditing move-specific exceptions and interactions across the enabled catalogue;
+  zero unavailable moves does not imply complete mechanics coverage.
 - Other Mental Herb effects and multi-hit recoil's once-per-move aggregation
   of actual HP lost.
-- King's Rock's per-hit flinch and Protective Pads' contact protection. The
-  sandbox neutralizes both items. Protect and Spiky Shield share the protection
-  chain and support Unseen Fist bypass; failure when no actions remain and
-  additional protection variants are not yet represented.
-- Durable observation knowledge for revealed abilities and item changes from
-  future item-exchange/removal move implementations.
+- Protect and Spiky Shield share the protection chain and support Unseen Fist
+  bypass; failure when no actions remain and additional protection variants
+  are not yet represented.
+- General ability-change lifecycle hooks beyond the represented Worry Seed
+  transition, and further audits of public ability/item knowledge.
 - Additional charge/semi-invulnerability variants, protection-independent
   move failure conditions, and additional forced-switch interactions.
-- Item removal/exchange and the remaining variable-damage, failure-condition,
-  stateful, and move-specific interactions listed above.
+- Further item binding, received-item effects and ability interactions beyond
+  the existing Knock Off, Trick and Switcheroo implementations. Those moves use
+  atomic item mutation helpers that update public knowledge and Choice locks.
 - Full curated team construction with original held items and abilities enabled,
   controlled Showdown parity probes, and complete transformed curated rollouts.
 

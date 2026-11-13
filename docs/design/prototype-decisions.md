@@ -3,7 +3,9 @@
 These questions supplement the project instructions. The current implementation
 is still a prototype with incomplete battle mechanics. The current observation
 contract is documented in [observations and events](observations.md). The prompts
-below are questions, not established rules.
+and answers below record the original milestone decisions; see
+[mechanics progress](curated-mechanics-progress.md) for current implementation
+and validation status.
 
 ## Decisions with the most impact
 
@@ -54,11 +56,18 @@ below are questions, not established rules.
 
 ## Decision points and action rules
 
-The current interface accepts two action slots, exposes an acting-player mask,
-and pauses for replacements. Actions 0–3 select moves, 8–13 select team slots,
-and 14 is the inactive-player no-op. Actions 4–7 are reserved and currently
-masked. Invalid active-player actions currently leave state unchanged and set
-an extras flag. These describe the implementation, not a confirmed ruleset.
+The current interface uses a `BattleAction` PyTree with `(2,)` `index`,
+`move_type` and `transformation` leaves, plus `(2, 6)` preview selection.
+`ActionType` distinguishes attacks, switches, continuations and inactive no-ops.
+Attack index 4 is forced Struggle; continued actions release Electro Shot or
+spend Hyper Beam's recharge turn without another PP cost. Transformations are
+represented but non-`NONE` requests are rejected. Legacy mask columns 0–3 are
+moves, 4 Struggle, 5 continuation, 8–13 switches and 14 no-op; 6–7 are reserved.
+The environment exposes an acting-player mask and pauses for replacements.
+Invalid active-player actions leave state unchanged and set an extras flag.
+See [environment interfaces](implemented-move-effects.md#environment-interfaces).
+
+The following questions and answers are the original design discussion:
 
 - Confirm or change the action encoding and invalid-action behavior.
 - What happens when no move has PP and no switch is legal?

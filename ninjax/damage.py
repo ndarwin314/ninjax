@@ -106,7 +106,13 @@ def compute_base_power(
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
     # punk rock
     power = conditional_mult_round(power, 1.3, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
-    return power
+    # Masks boost every damaging type for their matching stored Ogerpon form.
+    # Apply after the earlier power hooks (Showdown item priority 15).
+    from ninjax.enum_types import FormEnum, ItemEnum
+    mask = (((attacker.item == ItemEnum.WELLSPRING_MASK) & (attacker.form == FormEnum.OGERPON_WELLSPRING)) |
+            ((attacker.item == ItemEnum.HEARTHFLAME_MASK) & (attacker.form == FormEnum.OGERPON_HEARTHFLAME)) |
+            ((attacker.item == ItemEnum.CORNERSTONE_MASK) & (attacker.form == FormEnum.OGERPON_CORNERSTONE)))
+    return fixed_modifier(power, 4915/4096, mask)
 
 def compute_base_damage(
         attacker_ability: AbilityEnum,

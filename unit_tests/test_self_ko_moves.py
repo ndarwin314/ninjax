@@ -25,6 +25,7 @@ def test_explosion_self_faints_even_when_target_unaffected(neutral_type, mode):
         state = update_active(state, 0, mon.replace(moves=mon.moves.replace(accuracy=mon.moves.accuracy.at[0, 0].set(0.))))
     _, out = step_move(key, state, 0, 0, False)
     assert out.active.current_hp[0, 0] == 0 and out.active.item[0, 0] == I.FOCUS_SASH
+    assert out.volatile_status.explosion_hp[0, 0] == 0
     assert bool(out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) == (mode == 'hit')
 
 

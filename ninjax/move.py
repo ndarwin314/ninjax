@@ -94,8 +94,13 @@ class Move(ArrayTree):
                 if width > 7:
                     raise ValueError(f'{name} supports at most seven stat changes')
                 value = jnp.broadcast_to(value, shape[:-1] + (width,))
-                padding = [(0, 0)] * (value.ndim - 1) + [(0, 7-width)]
-                object.__setattr__(self, name, jnp.pad(value, padding))
+                # Most instances are reconstructed normalized PyTrees. A
+                # zero-width pad still introduces a traced call on each of
+                # these six leaves, so only pad caller-provided short vectors.
+                if width < 7:
+                    padding = [(0, 0)] * (value.ndim - 1) + [(0, 7-width)]
+                    value = jnp.pad(value, padding)
+                object.__setattr__(self, name, value)
                 continue
             dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))

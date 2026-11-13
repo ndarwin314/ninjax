@@ -438,7 +438,10 @@ class ItemEnum(JaxEnum):
     SITRUS_BERRY = auto()
     THROAT_SPRAY = auto()
     ABILITY_SHIELD = auto()
-    # Represented for transfer restrictions; mask damage boosts remain separate.
+    # Matching Ogerpon forms receive a power boost and cannot transfer masks.
     WELLSPRING_MASK = auto()
     HEARTHFLAME_MASK = auto()
     CORNERSTONE_MASK = auto()
+    KINGS_ROCK = auto()
+    PROTECTIVE_PADS = auto()
+    ABSORB_BULB = auto()

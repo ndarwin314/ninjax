@@ -14,7 +14,7 @@ import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum, ProtectionKind, OffensiveStatOwner
-from ninjax.side import (BattleState, update_active, clear_volatile_status, clear_boosts, add_boosts, reduce_boosts,
+from ninjax.side import (BattleState, update_active_fields, clear_volatile_status, clear_boosts, add_boosts, reduce_boosts,
                          conditional_add_boosts, conditional_reduce_boosts, set_weather, set_terrain,
                          take_damage_percent, set_status, take_damage_value, raw_boosted_stats, is_floating, is_sand_immune)
 from ninjax.pokemon import Pokemon
@@ -73,9 +73,8 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     # Beat Up includes the user even when statused; eligible teammates must
     # be selected, alive and status-free. Preserve party order for its hits.
     slots = jnp.arange(6)
-    team = state.team[attacker_idx]
     eligible = state.roster[attacker_idx] & ((slots == state.active_index[attacker_idx, 0]) |
-        ((team.current_hp[:, 0] > 0) & (team.status[:, 0] == Status.NONE)))
+        ((state.team.current_hp[attacker_idx, :, 0] > 0) & (state.team.status[attacker_idx, :, 0] == Status.NONE)))
     contributors = jnp.nonzero(eligible, size=6, fill_value=0)[0]
     key, target_hits = jax.lax.cond(move.hit_rule[0] == 1,
         lambda k: (k, jnp.int32(1)),
@@ -288,7 +287,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     # A damaging Fire move thaws its target after the hit, even if it faints.
     target = state.active[1-attacker_idx]
     thaw = (move.type == Type.FIRE) & (actual_loss > 0) & ~intercepted & (target.status == Status.FREEZE)
-    state = update_active(state, 1-attacker_idx, target.replace(status=jnp.where(thaw, Status.NONE, target.status)))
+    state = update_active_fields(state, 1-attacker_idx, status=jnp.where(thaw, Status.NONE, target.status))
     # Drain and recoil use HP removed before a berry heals, with half-up
     # rounding, and never the uncapped calculated damage.
     healing = jnp.maximum(1, jnp.floor(actual_loss * move.drain_fraction + .5)).astype(jnp.int32)
@@ -617,7 +616,7 @@ def swap_out(
     known = state.known_abilities
     state = state.replace(known_abilities=known.at[side_idx, slot].set(jnp.where(
         state.volatile_status.ability_override[side_idx, 0] >= 0, -1, known[side_idx, slot])))
-    state = update_active(state, side_idx, outgoing.replace(type_list=outgoing.base_types))
+    state = update_active_fields(state, side_idx, type_list=outgoing.base_types)
     state = take_damage_percent(state, side_idx, jnp.where(
         (state.ability[side_idx] == AbilityEnum.REGENERATOR) & (outgoing.current_hp > 0), -1/3, 0))
     # clear boosts and volatile status from active pokemon, maybe add baton pass check here?
@@ -644,28 +643,28 @@ def swap_out(
     state = take_damage_percent(
         state,
         side_idx,
-        state[side_idx].stealth_rocks * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8 * is_not_hazard_immune
+        state.stealth_rocks[side_idx] * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8 * is_not_hazard_immune
     )
 
     # spikes
     state = take_damage_percent(
         state, side_idx,
-        (state[side_idx].spikes != 0) / (10 - 2 * state[side_idx].spikes) * is_not_flying * is_not_hazard_immune
+        (state.spikes[side_idx] != 0) / (10 - 2 * state.spikes[side_idx]) * is_not_flying * is_not_hazard_immune
     )
 
     # sticky webs
     # so apparently if a pokemon sets webs and a pokemon with mirror armor is effected by them
     # then it applies the stat reduction to that mon, but this only happens if they are on field
     state = conditional_reduce_boosts(state, side_idx,
-        (is_not_flying * state[side_idx].sticky_webs).reshape(()) != 0, StatEnum.SPEED, 1, False)
+        (is_not_flying * state.sticky_webs[side_idx]).reshape(()) != 0, StatEnum.SPEED, 1, False)
 
     # toxic spikes
     # only remove is poison type and not floating
-    toxic_spikes = state[side_idx].toxic_spikes * (1 - jnp.logical_and(is_poison, is_not_flying))
+    toxic_spikes = state.toxic_spikes[side_idx] * (1 - jnp.logical_and(is_poison, is_not_flying))
     toxic_spikes = state.toxic_spikes.at[side_idx].set(toxic_spikes)
     state = state.replace(toxic_spikes=toxic_spikes)
     # this returns 0, 5, 6 for 0, 1, 2
-    status_ = (7 - state[side_idx].toxic_spikes) * (state[side_idx].toxic_spikes != 0)
+    status_ = (7 - state.toxic_spikes[side_idx]) * (state.toxic_spikes[side_idx] != 0)
     key, state = set_status(key, state, side_idx, status_ * (1-is_poison_immune) * is_not_flying)
 
     #check if switch in is still alive
@@ -675,8 +674,7 @@ def swap_out(
     state = jax.lax.cond(is_alive, swap_is_alive, lambda a, b: a, state, side_idx)
 
 
-    active = state.active[side_idx].replace(is_alive=is_alive)
-    state = update_active(state, side_idx, active)
+    state = update_active_fields(state, side_idx, is_alive=is_alive)
     return state
 
 def swap_is_alive(
@@ -792,7 +790,7 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     # Defrost-flagged moves thaw the user only when the move actually executes.
     mon = state.active[attacker_index]
     thaw = move.defrost & (mon.status == Status.FREEZE)
-    state = update_active(state, attacker_index, mon.replace(status=jnp.where(thaw, Status.NONE, mon.status)))
+    state = update_active_fields(state, attacker_index, status=jnp.where(thaw, Status.NONE, mon.status))
 
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(
@@ -815,41 +813,42 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
         lambda s: prepare_type_change(s, attacker_index, effective_move(s, attacker_index, move)), state)
     # decrement pp
     # theoretically the legal action mask should prevent us from using the move if its at 0 so we dont need to clip
-    move = move.replace(current_pp=move.current_pp-1)
-    active = state.active[attacker_index]
-    new_pp = active.moves.current_pp.at[move_index].subtract(1)
-    new_moves = active.moves.replace(current_pp=new_pp)
-    active = active.replace(moves=new_moves)
-    state = update_active(state, attacker_index, active)
-    # Sleep Talk calls the shared executor without spending the called move's PP.
-    return jax.lax.cond((move.identifier[0] == 214) & move.implemented[0],
-        execute_sleep_talk, dispatch_selected_move, key, state, attacker_index, move_index)
+    # PP is the only modified move leaf; avoid writing the other metadata back.
+    slot = state.active_index[attacker_index, 0]
+    moves = state.team.moves
+    state = state.replace(team=state.team.replace(moves=moves.replace(
+        current_pp=moves.current_pp.at[attacker_index, slot, move_index].add(-1))))
+    # Resolve the slot first, then dispatch once. Putting the full executor in
+    # both conditional branches makes XLA expand two copies of the hit pipeline.
+    return _execute_selected_or_called_move(key, state, attacker_index, move_index,
+        (move.identifier[0] == 214) & move.implemented[0])
 
 
 @jax.jit
 def dispatch_selected_move(key, state, attacker_index, move_index):
-    """Execute an already paid-for or called move through the ordinary hit path."""
+    """Prepare an already paid-for/called move, then enter one shared hit path."""
     move = state.active[attacker_index].moves[move_index]
-    def explosion(k, s, p, i):
-        """Damp stops Explosion; otherwise faint before resolving its attack."""
+    explosion = (move.identifier[0] == 153) & move.implemented[0]
+    electro_shot = (move.identifier[0] == 905) & move.implemented[0]
+
+    def prepare_explosion(k, s, p, i):
+        """Damp prevents execution; otherwise commit self-faint before the hit."""
         from ninjax.side import direct_faint
         damp_users = (s.ability[:, 0] == AbilityEnum.DAMP) & (s.active.current_hp[:, 0] > 0)
         damp = jnp.any(damp_users)
         def detonate(k, s):
-            """Save source HP, commit its faint and resolve target attempts."""
+            """Save source HP for damage calculation and commit its faint."""
             v = s.volatile_status
             s = s.replace(volatile_status=v.replace(explosion_hp=v.explosion_hp.at[p, 0].set(s.active.current_hp[p, 0])))
             s = direct_faint(s, p, p, Cause.SELF_KO)
-            k, s = _apply_move_effects(k, s, p, i)
-            v = s.volatile_status
-            return k, s.replace(volatile_status=v.replace(explosion_hp=v.explosion_hp.at[p, 0].set(0)))
+            return k, s, jnp.bool_(True)
         def blocked(k, s):
             """Reveal the Damp ability that prevented the explosion."""
             owner = jnp.argmax(damp_users)
             slot = s.active_index[owner, 0]
             s = s.replace(known_abilities=s.known_abilities.at[owner, slot].set(AbilityEnum.DAMP))
             s = emit(s, EventKind.ABILITY, owner, detail=AbilityEnum.DAMP)
-            return k, record_hit(s, 0, 1-p, HitOutcome.BLOCKED)
+            return k, record_hit(s, 0, 1-p, HitOutcome.BLOCKED), jnp.bool_(False)
         return jax.lax.cond(damp, blocked, detonate, k, s)
     v = state.volatile_status
     target = 1-attacker_index
@@ -860,17 +859,33 @@ def dispatch_selected_move(key, state, attacker_index, move_index):
     def fail(k, s, p, i):
         """Record an explicit move failure after PP has been consumed."""
         s = record_hit(s, 0, 1-p, HitOutcome.FAILED)
-        return k, emit(s, EventKind.MOVE_FAILED, p, detail=move.identifier[0])
-    key, state = jax.lax.cond(fake_fails | sucker_fails, fail,
-        lambda k, s, p, i: jax.lax.cond((move.identifier[0] == 153) & move.implemented[0], explosion,
-        lambda k, s, p, i: jax.lax.cond((move.identifier[0] == 905) & move.implemented[0], start_electro_shot,
-        lambda k, s, p, i: jax.lax.cond(move.implemented[0], _apply_move_effects, move_misses, k, s, p, i),
-        k, s, p, i), k, s, p, i), key, state, attacker_index, move_index)
+        return k, emit(s, EventKind.MOVE_FAILED, p, detail=move.identifier[0]), jnp.bool_(False)
+
+    def prepare(k, s, p, i):
+        """Special moves only prepare state and decide whether to attempt a hit."""
+        return jax.lax.cond(explosion, prepare_explosion,
+            lambda k, s, p, i: jax.lax.cond(electro_shot, _prepare_electro_shot,
+                lambda k, s, p, i: (k, s, jnp.bool_(True)), k, s, p, i), k, s, p, i)
+
+    key, state, ready = jax.lax.cond(fake_fails | sucker_fails, fail, prepare,
+        key, state, attacker_index, move_index)
+
+    def apply(k, s):
+        """Keep accuracy, immunity, status and damage resolution in one branch."""
+        return jax.lax.cond(move.implemented[0], _apply_move_effects, move_misses,
+                            k, s, attacker_index, move_index)
+    key, state = jax.lax.cond(ready, apply, lambda k, s: (k, s), key, state)
+    # Explosion's saved HP is action-local, even when the target was unaffected.
+    def clear_explosion_hp(s):
+        """Discard the pre-faint HP after the shared hit pipeline returns."""
+        v = s.volatile_status
+        return s.replace(volatile_status=v.replace(explosion_hp=v.explosion_hp.at[attacker_index, 0].set(0)))
+    state = jax.lax.cond(explosion & ready, clear_explosion_hp, lambda s: s, state)
     return key, finish_attempt(state, attacker_index, move)
 
 
-def execute_sleep_talk(key, state, player, move_index):
-    """Choose and call an eligible move while asleep without spending its PP."""
+def _prepare_sleep_talk(key, state, player, move_index):
+    """Return a called slot and execution flag without entering the hit pipeline."""
     moves = state.active[player].moves
     asleep = (state.active.status[player, 0] == Status.SLEEP) | (state.ability[player, 0] == AbilityEnum.COMATOSE)
     eligible = moves.sleep_talk_eligible[:, 0] & moves.implemented[:, 0] & (moves.identifier[:, 0] != 0) & (moves.identifier[:, 0] != 214)
@@ -880,15 +895,13 @@ def execute_sleep_talk(key, state, player, move_index):
     def fail(k, s):
         """Sleep Talk fails awake or without any callable moves."""
         s = record_hit(s, 0, player, HitOutcome.FAILED)
-        return k, emit(s, EventKind.MOVE_FAILED, player, detail=214)
+        return k, emit(s, EventKind.MOVE_FAILED, player, detail=214), jnp.asarray(move_index, jnp.int32), jnp.bool_(False)
     def call(k, s):
-        """Use the selected move with the caller's priority and sleep context."""
+        """Select a move and establish its priority, sleep and public context."""
         k, select_key = random.split(k)
         selected = random.categorical(select_key, jnp.where(eligible, 0., -jnp.inf))
         called = s.active[player].moves[selected]
-        old_move = s.event_move
         v = s.volatile_status
-        old_override = v.encore_overridden[player, 0]
         s = s.replace(event_move=called.identifier[0], volatile_status=v.replace(
             sleep_talk_active=v.sleep_talk_active.at[player, 0].set(True),
             sleep_talk_succeeded=v.sleep_talk_succeeded.at[player, 0].set(True),
@@ -897,13 +910,32 @@ def execute_sleep_talk(key, state, player, move_index):
         from ninjax.ability_effects import prepare_type_change
         s = prepare_type_change(s, player, effective_move(s, player, called))
         s = emit(s, EventKind.MOVE, player, detail=called.identifier[0])
-        k, s = dispatch_selected_move(k, s, player, selected)
+        return k, s, selected, jnp.bool_(True)
+    return jax.lax.cond(asleep & jnp.any(eligible), call, fail, key, state)
+
+
+def _execute_selected_or_called_move(key, state, player, move_index, sleep_talk):
+    """Select the effective slot, dispatch once and restore called-move context."""
+    old_move = state.event_move
+    old_override = state.volatile_status.encore_overridden[player, 0]
+    key, state, selected, ready = jax.lax.cond(sleep_talk, _prepare_sleep_talk,
+        lambda k, s, p, i: (k, s, jnp.asarray(i, jnp.int32), jnp.bool_(True)),
+        key, state, player, move_index)
+    key, state = jax.lax.cond(ready, dispatch_selected_move,
+        lambda k, s, p, i: (k, s), key, state, player, selected)
+
+    def restore(s):
+        """Restore Sleep Talk's event and Encore context after success or failure."""
         v = s.volatile_status
-        s = s.replace(event_move=old_move, volatile_status=v.replace(
+        return s.replace(event_move=old_move, volatile_status=v.replace(
             sleep_talk_active=v.sleep_talk_active.at[player, 0].set(False),
             encore_overridden=v.encore_overridden.at[player, 0].set(old_override)))
-        return k, s
-    return jax.lax.cond(asleep & jnp.any(eligible), call, fail, key, state)
+    return key, jax.lax.cond(sleep_talk & ready, restore, lambda s: s, state)
+
+
+def execute_sleep_talk(key, state, player, move_index):
+    """Call an eligible move without spending its PP, using the shared executor."""
+    return _execute_selected_or_called_move(key, state, player, move_index, jnp.bool_(True))
 
 
 def finish_attempt(state, player, move):
@@ -915,8 +947,8 @@ def finish_attempt(state, player, move):
         lambda s: take_damage_percent(s, player, .5, cause=Cause.RECOIL), lambda s: s, state)
 
 
-def start_electro_shot(key, state, player, index):
-    """Boost SpA once, then charge Electro Shot unless effective rain skips it."""
+def _prepare_electro_shot(key, state, player, index):
+    """Boost SpA and return whether rain permits an immediate hit attempt."""
     from ninjax.held_effects import effective_weather
     state = add_boosts(state, player, StatEnum.SPECIAL_ATTACK, 1)
     def charge(k, s):
@@ -927,8 +959,16 @@ def start_electro_shot(key, state, player, index):
             charge_target_side=v.charge_target_side.at[player, 0].set(1-player),
             charge_target_position=v.charge_target_position.at[player, 0].set(0)))
         return k, emit(s, EventKind.CONDITION, player, detail=14, before=0, after=905)
-    return jax.lax.cond(effective_weather(state) == WeatherEnum.RAIN,
-        lambda k, s: _apply_move_effects(k, s, player, index), charge, key, state)
+    ready = effective_weather(state) == WeatherEnum.RAIN
+    key, state = jax.lax.cond(ready, lambda k, s: (k, s), charge, key, state)
+    return key, state, ready
+
+
+def start_electro_shot(key, state, player, index):
+    """Charge or immediately execute Electro Shot without another PP payment."""
+    key, state, ready = _prepare_electro_shot(key, state, player, index)
+    return jax.lax.cond(ready, _apply_move_effects, lambda k, s, p, i: (k, s),
+                        key, state, player, index)
 
 
 def effective_move(state, attacker_index, move):
@@ -1110,7 +1150,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     # Spiky Shield damages a living contact attacker only when it actually
     # blocks; Long Reach and Magic Guard prevent this retaliation.
     spiky = blocked & (state.volatile_status.protection_kind[1-attacker_index, 0] == ProtectionKind.SPIKY_SHIELD)
-    spiky &= move.contact[0] & (state.ability[attacker_index, 0] != AbilityEnum.LONG_REACH)
+    from ninjax.held_effects import contact_reactions_allowed
+    spiky &= move.contact[0] & contact_reactions_allowed(state, attacker_index)
     spiky &= (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD) & (state.active.current_hp[attacker_index, 0] > 0)
     def retaliate(s):
         """Attribute Spiky Shield's indirect damage to its defending user."""

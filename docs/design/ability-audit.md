@@ -21,13 +21,18 @@ including non-triggering cases, JIT, a vmapped speed check, and Flash Fire under
 
 ## Follow-up findings
 
-- Flash Fire's switch reset is implemented, but ability-loss/suppression hooks
-  are not yet represented. Confusion and Transform have reserved volatile fields;
-  their mechanics and Transform's original-state restoration are not implemented.
+- Effective ability reads now resolve switch-cleared overrides and suppression
+  through `BattleState`; immunity helpers live on `Side`. Worry Seed implements
+  its represented ability-loss transition, waking and public reveal. A general
+  lifecycle for arbitrary ability changes remains future work.
+- Confusion now has duration, before-action resolution and public presence.
+  Transform and its original-state restoration remain unimplemented.
 - Sturdy's separate immunity to one-hit knockout moves is not implemented.
 - Clear Body's current reduction helper does not distinguish self-inflicted
   drops from opposing drops, and its Defiant/Competitive ordering needs review.
-- Several move-type-changing abilities compute a modified move that is not passed
-  through the rest of move execution. Their behavior needs end-to-end tests.
-- Ability suppression/bypass, doubles redirection, and all ability interactions
-  with hazards, Gravity, and status moves remain outside this initial audit.
+- Move-type overrides now pass through `effective_move`; focused Pixilate,
+  Protean/Libero, Ivy Cudgel and Revelation Dance checks cover represented cases.
+  Broader interaction parity still needs auditing.
+- General ability bypass, doubles redirection, and exhaustive ability interactions
+  with hazards, Gravity and status moves remain outside this audit. See the
+  [follow-up validation matrix](remaining-ability-validation.md) for later work.

@@ -197,6 +197,8 @@ CURATED_ITEMS = {
     'Throat Spray': 'THROAT_SPRAY',
     'Light Clay': 'LIGHT_CLAY',
     'Mental Herb': 'MENTAL_HERB',
+    "King's Rock": 'KINGS_ROCK', 'Protective Pads': 'PROTECTIVE_PADS',
+    'Wellspring Mask': 'WELLSPRING_MASK', 'Absorb Bulb': 'ABSORB_BULB',
 }
 
 

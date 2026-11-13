@@ -54,6 +54,26 @@ def test_rain_skip_uses_effective_weather(neutral_type, suppressed):
     assert bool(out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) != suppressed
 
 
+@pytest.mark.parametrize('rain', [False, True])
+def test_charge_preparation_gates_accuracy(neutral_type, rain):
+    """A dry charge skips accuracy; immediate rain execution draws it once."""
+    from ninjax.game_logic import dispatch_selected_move
+    from ninjax.hit import HitOutcome
+    key, state = neutral_type
+    state = equip_move(state, 'Electro Shot').replace(weather=Weather(W.RAIN if rain else W.NONE, 5))
+    mon = state.active[0]
+    state = update_active(state, 0, mon.replace(moves=mon.moves.replace(
+        accuracy=mon.moves.accuracy.at[0, 0].set(0.))))
+    out_key, out = dispatch_selected_move(key, state, 0, 0)
+    expected_key = jax.random.split(key)[0] if rain else key
+    assert jnp.array_equal(jax.random.key_data(out_key), jax.random.key_data(expected_key))
+    assert out.boosts.normal_boosts[0, 3] == 1
+    assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
+    assert jnp.array_equal(out.active.moves.current_pp, state.active.moves.current_pp)
+    assert (out.volatile_status.charging_move_id[0, 0] == 905) != rain
+    assert out.hit_results[0].outcome == (HitOutcome.MISS if rain else HitOutcome.UNUSED)
+
+
 def test_charge_interruption_and_switch_cleanup(neutral_type):
     """Flinch cancels a release; switching clears both forced-turn states."""
     key, state = neutral_type

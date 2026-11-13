@@ -25,7 +25,7 @@ def worry_seed(state, attacker):
     Preserve the team ability, clear represented old-ability state, refresh
     field-dependent Paradox effects, and record the publicly revealed ability.
     """
-    from ninjax.side import update_active
+    from ninjax.side import update_active_fields
     from ninjax.held_effects import refresh_paradox
     target = 1-attacker
     old = underlying_ability(state, target)
@@ -51,8 +51,8 @@ def worry_seed(state, attacker):
         s = emit(s, EventKind.ABILITY, target, detail=AbilityEnum.INSOMNIA, after=AbilityEnum.INSOMNIA)
         mon = s.active[target]
         asleep = mon.status == Status.SLEEP
-        s = update_active(s, target, mon.replace(status=jnp.where(asleep, Status.NONE, mon.status),
-                                                sleep_counter=jnp.where(asleep, 0, mon.sleep_counter)))
+        s = update_active_fields(s, target, status=jnp.where(asleep, Status.NONE, mon.status),
+                                 sleep_counter=jnp.where(asleep, 0, mon.sleep_counter))
         return refresh_paradox(s)
     return jax.lax.cond(allowed, change, lambda s: s, state)
 
@@ -86,7 +86,7 @@ def frisk(state, source):
 
 def prepare_type_change(state, player, move):
     """Apply Gen 9 Protean/Libero once per switch, only on an actual type change."""
-    from ninjax.side import update_active
+    from ninjax.side import update_active_fields
     from ninjax.enum_types import Type
     mon = state.active[player]
     used = state.volatile_status.libero_used[player, 0]
@@ -96,7 +96,7 @@ def prepare_type_change(state, player, move):
     trigger = (state.ability[player, 0] == AbilityEnum.PROTEAN) & ~used & ~matching & (
         move.type[0] != Type.NONE) & ~mon.is_terastallized[0] & move.implemented[0]
     types = jnp.where(trigger, jnp.array([move.type[0], Type.NONE]), mon.type_list)
-    state = update_active(state, player, mon.replace(type_list=types))
+    state = update_active_fields(state, player, type_list=types)
     state = emit(state, EventKind.ABILITY, player, detail=state.ability[player, 0], enabled=trigger)
     return state.replace(volatile_status=state.volatile_status.replace(
         libero_used=state.volatile_status.libero_used.at[player, 0].set(used | trigger)))

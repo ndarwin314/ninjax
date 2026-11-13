@@ -2,6 +2,25 @@
 
 A Pokémon battle environment using JAX, Flax PyTrees, and Jumanji.
 
+## Prototype status
+
+The initial singles environment is implemented: caller-provided teams, optional
+team selection, typed actions, legal-action masks, switching and replacements,
+hidden/species/open-sheet observations, transition events, and terminal rewards.
+The current curated collection has 30 sets and 120 move slots, with no unavailable
+moves. Enabled mechanics cover the represented singles effects, with incomplete
+interaction parity. All 30 curated abilities and all 19 curated item names can be
+enabled through the opt-in modes below. Unsupported items in custom collections
+remain omissions.
+
+Focused mechanics and environment checks have passed during implementation.
+Compiled acceptance tests exist, but the latest expanded engine still needs a
+complete `jit`/`vmap`/`scan` acceptance pass. Remaining work includes interaction
+audits against the pinned Showdown reference, additional item interactions, and complete
+curated rollouts with enabled abilities/items. Doubles and transformations remain
+future work. See [mechanics progress](docs/design/curated-mechanics-progress.md)
+for the current scope and validation gaps.
+
 ## Minimal trace-derived sandbox
 
 From the project root, using the existing environment:
@@ -110,6 +129,11 @@ The benchmark reports tracing/lowering and backend compilation separately, plus
 synchronized warmed latency for a neutral single-battle step. Warmed iterations
 reuse the same input state; this is a microbenchmark, not full training throughput.
 
+For phase-by-phase graph and memory profiling, use `tools/profile_compile.py`.
+It can stop after tracing or lowering and supports an explicit RSS watchdog.
+See [compilation memory measurements](docs/design/compilation-performance.md)
+for bounded commands, measured improvements and the remaining backend limit.
+
 ## Curated ability mode
 
 Enable the supported singles ability group while keeping item and move omissions
@@ -120,8 +144,7 @@ explicit:
 ```
 
 This mode recognizes all 30 named abilities in the current curated file, with
-initial, incomplete protection support for Unseen Fist.
-Unseen Fist remains omitted pending protection mechanics. Friend Guard is enabled
+initial, incomplete protection support for Unseen Fist. Friend Guard is enabled
 as a no-effect ability in singles; its doubles reduction is not validated.
 See the [remaining-ability validation matrix](docs/design/remaining-ability-validation.md)
 for scope and limitations. Unsupported abilities are listed in `omissions`;

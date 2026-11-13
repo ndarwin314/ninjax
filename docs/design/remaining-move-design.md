@@ -1,4 +1,4 @@
-# Remaining curated moves: implementation choices
+# Curated move architecture and remaining interactions
 
 Scarlet/Violet is the default ruleset. After implementing Disable, Encore and
 Taunt, Worry Seed, Ivy Cudgel, Blizzard, Hurricane, Substitute, Electro Shot,
@@ -60,36 +60,38 @@ spread moves will need capacity beyond the present ten-hit singles buffer.
 The buffer is internal and is replaced by the next executed move, rather than
 being an observation or a complete turn history.
 
-Not every remaining move needs an architectural change. The distinctions below
-are about the current engine, not uncertainty about the game rules.
+## Latest shared execution support
 
-## Shared execution/state changes
+Beat Up constructs a fixed-shape hit plan from participating party members in
+team order. The user contributes even when statused; other contributors must
+be alive and status-free. Each hit's power is 5 plus its contributor's species
+base Attack divided by ten, rounded down. The actual user supplies offensive
+stats and modifiers.
 
-| Moves | Missing shared support | Option A | Option B | Suggested approach |
-| --- | --- | --- | --- | --- |
+Sleep Talk uses the shared selected-move executor without spending the called
+move's PP or repeating the user's before-action checks. Eligible selection
+ignores called-move PP and Disable, but excludes Sleep Talk, charge moves and
+metadata marked `nosleeptalk`. Sleep or effective Comatose permits execution;
+waking before using it makes it fail. Called moves are publicly revealed and
+multi-hit calls can continue while asleep.
 
-## Bounded extensions with reusable helpers
+Whirlwind selects a living participating bench member with an explicit PRNG
+key and runs the normal switch lifecycle. Queued actions retain their original
+actor slot, so the displaced Pokémon's action is cancelled. The represented
+Wind Rider, Suction Cups and Guard Dog checks prevent the forced switch.
 
-These require some state or interface work, but can fit the current architecture.
-
-| Moves | Option A | Option B | Suggested approach |
-| --- | --- | --- | --- |
-| Fake Out, Sucker Punch, Stomping Tantrum | Add active tenure, action-taken/selected-action context, and a previous-move result; pass the relevant pending action from `EpisodeState` into move resolution. | Put a complete action queue and move history in `BattleState`. | Implemented with switch-cleared action counts, queued actor/category context, and explicit current/previous move results. |
-
-## Moves needing local mechanics rather than a redesign
-
-| Moves | Implementation options |
-| --- | --- |
-
-A practical sequence is: explicit move results and action context; shared called-
-move execution; multi-turn continuations and action restrictions; hit routing
-for Substitute; then faint/forced-switch lifecycle hooks. Item/form and status
-work can proceed independently of that sequence.
+No curated move remains unavailable, but additional forced-switch interactions,
+protection variants, status-failure classification, ability/item interactions
+and new charge/semi-invulnerable variants still need work. The focused tests do
+not establish full parity or a completed compiled acceptance pass. See
+[mechanics progress](curated-mechanics-progress.md).
 
 ## Disable, Encore and Taunt: expanded options
 
-The choice is how to store active conditions. Both options need the same
-selection-time and execution-time behavior. Neither requires a new scheduler.
+The implemented choice is Option A in `VolatileStatus`, with shared helpers in
+`restrictions.py`. The following options preserve the original design rationale.
+Both options need the same selection-time and execution-time behavior. Neither
+requires a new scheduler.
 
 ### Option A: dedicated typed fields
 
@@ -111,11 +113,10 @@ needed. Recording `last_move_id` must occur when a move is actually used, not
 when an action is merely selected or stopped before execution. A used move that
 misses can still become the relevant last move.
 
-Each move has a small application helper; shared pure helpers construct masks,
-resolve Encore overrides, check restrictions before PP consumption, and advance
+Shared pure helpers apply restrictions, construct masks, resolve Encore
+overrides, check restrictions before PP consumption, and advance
 or clear timers. Existing switch-reset handling clears these fields. The current
-`Pokemon.encore_move` placeholder should be migrated so there is one source of
-truth, rather than keeping a second lock on the Pokémon.
+Encore lock is held in volatile state rather than a second lock on the Pokémon.
 
 Advantages: named, documented fields; straightforward tracing and debugging;
 small implementation; easy focused tests. Cost: more named fields and explicit
@@ -179,10 +180,9 @@ Use Option A behind a shared restriction interface. It matches the current
 condition framework. The pure helper interface keeps a later table migration
 local: masks and action execution would not need to know how effects are stored.
 
-Implement and test Taunt first, then Disable (last-move history), then Encore
-(queued-action override and combinations). Check fast and slow application,
-switching, failed/interrupted moves, PP exhaustion, Mental Herb, existing item
-locks, overlapping Encore+Disable/Taunt, and actual `jit`/`vmap`/`scan` execution.
+Focused restriction tests cover application timing, switching, PP exhaustion,
+Mental Herb, locks and queued overrides. Full acceptance of the latest engine
+under `jit`/`vmap`/`scan` remains outstanding.
 
 ## Item mutation helpers
 
@@ -198,6 +198,9 @@ Swaps validate both outgoing and incoming bindings before either assignment,
 then update public item knowledge and events, clean up Choice locks, and run
 represented received-item effects (Sitrus Berry, Mental Herb and Booster Energy).
 Empty-handed exchanges are valid when at least one item exists. Same-item swaps
-are valid and reveal both items. Mask IDs are represented for Ogerpon transfer
-restrictions, but remain excluded from curated item projection until their
-other mechanics are implemented. Consumption remains a separate operation.
+are valid and reveal both items. Mask IDs enforce Ogerpon transfer restrictions
+and matching-form power modifiers; Wellspring Mask is enabled in the curated
+item projection. Absorb Bulb joins Sitrus Berry, Mental Herb and Booster Energy
+among the represented received-item effects, activating after a subsequent
+damaging Water hit rather than on receipt. Consumption remains a separate
+operation.

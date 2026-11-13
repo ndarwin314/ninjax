@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, WeatherEnum as W, TerrainEnum as T, Terrain, Type, Status, FormEnum
-from ninjax.side import add_boosts, reduce_boosts, clear_boosts, set_status, update_active, take_damage_value
+from ninjax.side import add_boosts, reduce_boosts, clear_boosts, set_status, update_active_fields, take_damage_value
 from ninjax.held_effects import effective_weather
 
 
@@ -20,13 +20,13 @@ def direct_status_move(key, state, player, move):
         eligible = (mon.current_hp[0] < mon.max_hp) & (mon.status[0] != Status.SLEEP) & (mon.current_hp[0] > 0)
         # Reuse terrain and ability sleep checks, but allow Rest to replace a
         # burn/poison/paralysis. Failed sleep attempts restore the original state.
-        candidate = update_active(s, player, mon.replace(status=jnp.zeros_like(mon.status)))
+        candidate = update_active_fields(s, player, status=jnp.zeros_like(mon.status))
         key, candidate = set_status(key, candidate, player, jnp.array([Status.SLEEP]))
         success = eligible & (candidate.active.status[player, 0] == Status.SLEEP)
         def heal(c):
             """Use the existing sleep counter's decrement-before-action convention."""
             from ninjax.events import EventKind, emit
-            c = update_active(c, player, c.active[player].replace(sleep_counter=jnp.array([3])))
+            c = update_active_fields(c, player, sleep_counter=jnp.array([3]))
             c = c.replace(toxic_counter=c.toxic_counter.at[player].set(0))
             c = emit(c, EventKind.STATUS, player, before=mon.status[0], after=Status.SLEEP)
             return take_damage_value(c, player, -mon.max_hp, False)
@@ -51,7 +51,7 @@ def direct_status_move(key, state, player, move):
                 hp_change=hp-mon.current_hp,
                 hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
                 enabled=hp[0] != mon.current_hp[0])
-            return update_active(s, p, mon.replace(current_hp=hp))
+            return update_active_fields(s, p, current_hp=hp)
         s = jax.lax.fori_loop(0, 2, assign, s)
         return key, jax.lax.fori_loop(0, 2, lambda p, s: after_hp_change(s, p), s)
     return jax.lax.cond(move.identifier[0] == 156, rest, split, (key, state))
@@ -149,7 +149,9 @@ def secondary_effects(key, state, player, move):
         v = state.volatile_status
         flinch = move.secondary_flinch[0] & (ability != A.INNER_FOCUS)
         return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
-    return jax.lax.cond(triggered, apply, lambda args: args, (key, state))
+    key, state = jax.lax.cond(triggered, apply, lambda args: args, (key, state))
+    from ninjax.held_effects import kings_rock_flinch
+    return kings_rock_flinch(key, state, player, move)
 
 
 def after_damage(state, player, move):
