@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import chex
 from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
 
-from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum, ProtectionKind, OffensiveStatOwner
+from ninjax.enum_types import AbilityEnum, ItemEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum, ProtectionKind, OffensiveStatOwner
 from ninjax.side import (BattleState, update_active_fields, clear_volatile_status, clear_boosts, add_boosts, reduce_boosts,
                          conditional_add_boosts, conditional_reduce_boosts, set_weather, set_terrain,
                          take_damage_percent, set_status, take_damage_value, raw_boosted_stats, is_floating, is_sand_immune)
@@ -142,11 +142,10 @@ def record_hit(state, index, target, outcome, recipient=HitRecipient.NONE, damag
     return state.replace(hit_results=state.hit_results.set(index, result))
 
 
-def substitute_intercepts(state, attacker_idx, move):
-    """Check whether an opposing move is stopped by the target's Substitute."""
-    return ((state.volatile_status.substitute_hp[1-attacker_idx, 0] > 0) &
-            ~move.target_self[0] & ~move.sound[0] & ~move.bypass_substitute[0] &
-            (state.ability[attacker_idx, 0] != AbilityEnum.INFILTRATOR))
+def substitute_intercepts(substitute_hp, attacker_ability, target_self, sound, bypass_substitute):
+    """Check interception from scalar HP, effective ability and move flags."""
+    return ((substitute_hp > 0) & ~target_self & ~sound & ~bypass_substitute &
+            (attacker_ability != AbilityEnum.INFILTRATOR))
 
 
 def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_index=0):
@@ -174,7 +173,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         attacker,
         defender,
         move,
-        state.terrain, effective_weather(state), state.gravity_duration > 0
+        state.terrain, effective_weather(state.weather.weather, state.ability, state.active.current_hp), state.gravity_duration > 0
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier
@@ -227,7 +226,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         key,
         attacker,
         defender,
-        Weather(effective_weather(state), state.weather.duration),
+        Weather(effective_weather(state.weather.weather, state.ability, state.active.current_hp), state.weather.duration),
         move,
         base_damage,
         is_crit,
@@ -243,6 +242,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
                        state.light_screen[1-attacker_idx, 0] > 0) | (state.aurora_veil[1-attacker_idx, 0] > 0)
     damage = conditional_mult_round(damage, .5, screen & ~is_crit & (attacker.ability != AbilityEnum.INFILTRATOR))
     damage = conditional_mult_round(damage, 5324/4096, attacker.item == ItemEnum.LIFE_ORB)
+    from ninjax.held_effects import conditional_mult_round as fixed_modifier
+    damage = fixed_modifier(damage, 4915/4096,
+        (attacker.item == ItemEnum.EXPERT_BELT) & (calculate_effectiveness_multiplier(move.type, defender.type_list) > 1))
     bypass = state.volatile_status.protected[1-attacker_idx] & (attacker.ability == AbilityEnum.UNSEEN_FIST) & move.contact
     damage = conditional_mult_round(damage, UNSEEN_FIST_PROTECT_MULTIPLIER, bypass)
 
@@ -255,7 +257,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     # Substitute intercepts this hit before Pokémon HP and on-hit callbacks.
     target_idx = 1-attacker_idx
-    intercepted = substitute_intercepts(state, attacker_idx, move)
+    intercepted = substitute_intercepts(state.volatile_status.substitute_hp[1-(attacker_idx), 0], state.ability[attacker_idx, 0],
+        move.target_self[0], move.sound[0], move.bypass_substitute[0])
     def damage_substitute(s):
         """Remove capped Substitute HP without triggering Pokémon damage hooks."""
         v = s.volatile_status
@@ -303,6 +306,10 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     key, state = jax.lax.cond(intercepted, lambda k, s: (k, s),
         lambda k, s: after_every_hit(k, s, attacker_idx, move, is_crit), key, state)
+    # Air Balloon breaks on a hit to the Pokémon, including zero-HP KOs, but
+    # Substitute absorbs the hit without popping the held balloon.
+    from ninjax.held_effects import consume
+    state = consume(state, target_idx, ~intercepted & (defender.item[0] == ItemEnum.AIR_BALLOON))
     state = jax.lax.cond(intercepted, lambda s: s,
         lambda s: after_hit(s, attacker_idx, move, damage, calculate_effectiveness_multiplier(move.type, defender.type_list)), state)
     # Knock Off removes the item after a real hit, only if the attacker survives.
@@ -547,7 +554,7 @@ def end_turn_damage(state: BattleState) -> BattleState:
     # this matters a lot in vgc but usually less in singles
     # it also matters for determining winner if the last pokemon for both players faints on the same turn
     from ninjax.held_effects import effective_weather
-    weather = effective_weather(state)
+    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
     active = state.effective_active
     idx = jnp.array([0,1])
     floating = is_floating(active)
@@ -572,21 +579,31 @@ def end_turn_damage(state: BattleState) -> BattleState:
 
     # status damage
     # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
+    poison_heal = (active.ability == AbilityEnum.POISON_HEAL) & active.is_poisoned
     status_damage = (1 / 8 * (active.status==Status.POISON) +
-                     1 / 16 * (active.status==Status.BURN) +
+                     1 / 16 * (active.status==Status.BURN) * jnp.where(active.ability == AbilityEnum.HEATPROOF, .5, 1.) +
                      state.toxic_counter / 16 * (active.status==Status.TOXIC))
+    status_damage = jnp.where(poison_heal, -1/8, status_damage)
     # Preserve effect-major, then player-major ordering while compiling one
     # shared HP-update body. All fractions use the original active snapshot.
     fractions = jnp.stack((sand_damage, -rain_healing, sun_damage,
-                           -snow_healing, grass_healing, status_damage))
-    causes = jnp.array([Cause.WEATHER] * 4 + [Cause.TERRAIN, Cause.STATUS], jnp.int32)
+                           -snow_healing, grass_healing))
+    causes = jnp.array([Cause.WEATHER] * 4 + [Cause.TERRAIN], jnp.int32)
     def apply_effect(s, effect):
         percent, cause = effect
         return take_damage_percent(s, idx, percent, cause=cause), None
-    return jax.lax.scan(apply_effect, state, (fractions, causes))[0]
+    state = jax.lax.scan(apply_effect, state, (fractions, causes))[0]
+    from ninjax.ability_effects import bad_dreams
+    state = bad_dreams(state)
+    return take_damage_percent(state, idx, status_damage, cause=Cause.STATUS)
 
 # TODO: at some point probably factor out part of this into like
 # just swapping out to implement baton pass idk
+def _unchanged_switch_state(state, player):
+    """Preserve state when a switch entrant is already fainted."""
+    return state
+
+
 def swap_out(
     key,
     state: BattleState,
@@ -611,6 +628,9 @@ def swap_out(
     state = state.replace(event_source=jnp.asarray(side_idx, jnp.int32), event_move=jnp.int32(0), event_cause=jnp.int32(Cause.SWITCH))
     state = emit(state, EventKind.SWITCH, side_idx, before=state.active_index[side_idx, 0], after=new_active)
     outgoing = state.active[side_idx]
+    from ninjax.held_effects import cure_status
+    state = jax.lax.cond((state.ability[side_idx, 0] == AbilityEnum.NATURAL_CURE) & (outgoing.current_hp[0] > 0),
+        lambda s: cure_status(s, side_idx), lambda s: s, state)
     # A temporary public reveal no longer identifies the restored base ability.
     slot = state.active_index[side_idx, 0]
     known = state.known_abilities
@@ -671,7 +691,7 @@ def swap_out(
     active_hp = state.active.current_hp[side_idx, 0]
     is_alive = active_hp != 0
 
-    state = jax.lax.cond(is_alive, swap_is_alive, lambda a, b: a, state, side_idx)
+    state = jax.lax.cond(is_alive, swap_is_alive, _unchanged_switch_state, state, side_idx)
 
 
     state = update_active_fields(state, side_idx, is_alive=is_alive)
@@ -713,14 +733,30 @@ def swap_is_alive(
         defender_ability==AbilityEnum.SCRAPPY,
     )
     intimidate_activated = jnp.logical_and(is_intimidate, 1-is_intimidate_immune)
+    old_attack = state.boosts.normal_boosts[1-side_idx, StatEnum.ATTACK]
     state = conditional_reduce_boosts(state, 1-side_idx, intimidate_activated, StatEnum.ATTACK, 1, True)
+    rattled = ((ability == AbilityEnum.INTIMIDATE) & (defender_ability[0] == AbilityEnum.RATTLED) &
+               (state.active.current_hp[1-side_idx, 0] > 0) &
+               (state.boosts.normal_boosts[1-side_idx, StatEnum.ATTACK] != old_attack))
+    state = conditional_add_boosts(state, 1-side_idx, rattled, StatEnum.SPEED, 1)
+    # Download compares stage-adjusted defenses without item/ability modifiers.
+    defenses = state.raw_boosted_stats[1-side_idx]
+    download_stat = jnp.where(defenses[StatEnum.DEFENSE] < defenses[StatEnum.SPECIAL_DEFENSE], StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK)
+    state = conditional_add_boosts(state, side_idx, (ability == AbilityEnum.DOWNLOAD) & (state.active.current_hp[1-side_idx, 0] > 0), download_stat, 1)
+    state = conditional_add_boosts(state, side_idx,
+        (ability == AbilityEnum.WIND_RIDER) & (state.tailwind[side_idx, 0] > 0), StatEnum.ATTACK, 1)
     old_source = state.event_source
     state = state.replace(event_source=jnp.asarray(side_idx, jnp.int32))
     state = emit(state, EventKind.ABILITY, side_idx, detail=ability,
                  enabled=(state.weather.weather != previous_weather) | (state.terrain.terrain != previous_terrain))
     state = state.replace(event_source=old_source)
     from ninjax.ability_effects import frisk
-    return frisk(state, side_idx)
+    from ninjax.held_effects import update_items
+    balloon = attacker.item[0] == ItemEnum.AIR_BALLOON
+    from ninjax.ability_effects import remember_item
+    state = remember_item(state, side_idx, ItemEnum.AIR_BALLOON, balloon)
+    state = emit(state, EventKind.ITEM_REVEALED, side_idx, detail=ItemEnum.AIR_BALLOON, enabled=balloon)
+    return update_items(frisk(state, side_idx))
 
 
 def step_side_conditions(
@@ -775,8 +811,54 @@ def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int,
     state = state.replace(volatile_status=v.replace(protect_chain=v.protect_chain.at[attacker_index, 0].set(0)))
     return key, emit(state, EventKind.INTERRUPTED, attacker_index)
 
-def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
-    """Consume one PP and dispatch the move if its implementation is enabled.
+def move_used(key, state: BattleState, attacker_index, move_index, continued=False, struggle=False):
+    """Prepare a selection, release or forced Struggle for one hit pipeline.
+
+    A charge release has already paid PP and established its move context in
+    the action scheduler. It skips selection bookkeeping and charge setup.
+    """
+    def release(k, s, p, i):
+        """Announce a released charge without consuming PP or changing type."""
+        from ninjax.side import clear_destiny_bond
+        s = clear_destiny_bond(s, p)
+        return k, emit(s, EventKind.MOVE, p, detail=s.event_move)
+    key, state = jax.lax.cond(struggle, _prepare_struggle_use,
+        lambda k, s, p, i: jax.lax.cond(continued, release, _prepare_move_use, k, s, p, i),
+        key, state, attacker_index, move_index)
+    move = state.active[attacker_index].moves[move_index]
+    key, state = _execute_selected_or_called_move(key, state, attacker_index, move_index,
+        ~jnp.asarray(struggle) & ~jnp.asarray(continued) & (move.identifier[0] == 214) & move.implemented[0], continued)
+    return key, jax.lax.cond(struggle, lambda s: _struggle_recoil(s, attacker_index), lambda s: s, state)
+
+
+def _prepare_struggle_use(key, state, player, unused_index):
+    """Announce forced Struggle and invalidate Encore/Disable move history."""
+    from ninjax.side import clear_destiny_bond
+    state = clear_destiny_bond(state, player)
+    v = state.volatile_status
+    state = state.replace(hit_results=HitResults.empty(), event_move=jnp.int32(-1),
+        volatile_status=v.replace(last_move_id=v.last_move_id.at[player, 0].set(0)))
+    return key, emit(state, EventKind.MOVE, player, detail=-1)
+
+
+def _struggle_recoil(b, player):
+    """Apply Struggle's existing quarter-max-HP recoil after shared damage."""
+    actor = b.active[player]
+    hp = jnp.maximum(0, actor.current_hp - jnp.maximum(1, jnp.round(actor.max_hp / 4)))
+    b = b.replace(event_cause=jnp.int32(Cause.RECOIL))
+    b = emit(b, EventKind.HP, player, before=actor.current_hp, after=hp,
+             hp_change=hp-actor.current_hp,
+             hp_fraction_change=(jnp.ceil(hp / actor.max_hp * 100) -
+                                 jnp.ceil(actor.current_hp / actor.max_hp * 100)) / 100,
+             enabled=hp != actor.current_hp)
+    b = emit(b, EventKind.FAINT, player, enabled=(actor.current_hp > 0) & (hp == 0))
+    b = update_active_fields(b, player, current_hp=hp, is_alive=hp > 0)
+    b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player, b.winner))
+    return b
+
+
+def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
+    """Consume one PP and establish ordinary selected-move bookkeeping.
 
     Unsupported moves consume PP but otherwise take the no-effect branch. The
     caller is responsible for ensuring the selected move has PP remaining.
@@ -803,7 +885,8 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
                           event_move=move.identifier[0], event_cause=jnp.int32(Cause.MOVE))
     state = emit(state, EventKind.MOVE, attacker_index, detail=move.identifier[0])
     from ninjax.enum_types import ItemEnum
-    choice = jnp.any(state.active[attacker_index].item == jnp.array([ItemEnum.CHOICE_BAND, ItemEnum.CHOICE_SPECS]))
+    from ninjax.held_effects import is_choice_item
+    choice = is_choice_item(state.active.item[attacker_index, 0])
     lock = state.volatile_status.choice_lock
     state = state.replace(volatile_status=state.volatile_status.replace(choice_lock=lock.at[attacker_index, 0].set(
         jnp.where(choice & (lock[attacker_index, 0] < 0), move_index, lock[attacker_index, 0]))))
@@ -818,15 +901,17 @@ def move_used(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
     moves = state.team.moves
     state = state.replace(team=state.team.replace(moves=moves.replace(
         current_pp=moves.current_pp.at[attacker_index, slot, move_index].add(-1))))
-    # Resolve the slot first, then dispatch once. Putting the full executor in
-    # both conditional branches makes XLA expand two copies of the hit pipeline.
-    return _execute_selected_or_called_move(key, state, attacker_index, move_index,
-        (move.identifier[0] == 214) & move.implemented[0])
+    return key, state
 
 
 @jax.jit
-def dispatch_selected_move(key, state, attacker_index, move_index):
-    """Prepare an already paid-for/called move, then enter one shared hit path."""
+def dispatch_selected_move(key, state, attacker_index, move_index, continued=False):
+    """Prepare a paid-for/called move or release, then share one hit path.
+
+    The scalar ``continued`` flag bypasses initial charge setup and ordinary
+    attempt finalization; release bookkeeping was handled by the scheduler.
+    """
+    struggle = state.event_move == -1
     move = state.active[attacker_index].moves[move_index]
     explosion = (move.identifier[0] == 153) & move.implemented[0]
     electro_shot = (move.identifier[0] == 905) & move.implemented[0]
@@ -867,12 +952,16 @@ def dispatch_selected_move(key, state, attacker_index, move_index):
             lambda k, s, p, i: jax.lax.cond(electro_shot, _prepare_electro_shot,
                 lambda k, s, p, i: (k, s, jnp.bool_(True)), k, s, p, i), k, s, p, i)
 
-    key, state, ready = jax.lax.cond(fake_fails | sucker_fails, fail, prepare,
+    def selected(k, s, p, i):
+        """Initial selections can fail or start charging before hit resolution."""
+        return jax.lax.cond(fake_fails | sucker_fails, fail, prepare, k, s, p, i)
+    key, state, ready = jax.lax.cond(continued | struggle,
+        lambda k, s, p, i: (k, s, jnp.bool_(True)), selected,
         key, state, attacker_index, move_index)
 
     def apply(k, s):
         """Keep accuracy, immunity, status and damage resolution in one branch."""
-        return jax.lax.cond(move.implemented[0], _apply_move_effects, move_misses,
+        return jax.lax.cond(move.implemented[0] | struggle, _apply_move_effects, move_misses,
                             k, s, attacker_index, move_index)
     key, state = jax.lax.cond(ready, apply, lambda k, s: (k, s), key, state)
     # Explosion's saved HP is action-local, even when the target was unaffected.
@@ -880,8 +969,9 @@ def dispatch_selected_move(key, state, attacker_index, move_index):
         """Discard the pre-faint HP after the shared hit pipeline returns."""
         v = s.volatile_status
         return s.replace(volatile_status=v.replace(explosion_hp=v.explosion_hp.at[attacker_index, 0].set(0)))
-    state = jax.lax.cond(explosion & ready, clear_explosion_hp, lambda s: s, state)
-    return key, finish_attempt(state, attacker_index, move)
+    state = jax.lax.cond(explosion & ready & ~struggle, clear_explosion_hp, lambda s: s, state)
+    return key, jax.lax.cond(continued | struggle, lambda s: s,
+        lambda s: finish_attempt(s, attacker_index, move), state)
 
 
 def _prepare_sleep_talk(key, state, player, move_index):
@@ -899,7 +989,9 @@ def _prepare_sleep_talk(key, state, player, move_index):
     def call(k, s):
         """Select a move and establish its priority, sleep and public context."""
         k, select_key = random.split(k)
-        selected = random.categorical(select_key, jnp.where(eligible, 0., -jnp.inf))
+        # Keep the selected slot aligned with the action's int32 index, also
+        # when a caller enables JAX's 64-bit default integer mode.
+        selected = random.categorical(select_key, jnp.where(eligible, 0., -jnp.inf)).astype(jnp.int32)
         called = s.active[player].moves[selected]
         v = s.volatile_status
         s = s.replace(event_move=called.identifier[0], volatile_status=v.replace(
@@ -914,14 +1006,15 @@ def _prepare_sleep_talk(key, state, player, move_index):
     return jax.lax.cond(asleep & jnp.any(eligible), call, fail, key, state)
 
 
-def _execute_selected_or_called_move(key, state, player, move_index, sleep_talk):
+def _execute_selected_or_called_move(key, state, player, move_index, sleep_talk, continued=False):
     """Select the effective slot, dispatch once and restore called-move context."""
     old_move = state.event_move
     old_override = state.volatile_status.encore_overridden[player, 0]
     key, state, selected, ready = jax.lax.cond(sleep_talk, _prepare_sleep_talk,
         lambda k, s, p, i: (k, s, jnp.asarray(i, jnp.int32), jnp.bool_(True)),
         key, state, player, move_index)
-    key, state = jax.lax.cond(ready, dispatch_selected_move,
+    key, state = jax.lax.cond(ready,
+        lambda k, s, p, i: dispatch_selected_move(k, s, p, i, continued),
         lambda k, s, p, i: (k, s), key, state, player, selected)
 
     def restore(s):
@@ -943,8 +1036,10 @@ def finish_attempt(state, player, move):
     outcome = state.hit_results[0].outcome
     failed = (outcome == HitOutcome.MISS) | (outcome == HitOutcome.BLOCKED) | (outcome == HitOutcome.IMMUNE) | (outcome == HitOutcome.PROTECTED)
     crash = (move.identifier[0] == 136) & failed & (state.ability[player, 0] != AbilityEnum.MAGIC_GUARD) & (state.active.current_hp[player, 0] > 0)
-    return jax.lax.cond(crash,
+    from ninjax.held_effects import update_items
+    return update_items(jax.lax.cond(crash,
         lambda s: take_damage_percent(s, player, .5, cause=Cause.RECOIL), lambda s: s, state)
+    )
 
 
 def _prepare_electro_shot(key, state, player, index):
@@ -959,7 +1054,7 @@ def _prepare_electro_shot(key, state, player, index):
             charge_target_side=v.charge_target_side.at[player, 0].set(1-player),
             charge_target_position=v.charge_target_position.at[player, 0].set(0)))
         return k, emit(s, EventKind.CONDITION, player, detail=14, before=0, after=905)
-    ready = effective_weather(state) == WeatherEnum.RAIN
+    ready = effective_weather(state.weather.weather, state.ability, state.active.current_hp) == WeatherEnum.RAIN
     key, state = jax.lax.cond(ready, lambda k, s: (k, s), charge, key, state)
     return key, state, ready
 
@@ -985,6 +1080,12 @@ def effective_move(state, attacker_index, move):
     move = move.replace(type=jnp.where(normalize, Type.NORMAL, move.type),
         base_power=conditional_mult_round(move.base_power, 4915/4096, normalize))
     move = move_overrides(state, attacker_index, move)
+    # These abilities change the queued priority bracket, independently of Speed.
+    priority = move.priority + jnp.where((ability == AbilityEnum.PRANKSTER) & (move.move_type == MoveType.STATUS), 1, 0)
+    priority += jnp.where((ability == AbilityEnum.GALE_WINGS) & (move.type == Type.FLYING) &
+                         (state.active.current_hp[attacker_index, 0] == state.active.max_hp[attacker_index]), 1, 0)
+    priority += jnp.where((ability == AbilityEnum.TRIAGE) & move.healing, 3, 0)
+    move = move.replace(priority=priority)
     normal = (move.type == Type.NORMAL) & ~excluded
     changed = normal & ((ability == AbilityEnum.PIXILATE) | (ability == AbilityEnum.AERILATE) |
                         (ability == AbilityEnum.REFRIGERATE) | (ability == AbilityEnum.GALVANIZE))
@@ -998,7 +1099,14 @@ def effective_move(state, attacker_index, move):
 
 
 def _apply_move_effects(key, state, attacker_index, move_index):
-    return move_not_drawn_in(key, state, attacker_index, move_index, StatEnum.SPECIAL_ATTACK)
+    """Skip Struggle accuracy while sharing the downstream hit executor."""
+    # Forced Struggle already uses -1 as its action-local public move marker.
+    # Prepare only a routing flag here so the heavy hit executor has one call.
+    key, state, ready = jax.lax.cond(state.event_move == -1,
+        lambda k, s: (k, s, jnp.bool_(True)),
+        lambda k, s: _prepare_accuracy(k, s, attacker_index, move_index), key, state)
+    return jax.lax.cond(ready, _move_hits, lambda k, s, p, i: (k, s),
+        key, state, attacker_index, move_index)
 
 
 def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
@@ -1007,6 +1115,11 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
     The calculation includes represented accuracy stages and abilities. The
     final ``unused`` operand is retained for compatibility with branch calls.
     """
+    return _apply_move_effects(key, state, attacker_index, move_index)
+
+
+def _prepare_accuracy(key, state, attacker_index, move_index):
+    """Record misses/immunity and return whether normal hit routing is allowed."""
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     move = effective_move(state, attacker_index, state.active[attacker_index].moves[move_index])
@@ -1015,7 +1128,7 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
     # Worry Seed fails against these identities before accuracy, including
     # while an ability's effects are suppressed.
     from ninjax.ability_effects import underlying_ability
-    old = underlying_ability(state, 1-attacker_index)
+    old = underlying_ability(state.active.ability[1-attacker_index, 0], state.volatile_status.ability_override[1-attacker_index, 0])
     cannot_target = (move.identifier[0] == 388) & ((old == AbilityEnum.INSOMNIA) | (old == AbilityEnum.TRUANT))
 
     # Gen 9 protection resolves before accuracy; an inaccurate contact move
@@ -1023,13 +1136,16 @@ def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, mov
     bypass = (state.ability[attacker_index, 0] == AbilityEnum.UNSEEN_FIST) & move.contact[0]
     protected = state.volatile_status.protected[1-attacker_index, 0] & ~move.target_self[0] & move.protectable[0] & ~bypass
 
-    # choose function based on if move hits
-    return jax.lax.cond(cannot_target,
-        lambda k, s: (k, record_hit(emit(s, EventKind.IMMUNE, 1-attacker_index), 0, 1-attacker_index, HitOutcome.IMMUNE)),
-        lambda k, s: jax.lax.cond(
-        jnp.less_equal(r, accuracy)[0] | protected,
-        move_hits, move_misses,
-        k, s, attacker_index, move_index), key, state)
+    hit = (jnp.less_equal(r, accuracy)[0] | protected) & move.implemented[0]
+    def immune(k, s):
+        """Stop a forbidden ability change before ordinary hit resolution."""
+        return k, record_hit(emit(s, EventKind.IMMUNE, 1-attacker_index), 0, 1-attacker_index, HitOutcome.IMMUNE), jnp.bool_(False)
+    def attempt(k, s):
+        """Retain the accuracy draw and record a miss when the hit is gated out."""
+        k, s = jax.lax.cond(hit, lambda k, s: (k, s),
+            lambda k, s: move_misses(k, s, attacker_index, move_index), k, s)
+        return k, s, hit
+    return jax.lax.cond(cannot_target, immune, attempt, key, state)
 
 
 def move_accuracy(state, attacker_index, move):
@@ -1039,13 +1155,14 @@ def move_accuracy(state, attacker_index, move):
     attacker_ability = active[attacker_index].ability
 
     from ninjax.held_effects import effective_weather
-    weather = effective_weather(state)
+    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
     is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
 
     base_accuracy = jnp.where((move.identifier == 542) & (weather == WeatherEnum.SUN), .5, move.accuracy)
+    ignore_evasion = move.ignore_defensive[0] | (attacker_ability[0] == AbilityEnum.KEEN_EYE)
     accuracy = (base_accuracy *
                 ACCURACY_MULTIPLIER_LOOKUP[6 + state.boosts.acc_boosts[attacker_index, 0]] *
-                ACCURACY_MULTIPLIER_LOOKUP[6 - jnp.where(move.ignore_defensive[0], 0, state.boosts.acc_boosts[1 - attacker_index, 1])] *
+                ACCURACY_MULTIPLIER_LOOKUP[6 - jnp.where(ignore_evasion, 0, state.boosts.acc_boosts[1 - attacker_index, 1])] *
                 jnp.power(0.8, is_hustle))
     veil_active = jnp.logical_or(
         jnp.logical_and(defender_ability == AbilityEnum.SAND_VEIL, weather == WeatherEnum.SANDSTORM),
@@ -1053,9 +1170,12 @@ def move_accuracy(state, attacker_index, move):
     conditions = jnp.array(
         [jnp.equal(attacker_ability, AbilityEnum.COMPOUND_EYES),
          attacker_ability==AbilityEnum.VICTORY_STAR,
-         veil_active])
-    modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, WEATHER_VEIL_MODIFIER, VICTORY_STAR])
+         veil_active]).reshape((3,))
+    modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, VICTORY_STAR, WEATHER_VEIL_MODIFIER])
     accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
+    accuracy *= jnp.where(active.item[attacker_index] == ItemEnum.WIDE_LENS, 1.1, 1.)
+    # The simulator samples an integer percentage after accuracy modifiers.
+    accuracy = jnp.floor(accuracy * 100 + 1e-5) / 100
     no_guard_active = jnp.logical_or(
         jnp.equal(defender_ability, AbilityEnum.NO_GUARD),
         jnp.equal(attacker_ability, AbilityEnum.NO_GUARD))
@@ -1065,9 +1185,16 @@ def move_accuracy(state, attacker_index, move):
     # Storm Drain and Water Absorb intercept incoming Water moves in TryHit,
     # before Showdown's accuracy stage. Dispatch their branch even on a move
     # that would otherwise miss; self-targeted moves are handled separately.
-    water_absorbed = (move.type == Type.WATER) & ~move.target_self & (
-        (defender_ability == AbilityEnum.STORM_DRAIN) | (defender_ability == AbilityEnum.WATER_ABSORB))
-    accuracy = jnp.where(water_absorbed, 1., accuracy)
+    absorbed = (((move.type == Type.WATER) & ((defender_ability == AbilityEnum.STORM_DRAIN) |
+        (defender_ability == AbilityEnum.WATER_ABSORB) | (defender_ability == AbilityEnum.DRY_SKIN))) |
+        ((move.type == Type.ELECTRIC) & ((defender_ability == AbilityEnum.LIGHTNING_ROD) |
+        (defender_ability == AbilityEnum.VOLT_ABSORB) | (defender_ability == AbilityEnum.MOTOR_DRIVE))) |
+        ((move.type == Type.FIRE) & (defender_ability == AbilityEnum.WELL_BAKED_BODY)) |
+        ((move.type == Type.GRASS) & (defender_ability == AbilityEnum.SAP_SIPPER)) |
+        ((move.type == Type.GROUND) & (defender_ability == AbilityEnum.EARTH_EATER))) & ~move.target_self
+    from ninjax.enum_types import MoveFlags
+    absorbed |= (defender_ability == AbilityEnum.WIND_RIDER) & ((move.move_flags & MoveFlags.WIND) != 0) & ~move.target_self
+    accuracy = jnp.where(absorbed, 1., accuracy)
     # Blizzard in snow and Hurricane in rain bypass accuracy/evasion checks.
     weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | ((move.identifier == 542) & (weather == WeatherEnum.RAIN))
     accuracy = jnp.where((defender_ability == AbilityEnum.TANGLED_FEET) & (state.volatile_status.confusion_turns[1-attacker_index] > 0), accuracy * .5, accuracy)
@@ -1087,24 +1214,42 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
 
 def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
-    """Select the represented hit outcome and record a pending pivot switch.
+    """Join normal and forced routing before one damage/status executor.
 
     Ability and type immunities, status moves, and damaging moves share one
     branch signature so ``lax.switch`` can trace each possible outcome.
     """
 
+    state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
+        _prepare_struggle_hit, _prepare_normal_hit, state, attacker_index, move_index)
+    key, state = jax.lax.switch(branch,
+        [do_damaging_move, do_status_move, do_stat_boost_from_move,
+         do_flash_fire_from_move, do_healing_from_move, is_immune],
+        key, state, attacker_index, move, stat, boost_value)
+    requested = move.switch_out[0] & (branch <= 1)
+    return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
+
+
+def _prepare_struggle_hit(state, player, index):
+    """Supply typeless Struggle to the same damaging branch as ordinary hits."""
+    reference = state.active[player].moves[index]
+    move = Move(move_type=jnp.array([0]), max_pp=jnp.array([1]), current_pp=jnp.array([1]),
+        type=jnp.array([Type.NONE]), base_power=jnp.array([50]), accuracy=jnp.array([1.]),
+        priority=jnp.array([0]), offensive_stat=jnp.array([StatEnum.ATTACK]),
+        defensive_stat=jnp.array([StatEnum.DEFENSE]), crit_stage=jnp.array([0]))
+    move = jax.tree.map(lambda value, ref: value.astype(ref.dtype), move, reference)
+    ability = state.ability[1-player]
+    return state, move, jnp.int32(0), jnp.zeros_like(ability), 1 + (ability == AbilityEnum.WELL_BAKED_BODY)
+
+
+def _prepare_normal_hit(state, attacker_index, move_index):
+    """Resolve normal hit routing before the common damage/status executor."""
     # decide branch to execute based on ability immunities
     defender = state.effective_active[1 - attacker_index]
     move = effective_move(state, attacker_index, state.active[attacker_index].moves[move_index])
     v = state.volatile_status
     move = move.replace(priority=jnp.where(v.encore_overridden[attacker_index], v.queued_priority[attacker_index], move.priority))
     ability = defender.ability
-    branches = [do_damaging_move,
-                do_status_move,
-                do_stat_boost_from_move,
-                do_flash_fire_from_move,
-                do_healing_from_move,
-                is_immune]
     is_flash_fire = jnp.logical_and(ability==AbilityEnum.FLASH_FIRE, move.type==Type.FIRE)
     is_spa_boost = jnp.logical_or(
         jnp.logical_and(ability==AbilityEnum.STORM_DRAIN, move.type==Type.WATER),
@@ -1114,6 +1259,10 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
         jnp.logical_and(AbilityEnum.STORM_DRAIN==ability, Type.WATER==move.type),
         jnp.logical_and(ability == AbilityEnum.LIGHTNING_ROD, move.type == Type.ELECTRIC))"""
     is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
+    from ninjax.enum_types import MoveFlags
+    # Whirlwind retains its existing forced-switch failure classification.
+    wind_absorbed = (ability == AbilityEnum.WIND_RIDER) & ((move.move_flags & MoveFlags.WIND) != 0) & (move.identifier != 18)
+    is_attack_boost |= wind_absorbed
     is_speed_boost = jnp.logical_and(ability==AbilityEnum.MOTOR_DRIVE, move.type==Type.ELECTRIC)
     is_def_boost = jnp.logical_and(ability==AbilityEnum.WELL_BAKED_BODY, move.type==Type.FIRE)
     is_heal = quad_or(
@@ -1141,7 +1290,12 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     # Psychic Terrain blocks opposing priority moves before absorption abilities
     # or other hit effects can activate, but only for grounded targets.
     grounded = state.is_grounded(1-attacker_index)[0]
-    priority_blocked = (state.terrain.terrain == TerrainEnum.PSYCHIC) & grounded & (move.priority[0] > 0) & ~move.target_self[0]
+    priority_blocked = (((state.terrain.terrain == TerrainEnum.PSYCHIC) & grounded) |
+        (ability[0] == AbilityEnum.QUEENLY_MAJESTY)) & (move.priority[0] > 0) & ~move.target_self[0]
+    prankster_dark = ((state.ability[attacker_index, 0] == AbilityEnum.PRANKSTER) &
+        (move.move_type[0] == MoveType.STATUS) & jnp.any(defender.type_list == Type.DARK) &
+        ~move.target_self[0] & (move.hazard_effect[0] == 0))
+    priority_blocked |= prankster_dark
     branch_index = jnp.where(priority_blocked, 5, branch_index)
     # Protect blocks opposing targeted moves, but not field-wide hazards.
     bypass = (state.ability[attacker_index, 0] == AbilityEnum.UNSEEN_FIST) & move.contact[0]
@@ -1151,7 +1305,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     # blocks; Long Reach and Magic Guard prevent this retaliation.
     spiky = blocked & (state.volatile_status.protection_kind[1-attacker_index, 0] == ProtectionKind.SPIKY_SHIELD)
     from ninjax.held_effects import contact_reactions_allowed
-    spiky &= move.contact[0] & contact_reactions_allowed(state, attacker_index)
+    spiky &= move.contact[0] & contact_reactions_allowed(state.ability[attacker_index, 0], state.active.item[attacker_index, 0])
     spiky &= (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD) & (state.active.current_hp[attacker_index, 0] > 0)
     def retaliate(s):
         """Attribute Spiky Shield's indirect damage to its defending user."""
@@ -1161,7 +1315,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
         return s.replace(event_source=source)
     state = jax.lax.cond(spiky, retaliate, lambda s: s, state)
     # Side and field moves do not target the Pokémon behind its Substitute.
-    sub_blocked = substitute_intercepts(state, attacker_index, move) & (move.move_type[0] == MoveType.STATUS) & (move.hazard_effect[0] == 0)
+    sub_blocked = substitute_intercepts(state.volatile_status.substitute_hp[1-(attacker_index), 0], state.ability[attacker_index, 0],
+        move.target_self[0], move.sound[0], move.bypass_substitute[0]) & (move.move_type[0] == MoveType.STATUS) & (move.hazard_effect[0] == 0)
     branch_index = jnp.where(sub_blocked, 5, branch_index)
     failed_endeavor = (move.identifier[0] == 283) & (defender.current_hp[0] <= state.active.current_hp[attacker_index, 0])
     failed_poltergeist = (move.identifier[0] == 809) & (defender.item[0] == 0)
@@ -1181,21 +1336,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     state = record_hit(state, 0, target, outcome, recipient)
     boost_value = 1 + (ability==AbilityEnum.WELL_BAKED_BODY)
 
-    # i think using a switch means we skip evaluating the branches we don't need
-    # the stat_index only is used in the stat_boost branch so its value doesnt matter the rest of the time
-    key, state = jax.lax.switch(
-        branch_index[0],
-        branches,
-        key,
-        state,
-        attacker_index,
-        move,
-        is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE +
-        is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED,
-        boost_value
-    )
-    requested = move.switch_out[0] & (branch_index[0] <= 1)
-    return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
+    return state, move, branch_index[0], is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE + is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED, boost_value
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     """Return unchanged key and state for a miss or unsupported move."""

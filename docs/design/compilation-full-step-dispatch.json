@@ -1,0 +1,1614 @@
+{
+  "date": "2026-11-13",
+  "cpu_count": 2,
+  "virtual_limit_mib": 8192,
+  "rss_limit_mib": 4096,
+  "runs": [
+    {
+      "implementation": "before",
+      "returncode": 137,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 508.0,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": "--xla_dump_to=/tmp/ninjax-step-hlo-before --xla_dump_hlo_module_re=jit_function --xla_dump_hlo_pass_re=call-inliner|flatten-call-graph"
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 8.041,
+          "peak_rss_mib": 616.2,
+          "equations": 68829,
+          "subgraphs": 653,
+          "primitives": {
+            "jit": 15831,
+            "add": 7565,
+            "lt": 5943,
+            "select_n": 5732,
+            "squeeze": 4038,
+            "broadcast_in_dim": 3830,
+            "reshape": 3586,
+            "convert_element_type": 2812,
+            "eq": 2684,
+            "and": 2422,
+            "mul": 1891,
+            "dynamic_slice": 1683
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 14.299,
+          "peak_rss_mib": 1275.1
+        },
+        {
+          "phase": "rss_limit_exceeded",
+          "peak_rss_mib": 4132.6,
+          "limit_mib": 4096
+        }
+      ]
+    },
+    {
+      "implementation": "shared_charge",
+      "returncode": 0,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 508.6,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": "--xla_dump_to=/tmp/ninjax-step-hlo-charge --xla_dump_hlo_module_re=jit_function --xla_dump_hlo_pass_re=call-inliner|flatten-call-graph"
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 7.579,
+          "peak_rss_mib": 613.1,
+          "equations": 66868,
+          "subgraphs": 645,
+          "primitives": {
+            "jit": 15285,
+            "add": 7390,
+            "lt": 5829,
+            "select_n": 5629,
+            "squeeze": 3920,
+            "broadcast_in_dim": 3762,
+            "reshape": 3466,
+            "convert_element_type": 2747,
+            "eq": 2556,
+            "and": 2339,
+            "mul": 1819,
+            "dynamic_slice": 1652
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 13.235,
+          "peak_rss_mib": 1054.9
+        },
+        {
+          "phase": "compiled",
+          "target": "step",
+          "elapsed_seconds": 102.974,
+          "peak_rss_mib": 3349.4
+        },
+        {
+          "phase": "executed",
+          "target": "step",
+          "elapsed_seconds": 102.98,
+          "peak_rss_mib": 3349.4
+        },
+        {
+          "phase": "validated",
+          "target": "step",
+          "elapsed_seconds": 148.506,
+          "peak_rss_mib": 3349.4,
+          "comparison": "compiled_vs_eager",
+          "leaves": 243
+        }
+      ],
+      "backend_seconds": 89.739
+    },
+    {
+      "implementation": "shared_charge_and_replacement_oversized_capture",
+      "returncode": 137,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 571.1,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": "--xla_dump_to=/tmp/ninjax-step-hlo-after --xla_dump_hlo_module_re=jit_function --xla_dump_hlo_pass_re=call-inliner|flatten-call-graph"
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 7.404,
+          "peak_rss_mib": 685.6,
+          "equations": 65701,
+          "subgraphs": 639,
+          "primitives": {
+            "jit": 14888,
+            "add": 7463,
+            "lt": 5936,
+            "select_n": 5743,
+            "squeeze": 3747,
+            "broadcast_in_dim": 3535,
+            "reshape": 3360,
+            "convert_element_type": 2798,
+            "eq": 2495,
+            "and": 2283,
+            "mul": 1774,
+            "dynamic_slice": 1703
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 12.497,
+          "peak_rss_mib": 1125.8
+        },
+        {
+          "phase": "compiled",
+          "target": "step",
+          "elapsed_seconds": 96.563,
+          "peak_rss_mib": 3217.0
+        },
+        {
+          "phase": "executed",
+          "target": "step",
+          "elapsed_seconds": 96.575,
+          "peak_rss_mib": 3217.0
+        },
+        {
+          "phase": "validated",
+          "target": "step",
+          "elapsed_seconds": 144.378,
+          "peak_rss_mib": 3278.8,
+          "comparison": "compiled_vs_eager",
+          "leaves": 243
+        },
+        {
+          "phase": "rss_limit_exceeded",
+          "peak_rss_mib": 4105.8,
+          "limit_mib": 4096
+        }
+      ],
+      "backend_seconds": 84.066
+    },
+    {
+      "implementation": "shared_charge_and_replacement_narrow_capture",
+      "returncode": 0,
+      "backend_seconds": 77.44,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 506.7,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 7.231,
+          "peak_rss_mib": 620.7,
+          "equations": 65701,
+          "subgraphs": 639,
+          "primitives": {
+            "jit": 14888,
+            "add": 7463,
+            "lt": 5936,
+            "select_n": 5743,
+            "squeeze": 3747,
+            "broadcast_in_dim": 3535,
+            "reshape": 3360,
+            "convert_element_type": 2798,
+            "eq": 2495,
+            "and": 2283,
+            "mul": 1774,
+            "dynamic_slice": 1703
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 12.589,
+          "peak_rss_mib": 1061.1
+        },
+        {
+          "phase": "compiled",
+          "target": "step",
+          "elapsed_seconds": 90.029,
+          "peak_rss_mib": 3174.2
+        },
+        {
+          "phase": "executed",
+          "target": "step",
+          "elapsed_seconds": 90.043,
+          "peak_rss_mib": 3174.2
+        },
+        {
+          "phase": "profile_written",
+          "target": "step",
+          "elapsed_seconds": 94.439,
+          "peak_rss_mib": 3277.9,
+          "directory": ".profiling/dispatch-consolidation/step-timeline"
+        },
+        {
+          "phase": "validated",
+          "target": "step",
+          "elapsed_seconds": 138.147,
+          "peak_rss_mib": 3277.9,
+          "comparison": "compiled_vs_eager",
+          "leaves": 243
+        }
+      ]
+    }
+  ],
+  "hlo": {
+    "before": [
+      {
+        "file": "module_0972.jit_function.0000.sharding-removal.after_pipeline-start.before_flatten-call-graph.txt",
+        "bytes": 45391635,
+        "computations": 4382,
+        "instructions": 131985,
+        "control_flow": {
+          "call": 21352,
+          "conditional": 384,
+          "while": 213
+        },
+        "operations": {
+          "call": 21352,
+          "reshape": 16387,
+          "parameter": 14233,
+          "compare": 14161,
+          "constant": 11326,
+          "add": 10969,
+          "select": 7461,
+          "broadcast": 6251,
+          "dynamic-slice": 3422,
+          "and": 3336
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0001.sharding-removal.after_flatten-call-graph.before_sharding-remover.txt",
+        "bytes": 100297811,
+        "computations": 51337,
+        "instructions": 587633,
+        "control_flow": {
+          "call": 43648,
+          "conditional": 511,
+          "while": 515
+        },
+        "operations": {
+          "parameter": 179307,
+          "broadcast": 51246,
+          "reshape": 46129,
+          "compare": 45287,
+          "call": 43648,
+          "add": 37068,
+          "select": 36058,
+          "constant": 31999,
+          "and": 9982,
+          "dynamic-slice": 9950
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0002.HLO_passes_through_layout_assignment.after_stochastic_convert_decomposer.before_call-inliner.txt",
+        "bytes": 92226149,
+        "computations": 46900,
+        "instructions": 536549,
+        "control_flow": {
+          "call": 39868,
+          "conditional": 454,
+          "while": 453
+        },
+        "operations": {
+          "parameter": 164969,
+          "broadcast": 46224,
+          "reshape": 42244,
+          "compare": 41395,
+          "call": 39868,
+          "add": 33674,
+          "select": 32833,
+          "constant": 28919,
+          "and": 9177,
+          "dynamic-slice": 9160
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0003.HLO_passes_through_layout_assignment.after_call-inliner.before_batch-dot-simplification.txt",
+        "bytes": 163035480,
+        "computations": 7032,
+        "instructions": 344239,
+        "control_flow": {
+          "call": 0,
+          "conditional": 454,
+          "while": 453
+        },
+        "operations": {
+          "broadcast": 46224,
+          "reshape": 42244,
+          "compare": 41395,
+          "add": 33674,
+          "select": 32833,
+          "constant": 28919,
+          "parameter": 12654,
+          "and": 9177,
+          "dynamic-slice": 9160,
+          "maximum": 7869
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0004.HLO_passes_through_layout_assignment.after_while-loop-trip-count-annotator.before_flatten-call-graph.txt",
+        "bytes": 57676201,
+        "computations": 3934,
+        "instructions": 128104,
+        "control_flow": {
+          "call": 0,
+          "conditional": 366,
+          "while": 394
+        },
+        "operations": {
+          "reshape": 16487,
+          "compare": 13408,
+          "constant": 12573,
+          "broadcast": 10493,
+          "select": 10049,
+          "and": 7908,
+          "add": 6782,
+          "parameter": 6656,
+          "dynamic-slice": 6291,
+          "clamp": 5356
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0005.HLO_passes_through_layout_assignment.after_flatten-call-graph.before_layout-assignment.txt",
+        "bytes": 57676201,
+        "computations": 3934,
+        "instructions": 128104,
+        "control_flow": {
+          "call": 0,
+          "conditional": 366,
+          "while": 394
+        },
+        "operations": {
+          "reshape": 16487,
+          "compare": 13408,
+          "constant": 12573,
+          "broadcast": 10493,
+          "select": 10049,
+          "and": 7908,
+          "add": 6782,
+          "parameter": 6656,
+          "dynamic-slice": 6291,
+          "clamp": 5356
+        }
+      },
+      {
+        "file": "module_0972.jit_function.before_optimizations.txt",
+        "bytes": 45391635,
+        "computations": 4382,
+        "instructions": 131985,
+        "control_flow": {
+          "call": 21352,
+          "conditional": 384,
+          "while": 213
+        },
+        "operations": {
+          "call": 21352,
+          "reshape": 16387,
+          "parameter": 14233,
+          "compare": 14161,
+          "constant": 11326,
+          "add": 10969,
+          "select": 7461,
+          "broadcast": 6251,
+          "dynamic-slice": 3422,
+          "and": 3336
+        }
+      },
+      {
+        "file": "module_0972.jit_function.cpu_after_optimizations.txt",
+        "bytes": 138567619,
+        "computations": 22249,
+        "instructions": 387998,
+        "control_flow": {
+          "call": 370,
+          "conditional": 366,
+          "while": 394
+        },
+        "operations": {
+          "parameter": 66299,
+          "constant": 50227,
+          "bitcast": 39305,
+          "compare": 34258,
+          "broadcast": 31382,
+          "select": 22090,
+          "fusion": 18804,
+          "and": 15857,
+          "dynamic-slice": 14732,
+          "add": 13634
+        }
+      }
+    ],
+    "charge": [
+      {
+        "file": "module_0972.jit_function.0000.sharding-removal.after_pipeline-start.before_flatten-call-graph.txt",
+        "bytes": 29701684,
+        "computations": 3331,
+        "instructions": 102303,
+        "control_flow": {
+          "call": 15753,
+          "conditional": 273,
+          "while": 154
+        },
+        "operations": {
+          "call": 15753,
+          "reshape": 12734,
+          "parameter": 12475,
+          "compare": 10639,
+          "add": 8577,
+          "constant": 8353,
+          "select": 5762,
+          "broadcast": 5067,
+          "dynamic-slice": 2570,
+          "and": 2461
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0001.sharding-removal.after_flatten-call-graph.before_sharding-remover.txt",
+        "bytes": 66211446,
+        "computations": 35721,
+        "instructions": 409084,
+        "control_flow": {
+          "call": 30349,
+          "conditional": 355,
+          "while": 355
+        },
+        "operations": {
+          "parameter": 125008,
+          "broadcast": 35919,
+          "reshape": 32151,
+          "compare": 31330,
+          "call": 30349,
+          "add": 25662,
+          "select": 24989,
+          "constant": 22282,
+          "and": 6929,
+          "dynamic-slice": 6817
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0002.HLO_passes_through_layout_assignment.after_stochastic_convert_decomposer.before_call-inliner.txt",
+        "bytes": 58776433,
+        "computations": 31621,
+        "instructions": 361263,
+        "control_flow": {
+          "call": 26874,
+          "conditional": 303,
+          "while": 296
+        },
+        "operations": {
+          "parameter": 111407,
+          "broadcast": 31335,
+          "reshape": 28477,
+          "compare": 27708,
+          "call": 26874,
+          "add": 22477,
+          "select": 22012,
+          "constant": 19400,
+          "and": 6179,
+          "dynamic-slice": 6060
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0003.HLO_passes_through_layout_assignment.after_call-inliner.before_batch-dot-simplification.txt",
+        "bytes": 101408845,
+        "computations": 4747,
+        "instructions": 231523,
+        "control_flow": {
+          "call": 0,
+          "conditional": 303,
+          "while": 296
+        },
+        "operations": {
+          "broadcast": 31335,
+          "reshape": 28477,
+          "compare": 27708,
+          "add": 22477,
+          "select": 22012,
+          "constant": 19400,
+          "parameter": 8632,
+          "and": 6179,
+          "dynamic-slice": 6060,
+          "maximum": 5294
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0004.HLO_passes_through_layout_assignment.after_while-loop-trip-count-annotator.before_flatten-call-graph.txt",
+        "bytes": 36769708,
+        "computations": 2596,
+        "instructions": 85503,
+        "control_flow": {
+          "call": 0,
+          "conditional": 243,
+          "while": 257
+        },
+        "operations": {
+          "reshape": 11020,
+          "compare": 8945,
+          "constant": 8293,
+          "broadcast": 7074,
+          "select": 6716,
+          "and": 5274,
+          "add": 4498,
+          "parameter": 4464,
+          "dynamic-slice": 4074,
+          "clamp": 3599
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0005.HLO_passes_through_layout_assignment.after_flatten-call-graph.before_layout-assignment.txt",
+        "bytes": 36769708,
+        "computations": 2596,
+        "instructions": 85503,
+        "control_flow": {
+          "call": 0,
+          "conditional": 243,
+          "while": 257
+        },
+        "operations": {
+          "reshape": 11020,
+          "compare": 8945,
+          "constant": 8293,
+          "broadcast": 7074,
+          "select": 6716,
+          "and": 5274,
+          "add": 4498,
+          "parameter": 4464,
+          "dynamic-slice": 4074,
+          "clamp": 3599
+        }
+      },
+      {
+        "file": "module_0972.jit_function.before_optimizations.txt",
+        "bytes": 29701684,
+        "computations": 3331,
+        "instructions": 102303,
+        "control_flow": {
+          "call": 15753,
+          "conditional": 273,
+          "while": 154
+        },
+        "operations": {
+          "call": 15753,
+          "reshape": 12734,
+          "parameter": 12475,
+          "compare": 10639,
+          "add": 8577,
+          "constant": 8353,
+          "select": 5762,
+          "broadcast": 5067,
+          "dynamic-slice": 2570,
+          "and": 2461
+        }
+      },
+      {
+        "file": "module_0972.jit_function.cpu_after_optimizations.txt",
+        "bytes": 87219564,
+        "computations": 14888,
+        "instructions": 260596,
+        "control_flow": {
+          "call": 240,
+          "conditional": 243,
+          "while": 257
+        },
+        "operations": {
+          "parameter": 44356,
+          "constant": 33588,
+          "bitcast": 26426,
+          "compare": 23007,
+          "broadcast": 21260,
+          "select": 15036,
+          "fusion": 12610,
+          "and": 10606,
+          "dynamic-slice": 9270,
+          "add": 9088
+        }
+      }
+    ],
+    "after": [
+      {
+        "file": "module_0972.jit_function.0000.sharding-removal.after_pipeline-start.before_flatten-call-graph.txt",
+        "bytes": 29164966,
+        "computations": 3170,
+        "instructions": 99731,
+        "control_flow": {
+          "call": 15202,
+          "conditional": 264,
+          "while": 147
+        },
+        "operations": {
+          "call": 15202,
+          "reshape": 12343,
+          "parameter": 12185,
+          "compare": 10540,
+          "add": 8561,
+          "constant": 8052,
+          "select": 5822,
+          "broadcast": 4932,
+          "dynamic-slice": 2637,
+          "and": 2377
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0001.sharding-removal.after_flatten-call-graph.before_sharding-remover.txt",
+        "bytes": 62483540,
+        "computations": 33330,
+        "instructions": 381214,
+        "control_flow": {
+          "call": 28349,
+          "conditional": 337,
+          "while": 337
+        },
+        "operations": {
+          "parameter": 116010,
+          "broadcast": 33409,
+          "reshape": 29941,
+          "compare": 29355,
+          "call": 28349,
+          "add": 24103,
+          "select": 23436,
+          "constant": 20846,
+          "dynamic-slice": 6484,
+          "and": 6437
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0002.HLO_passes_through_layout_assignment.after_stochastic_convert_decomposer.before_call-inliner.txt",
+        "bytes": 55094089,
+        "computations": 29260,
+        "instructions": 333786,
+        "control_flow": {
+          "call": 24904,
+          "conditional": 285,
+          "while": 278
+        },
+        "operations": {
+          "parameter": 102490,
+          "broadcast": 28888,
+          "reshape": 26291,
+          "compare": 25769,
+          "call": 24904,
+          "add": 20945,
+          "select": 20492,
+          "constant": 17982,
+          "dynamic-slice": 5727,
+          "and": 5696
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0003.HLO_passes_through_layout_assignment.after_call-inliner.before_batch-dot-simplification.txt",
+        "bytes": 97611966,
+        "computations": 4356,
+        "instructions": 214215,
+        "control_flow": {
+          "call": 0,
+          "conditional": 285,
+          "while": 278
+        },
+        "operations": {
+          "broadcast": 28888,
+          "reshape": 26291,
+          "compare": 25769,
+          "add": 20945,
+          "select": 20492,
+          "constant": 17982,
+          "parameter": 7906,
+          "dynamic-slice": 5727,
+          "and": 5696,
+          "maximum": 4933
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0004.HLO_passes_through_layout_assignment.after_while-loop-trip-count-annotator.before_flatten-call-graph.txt",
+        "bytes": 35946473,
+        "computations": 2519,
+        "instructions": 81142,
+        "control_flow": {
+          "call": 0,
+          "conditional": 231,
+          "while": 242
+        },
+        "operations": {
+          "reshape": 10420,
+          "compare": 8455,
+          "constant": 7913,
+          "broadcast": 6725,
+          "select": 6442,
+          "and": 5048,
+          "parameter": 4354,
+          "add": 4247,
+          "dynamic-slice": 4105,
+          "clamp": 3369
+        }
+      },
+      {
+        "file": "module_0972.jit_function.0005.HLO_passes_through_layout_assignment.after_flatten-call-graph.before_layout-assignment.txt",
+        "bytes": 35946473,
+        "computations": 2519,
+        "instructions": 81142,
+        "control_flow": {
+          "call": 0,
+          "conditional": 231,
+          "while": 242
+        },
+        "operations": {
+          "reshape": 10420,
+          "compare": 8455,
+          "constant": 7913,
+          "broadcast": 6725,
+          "select": 6442,
+          "and": 5048,
+          "parameter": 4354,
+          "add": 4247,
+          "dynamic-slice": 4105,
+          "clamp": 3369
+        }
+      },
+      {
+        "file": "module_0972.jit_function.before_optimizations.txt",
+        "bytes": 29164966,
+        "computations": 3170,
+        "instructions": 99731,
+        "control_flow": {
+          "call": 15202,
+          "conditional": 264,
+          "while": 147
+        },
+        "operations": {
+          "call": 15202,
+          "reshape": 12343,
+          "parameter": 12185,
+          "compare": 10540,
+          "add": 8561,
+          "constant": 8052,
+          "select": 5822,
+          "broadcast": 4932,
+          "dynamic-slice": 2637,
+          "and": 2377
+        }
+      },
+      {
+        "file": "module_0972.jit_function.cpu_after_optimizations.txt",
+        "bytes": 84166150,
+        "computations": 14000,
+        "instructions": 241940,
+        "control_flow": {
+          "call": 224,
+          "conditional": 231,
+          "while": 242
+        },
+        "operations": {
+          "parameter": 41390,
+          "constant": 31610,
+          "bitcast": 24374,
+          "compare": 21237,
+          "broadcast": 19754,
+          "select": 13891,
+          "fusion": 11848,
+          "dynamic-slice": 9842,
+          "and": 9804,
+          "add": 8470
+        }
+      }
+    ]
+  },
+  "dispatch_baseline_timeline_inclusive_events": [
+    [
+      "backend_compile_and_load",
+      496,
+      38.44,
+      30.737
+    ],
+    [
+      "CompileCpuExecutable",
+      496,
+      35.705,
+      28.738
+    ],
+    [
+      "ninjax.compile",
+      1,
+      30.86,
+      30.86
+    ],
+    [
+      "CpuCompiler::RunBackend",
+      496,
+      17.188,
+      10.734
+    ],
+    [
+      "CpuCompiler::CompileCpuExecutable",
+      496,
+      17.157,
+      10.731
+    ],
+    [
+      "HLO passes through layout assignment (jit_function)",
+      1,
+      10.652,
+      10.652
+    ],
+    [
+      "FusionCompiler::Compile",
+      1476,
+      9.947,
+      0.121
+    ],
+    [
+      "TaskDispatcher::dispatch",
+      2274,
+      9.204,
+      0.108
+    ],
+    [
+      "PjitFunction(dispatch_selected_move)",
+      2,
+      7.35,
+      3.675
+    ],
+    [
+      "Codegen",
+      496,
+      5.405,
+      3.411
+    ],
+    [
+      "JitCompiler::Compile",
+      496,
+      5.404,
+      3.411
+    ],
+    [
+      "ThunkEmitter::EmitEntryComputation",
+      496,
+      5.367,
+      4.583
+    ],
+    [
+      "HLO passes after layout assignment (jit_function)",
+      1,
+      4.943,
+      4.943
+    ],
+    [
+      "copy-insertion",
+      496,
+      3.714,
+      3.67
+    ],
+    [
+      "ninjax.trace",
+      1,
+      3.694,
+      3.694
+    ],
+    [
+      "simplification",
+      496,
+      3.676,
+      3.628
+    ],
+    [
+      "simplification (jit_function)",
+      14,
+      3.506,
+      0.778
+    ],
+    [
+      "RunInvariantCheckers",
+      9118,
+      3.065,
+      0.28
+    ],
+    [
+      "ninjax.lower",
+      1,
+      2.626,
+      2.626
+    ],
+    [
+      "lower_sharding_computation",
+      496,
+      2.591,
+      1.862
+    ],
+    [
+      "PjitFunction(_where)",
+      2564,
+      2.158,
+      0.038
+    ],
+    [
+      "ThunkEmitter::ConsumeKernels",
+      496,
+      2.003,
+      0.045
+    ],
+    [
+      "PjitFunction(_index_tree)",
+      248,
+      1.977,
+      0.263
+    ],
+    [
+      "post_scatter_expansion_simplification",
+      496,
+      1.885,
+      1.858
+    ],
+    [
+      "PjitFunction(_active_pokemon)",
+      434,
+      1.833,
+      0.185
+    ],
+    [
+      "CanonicalizerPass",
+      9831,
+      1.755,
+      0.005
+    ],
+    [
+      "post_scatter_expansion_simplification (jit_function)",
+      5,
+      1.697,
+      0.595
+    ],
+    [
+      "algsimp",
+      1654,
+      1.517,
+      0.266
+    ],
+    [
+      "PjitFunction(multiply)",
+      2572,
+      1.407,
+      0.112
+    ],
+    [
+      "sharding-removal (jit_function)",
+      1,
+      1.395,
+      1.395
+    ],
+    [
+      "mlir::detail::OpToOpPassAdaptor",
+      12198,
+      1.384,
+      0.012
+    ],
+    [
+      "PjitFunction(broadcast_in_dim)",
+      1076,
+      1.306,
+      0.033
+    ],
+    [
+      "PjitFunction(equal)",
+      3194,
+      1.264,
+      0.029
+    ],
+    [
+      "PjitFunction(stack)",
+      5914,
+      1.247,
+      0.026
+    ],
+    [
+      "PjitFunction(convert_element_type)",
+      25790,
+      1.201,
+      0.03
+    ],
+    [
+      "PjitFunction(add)",
+      7566,
+      1.18,
+      0.026
+    ],
+    [
+      "PjitFunction(take_damage_value)",
+      32,
+      1.145,
+      0.211
+    ],
+    [
+      "call-inliner",
+      496,
+      1.02,
+      1.011
+    ],
+    [
+      "simplify-conditional",
+      1155,
+      1.004,
+      0.112
+    ],
+    [
+      "PjitFunction(cond)",
+      4,
+      0.932,
+      0.24
+    ],
+    [
+      "PjitFunction(_shuffle)",
+      4,
+      0.918,
+      0.23
+    ],
+    [
+      "PjitFunction(bitwise_and)",
+      2302,
+      0.885,
+      0.026
+    ],
+    [
+      "PjitFunction(less)",
+      7062,
+      0.878,
+      0.027
+    ],
+    [
+      "PjitFunction(dynamic_slice)",
+      414,
+      0.78,
+      0.023
+    ],
+    [
+      "flatten-call-graph",
+      992,
+      0.75,
+      0.661
+    ],
+    [
+      "LowerTensorsPass",
+      1281,
+      0.694,
+      0.011
+    ],
+    [
+      "fusion",
+      496,
+      0.67,
+      0.647
+    ],
+    [
+      "LowerToLLVMCPUPass",
+      1476,
+      0.637,
+      0.01
+    ],
+    [
+      "SimplifyArithPass",
+      7461,
+      0.632,
+      0.012
+    ],
+    [
+      "layout-assignment",
+      496,
+      0.588,
+      0.545
+    ],
+    [
+      "PjitFunction(scatter)",
+      160,
+      0.587,
+      0.027
+    ],
+    [
+      "PjitFunction(bitwise_or)",
+      984,
+      0.549,
+      0.026
+    ],
+    [
+      "PjitFunction(atleast_1d)",
+      13860,
+      0.547,
+      0.007
+    ],
+    [
+      "CSEPass",
+      17719,
+      0.545,
+      0.005
+    ],
+    [
+      "PjitFunction(update_active_fields)",
+      108,
+      0.506,
+      0.071
+    ],
+    [
+      "dce",
+      4297,
+      0.503,
+      0.275
+    ],
+    [
+      "simplify-while-loops",
+      1155,
+      0.468,
+      0.105
+    ],
+    [
+      "PjitFunction(gather)",
+      172,
+      0.442,
+      0.022
+    ],
+    [
+      "Inliner",
+      1281,
+      0.43,
+      0.015
+    ],
+    [
+      "PjitFunction(squeeze)",
+      496,
+      0.427,
+      0.034
+    ],
+    [
+      "LowerToLLVMPass",
+      1476,
+      0.425,
+      0.006
+    ],
+    [
+      "PjitFunction(greater)",
+      376,
+      0.418,
+      0.024
+    ],
+    [
+      "PjitFunction(rev)",
+      108,
+      0.415,
+      0.023
+    ],
+    [
+      "PjitFunction(_broadcast_arrays)",
+      7758,
+      0.397,
+      0.009
+    ],
+    [
+      "cse",
+      995,
+      0.395,
+      0.211
+    ],
+    [
+      "PjitFunction(not_equal)",
+      448,
+      0.372,
+      0.024
+    ],
+    [
+      "PjitFunction(_reduce_any)",
+      318,
+      0.366,
+      0.021
+    ],
+    [
+      "PjitFunction(floor_divide)",
+      1190,
+      0.362,
+      0.035
+    ],
+    [
+      "zero_sized_hlo_elimination",
+      1651,
+      0.36,
+      0.03
+    ],
+    [
+      "InlinerPass",
+      2562,
+      0.344,
+      0.007
+    ],
+    [
+      "constant_folding",
+      1155,
+      0.337,
+      0.084
+    ],
+    [
+      "scatter_expander",
+      496,
+      0.319,
+      0.313
+    ],
+    [
+      "PjitFunction(subtract)",
+      912,
+      0.317,
+      0.026
+    ],
+    [
+      "PjitFunction(clip)",
+      2134,
+      0.317,
+      0.054
+    ],
+    [
+      "tree_reduction_rewriter",
+      1155,
+      0.314,
+      0.024
+    ],
+    [
+      "cpu-parallel-task-assigner",
+      496,
+      0.311,
+      0.299
+    ],
+    [
+      "dynamic-dimension-simplifier",
+      496,
+      0.297,
+      0.296
+    ],
+    [
+      "FlattenTensorsPass",
+      1281,
+      0.291,
+      0.005
+    ],
+    [
+      "PjitFunction(greater_equal)",
+      750,
+      0.286,
+      0.037
+    ],
+    [
+      "sharding-remover",
+      496,
+      0.284,
+      0.282
+    ]
+  ],
+  "battles": {
+    "status": "passed",
+    "abilities": true,
+    "items": true,
+    "seeds": [
+      {
+        "seed": 0,
+        "turns": 40,
+        "reward": [
+          1.0,
+          -1.0
+        ],
+        "decisions": 51,
+        "status": "passed",
+        "wall_seconds": 101.161
+      },
+      {
+        "seed": 17,
+        "turns": 25,
+        "reward": [
+          -1.0,
+          1.0
+        ],
+        "decisions": 32,
+        "status": "passed",
+        "wall_seconds": 2.608
+      },
+      {
+        "seed": 42,
+        "turns": 26,
+        "reward": [
+          -1.0,
+          1.0
+        ],
+        "decisions": 35,
+        "status": "passed",
+        "wall_seconds": 2.405
+      }
+    ],
+    "step_compilations": 1,
+    "backend_seconds": [
+      77.512185574
+    ],
+    "peak_rss_mib": 3173.28515625,
+    "total_wall_seconds": 106.85
+  },
+  "validation": {
+    "eager_mechanics_cases": 58,
+    "scheduler_cases": 5,
+    "policy_cases": 1,
+    "compiled_battles": 3,
+    "full_step_compiled_vs_eager_leaves": 243,
+    "files": [
+      "unit_tests/test_charge_recharge.py",
+      "unit_tests/test_sleep_talk.py",
+      "unit_tests/test_move_restrictions.py",
+      "unit_tests/test_self_ko_moves.py",
+      "unit_tests/test_action_dependent_moves.py",
+      "unit_tests/test_battle.py",
+      "unit_tests/test_prototype.py",
+      "unit_tests/test_curated.py"
+    ]
+  },
+  "notes": [
+    "RSS is the process high-water mark including fixture construction.",
+    "HLO counts include all static instructions and cloned computations, not runtime operations.",
+    "The oversized capture run passed compilation/execution/eager comparison before trace export crossed the RSS limit.",
+    "Timeline event durations overlap and are inclusive; do not sum them as exclusive costs.",
+    "The baseline dispatcher timeline includes fixture preparation; the final full-step timeline summary is restricted to the ninjax.compile span.",
+    "HLO dumps and profiler events can add overhead; these are single runs on a shared host.",
+    "Complete full-environment vmap/scan acceptance remains outstanding.",
+    "The final narrowed capture completed trace export and eager validation within the RSS guard."
+  ],
+  "full_step_compiler_timeline": {
+    "artifact": ".profiling/dispatch-consolidation/step-timeline/plugins/profile/2026_11_13_15_39_35/perfetto_trace.json.gz",
+    "events": [
+      {
+        "event": "ninjax.compile",
+        "count": 1,
+        "inclusive_total_seconds": 77.44,
+        "maximum_seconds": 77.44
+      },
+      {
+        "event": "backend_compile_and_load",
+        "count": 1,
+        "inclusive_total_seconds": 77.147,
+        "maximum_seconds": 77.147
+      },
+      {
+        "event": "CompileCpuExecutable",
+        "count": 1,
+        "inclusive_total_seconds": 73.768,
+        "maximum_seconds": 73.768
+      },
+      {
+        "event": "HLO passes through layout assignment (jit_function)",
+        "count": 1,
+        "inclusive_total_seconds": 28.873,
+        "maximum_seconds": 28.873
+      },
+      {
+        "event": "CpuCompiler::RunBackend",
+        "count": 1,
+        "inclusive_total_seconds": 28.029,
+        "maximum_seconds": 28.029
+      },
+      {
+        "event": "CpuCompiler::CompileCpuExecutable",
+        "count": 1,
+        "inclusive_total_seconds": 28.023,
+        "maximum_seconds": 28.023
+      },
+      {
+        "event": "ThunkEmitter::EmitEntryComputation",
+        "count": 1,
+        "inclusive_total_seconds": 15.189,
+        "maximum_seconds": 15.189
+      },
+      {
+        "event": "simplification",
+        "count": 1,
+        "inclusive_total_seconds": 14.047,
+        "maximum_seconds": 14.047
+      },
+      {
+        "event": "simplification (jit_function)",
+        "count": 23,
+        "inclusive_total_seconds": 13.793,
+        "maximum_seconds": 1.681
+      },
+      {
+        "event": "HLO passes after layout assignment (jit_function)",
+        "count": 1,
+        "inclusive_total_seconds": 12.451,
+        "maximum_seconds": 12.451
+      },
+      {
+        "event": "TaskDispatcher::dispatch",
+        "count": 1997,
+        "inclusive_total_seconds": 10.734,
+        "maximum_seconds": 0.093
+      },
+      {
+        "event": "FusionCompiler::Compile",
+        "count": 1464,
+        "inclusive_total_seconds": 10.667,
+        "maximum_seconds": 0.102
+      },
+      {
+        "event": "copy-insertion",
+        "count": 1,
+        "inclusive_total_seconds": 9.568,
+        "maximum_seconds": 9.568
+      },
+      {
+        "event": "RunInvariantCheckers",
+        "count": 174,
+        "inclusive_total_seconds": 6.69,
+        "maximum_seconds": 0.584
+      },
+      {
+        "event": "simplify-conditional",
+        "count": 30,
+        "inclusive_total_seconds": 5.449,
+        "maximum_seconds": 0.334
+      },
+      {
+        "event": "Codegen",
+        "count": 1,
+        "inclusive_total_seconds": 5.374,
+        "maximum_seconds": 5.374
+      },
+      {
+        "event": "JitCompiler::Compile",
+        "count": 1,
+        "inclusive_total_seconds": 5.374,
+        "maximum_seconds": 5.374
+      },
+      {
+        "event": "post_scatter_expansion_simplification",
+        "count": 1,
+        "inclusive_total_seconds": 5.334,
+        "maximum_seconds": 5.334
+      },
+      {
+        "event": "post_scatter_expansion_simplification (jit_function)",
+        "count": 7,
+        "inclusive_total_seconds": 5.035,
+        "maximum_seconds": 1.194
+      },
+      {
+        "event": "algsimp",
+        "count": 32,
+        "inclusive_total_seconds": 3.637,
+        "maximum_seconds": 0.503
+      },
+      {
+        "event": "sharding-removal (jit_function)",
+        "count": 1,
+        "inclusive_total_seconds": 2.488,
+        "maximum_seconds": 2.488
+      },
+      {
+        "event": "CanonicalizerPass",
+        "count": 9249,
+        "inclusive_total_seconds": 2.027,
+        "maximum_seconds": 0.011
+      },
+      {
+        "event": "simplify-while-loops",
+        "count": 30,
+        "inclusive_total_seconds": 1.939,
+        "maximum_seconds": 0.245
+      },
+      {
+        "event": "mlir::detail::OpToOpPassAdaptor",
+        "count": 11898,
+        "inclusive_total_seconds": 1.787,
+        "maximum_seconds": 0.012
+      },
+      {
+        "event": "call-inliner",
+        "count": 1,
+        "inclusive_total_seconds": 1.395,
+        "maximum_seconds": 1.395
+      },
+      {
+        "event": "fusion",
+        "count": 1,
+        "inclusive_total_seconds": 1.246,
+        "maximum_seconds": 1.246
+      },
+      {
+        "event": "dce",
+        "count": 65,
+        "inclusive_total_seconds": 1.16,
+        "maximum_seconds": 0.558
+      },
+      {
+        "event": "layout-assignment",
+        "count": 1,
+        "inclusive_total_seconds": 1.117,
+        "maximum_seconds": 1.117
+      },
+      {
+        "event": "tree_reduction_rewriter",
+        "count": 30,
+        "inclusive_total_seconds": 1.095,
+        "maximum_seconds": 0.05
+      },
+      {
+        "event": "flatten-call-graph",
+        "count": 2,
+        "inclusive_total_seconds": 1.075,
+        "maximum_seconds": 1.074
+      },
+      {
+        "event": "zero_sized_hlo_elimination",
+        "count": 31,
+        "inclusive_total_seconds": 1.027,
+        "maximum_seconds": 0.057
+      },
+      {
+        "event": "while-loop-invariant-code-motion",
+        "count": 30,
+        "inclusive_total_seconds": 0.976,
+        "maximum_seconds": 0.177
+      },
+      {
+        "event": "cse",
+        "count": 3,
+        "inclusive_total_seconds": 0.972,
+        "maximum_seconds": 0.438
+      },
+      {
+        "event": "constant_folding",
+        "count": 30,
+        "inclusive_total_seconds": 0.917,
+        "maximum_seconds": 0.1
+      },
+      {
+        "event": "tuple-simplifier",
+        "count": 32,
+        "inclusive_total_seconds": 0.896,
+        "maximum_seconds": 0.048
+      }
+    ]
+  }
+}

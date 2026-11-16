@@ -166,6 +166,54 @@ CURATED_ABILITIES = {
     'Storm Drain': 'STORM_DRAIN', 'Water Absorb': 'WATER_ABSORB',
     # Friend Guard only affects other active allies: it has no effect in singles.
     'Friend Guard': 'FRIEND_GUARD', 'Unseen Fist': 'UNSEEN_FIST',
+    # Passive hooks audited against the pinned random-battle reference probes.
+    'Adaptability': 'ADAPTABILITY', 'Blaze': 'BLAZE', 'Overgrow': 'OVERGROW',
+    'Torrent': 'TORRENT', 'Swarm': 'SWARM', 'Huge Power': 'HUGE_POWER',
+    'Pure Power': 'PURE_POWER', 'Guts': 'GUTS', 'Toxic Boost': 'TOXIC_BOOST',
+    "Dragon's Maw": 'DRAGONS_MAW', 'Rocky Payload': 'ROCKY_PAYLOAD',
+    'Transistor': 'TRANSISTOR', 'Strong Jaw': 'STRONG_JAW', 'Iron Fist': 'IRON_FIST',
+    'Tough Claws': 'TOUGH_CLAWS', 'Mega Launcher': 'MEGA_LAUNCHER',
+    'Punk Rock': 'PUNK_ROCK', 'Sharpness': 'SHARPNESS', 'Water Bubble': 'WATER_BUBBLE',
+    'Tinted Lens': 'TINTED_LENS', 'Thick Fat': 'THICK_FAT', 'Heatproof': 'HEATPROOF',
+    'Fur Coat': 'FUR_COAT', 'Ice Scales': 'ICE_SCALES', 'Purifying Salt': 'PURIFYING_SALT',
+    'Filter': 'FILTER', 'Solid Rock': 'SOLID_ROCK', 'Prism Armor': 'PRISM_ARMOR',
+    'Fluffy': 'FLUFFY', 'Multiscale': 'MULTISCALE', 'Shadow Shield': 'SHADOW_SHIELD',
+    'Chlorophyll': 'CHLOROPHYLL', 'Swift Swim': 'SWIFT_SWIM', 'Slush Rush': 'SLUSH_RUSH',
+    'Sand Rush': 'SAND_RUSH', 'Surge Surfer': 'SURGE_SURFER', 'Quick Feet': 'QUICK_FEET',
+    'Limber': 'LIMBER', 'Water Veil': 'WATER_VEIL', 'Thermal Exchange': 'THERMAL_EXCHANGE',
+    'Insomnia': 'INSOMNIA', 'Vital Spirit': 'VITAL_SPIRIT', 'Leaf Guard': 'LEAF_GUARD',
+    'Poison Heal': 'POISON_HEAL', 'Natural Cure': 'NATURAL_CURE', 'Hydration': 'HYDRATION',
+    'Shed Skin': 'SHED_SKIN', 'Speed Boost': 'SPEED_BOOST', 'Unnerve': 'UNNERVE',
+    'Air Lock': 'AIR_LOCK', 'Drought': 'DROUGHT', 'Electric Surge': 'ELECTRIC_SURGE',
+    'Volt Absorb': 'VOLT_ABSORB', 'Earth Eater': 'EARTH_EATER', 'Dry Skin': 'DRY_SKIN',
+    'Lightning Rod': 'LIGHTNING_ROD', 'Motor Drive': 'MOTOR_DRIVE', 'Sap Sipper': 'SAP_SIPPER',
+    'Well-Baked Body': 'WELL_BAKED_BODY', 'Queenly Majesty': 'QUEENLY_MAJESTY',
+    'Levitate': 'LEVITATE', 'Soundproof': 'SOUNDPROOF', 'Bulletproof': 'BULLET_PROOF',
+    'Overcoat': 'OVERCOAT', 'Rock Head': 'ROCK_HEAD', 'Shell Armor': 'SHELL_ARMOR',
+    'Inner Focus': 'INNER_FOCUS', 'Shield Dust': 'SHIELD_DUST', 'Serene Grace': 'SERENE_GRACE',
+    'No Guard': 'NO_GUARD', 'Compound Eyes': 'COMPOUND_EYES',
+    'Clear Body': 'CLEAR_BODY', 'Full Metal Body': 'FULL_METAL_BODY', 'Contrary': 'CONTRARY',
+    'Big Pecks': 'BIG_PECKS', 'Keen Eye': 'KEEN_EYE', 'Own Tempo': 'OWN_TEMPO',
+    'Flash Fire': 'FLASH_FIRE', 'Damp': 'DAMP', 'Sticky Hold': 'STICKY_HOLD',
+    'Heavy Metal': 'HEAVY_METAL', 'Light Metal': 'LIGHT_METAL', 'Ice Body': 'ICE_BODY',
+    'Hustle': 'HUSTLE', 'Sniper': 'SNIPER', 'Reckless': 'RECKLESS',
+    'Tablets of Ruin': 'TABLETS_OF_RUIN', 'Infiltrator': 'INFILTRATOR',
+    'Good as Gold': 'GOOD_AS_GOLD', 'Galvanize': 'GALVANIZE', 'Liquid Voice': 'LIQUID_VOICE',
+    'Prankster': 'PRANKSTER', 'Gale Wings': 'GALE_WINGS', 'Triage': 'TRIAGE',
+    'Rough Skin': 'ROUGH_SKIN', 'Gooey': 'GOOEY',
+    'Tangling Hair': 'TANGLING_HAIR', 'Static': 'STATIC', 'Flame Body': 'FLAME_BODY',
+    'Effect Spore': 'EFFECT_SPORE', 'Poison Touch': 'POISON_TOUCH',
+    'Early Bird': 'EARLY_BIRD', 'Download': 'DOWNLOAD', 'Intimidate': 'INTIMIDATE',
+    'Water Compaction': 'WATER_COMPACTION', 'Justified': 'JUSTIFIED', 'Rattled': 'RATTLED',
+    'Seed Sower': 'SEED_SOWER', 'Aroma Veil': 'AROMA_VEIL', 'Oblivious': 'OBLIVIOUS',
+    'Liquid Ooze': 'LIQUID_OOZE',
+    'Defiant': 'DEFIANT', 'Competitive': 'COMPETITIVE',
+    # Like Friend Guard, Power Spot affects other allies and has no singles effect.
+    'Power Spot': 'POWER_SPOT',
+    'Sturdy': 'STURDY', 'Unaware': 'UNAWARE',
+    'Cheek Pouch': 'CHEEK_POUCH', 'Aftermath': 'AFTERMATH', 'Bad Dreams': 'BAD_DREAMS',
+    'Wind Rider': 'WIND_RIDER',
+    'Arena Trap': 'ARENA_TRAP', 'Magnet Pull': 'MAGNET_PULL',
 }
 
 
@@ -188,6 +236,7 @@ def make_ability_pool(sets):
 
 # Only items with existing engine hooks are projected into test battles.
 CURATED_ITEMS = {
+    '': 'NONE',
     'Life Orb': 'LIFE_ORB', 'Heavy-Duty Boots': 'HEAVY_DUTY_BOOTS',
     'Choice Specs': 'CHOICE_SPECS', 'Choice Band': 'CHOICE_BAND',
     'Assault Vest': 'ASSAULT_VEST', 'Weakness Policy': 'WEAKNESS_POLICY',
@@ -199,6 +248,13 @@ CURATED_ITEMS = {
     'Mental Herb': 'MENTAL_HERB',
     "King's Rock": 'KINGS_ROCK', 'Protective Pads': 'PROTECTIVE_PADS',
     'Wellspring Mask': 'WELLSPRING_MASK', 'Absorb Bulb': 'ABSORB_BULB',
+    'Choice Scarf': 'CHOICE_SCARF', 'Wide Lens': 'WIDE_LENS', 'Expert Belt': 'EXPERT_BELT',
+    'Light Ball': 'LIGHT_BALL', 'Magnet': 'MAGNET', 'Silk Scarf': 'SILK_SCARF',
+    'Soul Dew': 'SOUL_DEW', 'Lustrous Orb': 'LUSTROUS_ORB',
+    'Chesto Berry': 'CHESTO_BERRY', 'Lum Berry': 'LUM_BERRY',
+    'Flame Orb': 'FLAME_ORB', 'Toxic Orb': 'TOXIC_ORB', 'White Herb': 'WHITE_HERB',
+    'Air Balloon': 'AIR_BALLOON', 'Hearthflame Mask': 'HEARTHFLAME_MASK',
+    'Cornerstone Mask': 'CORNERSTONE_MASK',
 }
 
 

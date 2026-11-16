@@ -14,8 +14,6 @@ import jax.numpy as jnp
 
 from ninjax.side import BattleState, update_active_fields, resolve_faints, clear_destiny_bond
 from ninjax.pokemon import Pokemon
-from ninjax.move import Move
-from ninjax.game_logic import do_damaging_move
 from ninjax.side import take_damage_value
 from ninjax.utils import triple_and, triple_or
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType, MoveResult
@@ -127,7 +125,34 @@ class EpisodeState(struct.PyTreeNode):
     revealed_moves: jax.Array
 
 
+def _execute_replacement(key, battle, player, index):
+    """Switch the requested active slot during a replacement phase."""
+    return step_switch(key, battle, player, index, False)
 
+
+def _skip_replacement(key, battle, player, index):
+    """Preserve state and key for a player not awaiting replacement."""
+    return key, battle
+
+
+def replace_player(player, carry):
+    """Preserve player order, switch keys and condition snapshots."""
+    current, actions = carry
+    key, battle = lax.cond(current.acting_player_mask[player],
+                           _execute_replacement, _skip_replacement,
+                           current.key, current.battle, player, actions.index[player])
+    from ninjax.held_effects import refresh_paradox
+    battle = refresh_paradox(battle)
+    battle = capture_conditions(current.battle, battle)
+    return current.replace(key=key, battle=battle), actions
+
+
+def replace_active(current, actions):
+    """Apply replacements sequentially through one compiled switch body."""
+
+    # A Python loop expands swap_out and its entry hooks for each side.
+    current, _ = lax.fori_loop(0, 2, replace_player, (current, actions))
+    return current.replace(acting_player_mask=jnp.zeros(2, bool))
 
 class Battle(Environment):
 
@@ -187,14 +212,28 @@ class Battle(Environment):
         active = battle.active
         moves = (active.moves.current_pp[..., 0] > 0) & ~active.moves.disabled[..., 0]
         from ninjax.restrictions import allowed_moves
-        moves &= allowed_moves(battle)
+        moves &= allowed_moves(active.moves.identifier[..., 0], active.moves.move_type[..., 0],
+            disabled_move_id=battle.volatile_status.disabled_move_id,
+            disable_turns=battle.volatile_status.disable_turns,
+            taunt_turns=battle.volatile_status.taunt_turns,
+            encore_move_id=battle.volatile_status.encore_move_id,
+            encore_turns=battle.volatile_status.encore_turns,
+            gravity_duration=battle.gravity_duration)
         from ninjax.enum_types import ItemEnum
         items = active.item[:, 0]
-        choice = (items == ItemEnum.CHOICE_BAND) | (items == ItemEnum.CHOICE_SPECS)
+        from ninjax.held_effects import is_choice_item
+        choice = is_choice_item(items)
         lock = battle.volatile_status.choice_lock[:, 0]
         moves &= ~choice[:, None] | (lock[:, None] < 0) | (jnp.arange(4)[None, :] == lock[:, None])
         moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (active.moves.move_type[..., 0] != MoveType.STATUS)
         trapped = (battle.ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (active.current_hp[::-1, 0] > 0) & (battle.ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(active.type_list == Type.GHOST, axis=1)
+        from ninjax.side import is_floating
+        opposing = battle.ability[::-1, 0]
+        ghost = jnp.any(battle.effective_active.type_list == Type.GHOST, axis=1)
+        grounded = (~is_floating(battle.effective_active) | (battle.gravity_duration > 0))[:, 0]
+        arena = (opposing == AbilityEnum.ARENA_TRAP) & grounded
+        magnet = (opposing == AbilityEnum.MAGNET_PULL) & jnp.any(battle.effective_active.type_list == Type.STEEL, axis=1)
+        trapped |= (arena | magnet) & ~ghost & (active.current_hp[::-1, 0] > 0)
         switches &= ~trapped[:, None] | (state.phase != Phase.TURN)
         forced = ~jnp.any(moves, axis=1) & (state.phase == Phase.TURN)
         moves &= state.phase == Phase.TURN
@@ -208,6 +247,7 @@ class Battle(Environment):
                          jnp.arange(15)[None, :] == 14)
 
     def reset(self, key: jax.Array) -> tuple[EpisodeState, TimeStep[Observation]]:
+        """Initialize caller-provided teams before the first turn's entry abilities."""
         if self.teams is None:
             raise ValueError("Battle requires caller-provided teams for reset")
         state = EpisodeState(key=key, battle=BattleState(team=self.teams), turn=jnp.int32(0),
@@ -217,6 +257,10 @@ class Battle(Environment):
                              order=jnp.arange(2, dtype=jnp.int32), cursor=jnp.int32(2), field_pending=jnp.bool_(False), selected=jnp.ones((2, 6), bool),
                              revealed=jnp.zeros((2, 6), bool).at[:, 0].set(not self.params.team_preview),
                              revealed_moves=jnp.zeros((2, 6, 4), bool))
+        # Initial leads entered before turn zero. Ordinary switches record the
+        # current turn instead, so Speed Boost can distinguish their timing.
+        state = state.replace(battle=state.battle.replace(volatile_status=state.battle.volatile_status.replace(
+            entry_turn=-jnp.ones((2, 1), jnp.int32))))
         state = state.replace(phase=jnp.int32(Phase.TEAM_SELECTION if self.params.team_preview else Phase.TURN))
         if not self.params.team_preview:
             state = self._activate_entry_abilities(state)
@@ -233,13 +277,14 @@ class Battle(Environment):
 
     def step(self, state: EpisodeState, action: chex.Array | BattleAction) -> tuple[EpisodeState, TimeStep[Observation]]:
         """Validate indexed actions and advance the symmetric battle scheduler."""
-        state = state.replace(battle=state.battle.replace(events=EventBuffer.empty()))
         if isinstance(action, BattleAction):
             selection = action.selection.astype(bool)
             selecting = state.phase == Phase.TEAM_SELECTION
             valid_selection = jnp.all(jnp.any(selection, axis=1)) & jnp.all(action.transformation == Transformation.NONE)
             encoded = action.encode()
             def choose(current):
+                """Start a selected battle with a fresh transition event buffer."""
+                current = current.replace(battle=current.battle.replace(events=EventBuffer.empty()))
                 indices = jnp.argmax(selection, axis=1).astype(jnp.int32)
                 battle = current.battle.replace(active_index=indices[:, None], roster=selection)
                 revealed = jnp.zeros((2, 6), bool).at[jnp.arange(2), indices].set(True)
@@ -260,7 +305,11 @@ class Battle(Environment):
         valid = (state.phase != Phase.TEAM_SELECTION) & (encoded >= 0) & (encoded < 15)
         valid &= mask[jnp.arange(2), jnp.clip(encoded, 0, 14)]
         valid = jnp.all(valid | ~state.acting_player_mask)
-        state = lax.cond(valid & (state.phase != Phase.TERMINAL), self._advance,
+        def advance(current, chosen):
+            """Clear previous transition events only when an action is accepted."""
+            current = current.replace(battle=current.battle.replace(events=EventBuffer.empty()))
+            return self._advance(current, chosen)
+        state = lax.cond(valid & (state.phase != Phase.TERMINAL), advance,
                          lambda current, _: current, state, action)
         alive = jnp.any((state.battle.team.current_hp[..., 0] > 0) & state.selected, axis=1)
         defeated = ~jnp.all(alive)
@@ -284,7 +333,8 @@ class Battle(Environment):
 
     def _advance(self, state, actions):
         """Execute queued simultaneous choices and pause for replacement decisions."""
-        def select(current):
+        def select(current, actions):
+            """Order the players' queued choices and preserve their actor slots."""
             key, order_key = random.split(current.key)
             v = current.battle.volatile_status
             continuing = (actions.move_type == ActionType.CONTINUED) & (v.charging_move_id[:, 0] != 0)
@@ -302,19 +352,9 @@ class Battle(Environment):
                                    order=jnp.stack((first, second)), cursor=jnp.int32(0), field_pending=jnp.bool_(True),
                                    acting_player_mask=jnp.zeros(2, bool))
 
-        def replace_active(current):
-            for player in range(2):
-                key, battle = lax.cond(current.acting_player_mask[player],
-                    lambda k, b: step_switch(k, b, player, actions.index[player], False),
-                    lambda k, b: (k, b), current.key, current.battle)
-                from ninjax.held_effects import refresh_paradox
-                battle = refresh_paradox(battle)
-                battle = capture_conditions(current.battle, battle)
-                current = current.replace(key=key, battle=battle)
-            return current.replace(acting_player_mask=jnp.zeros(2, bool))
 
         was_turn = state.phase == Phase.TURN
-        state = lax.cond(was_turn, select, replace_active, state)
+        state = lax.cond(was_turn, select, replace_active, state, actions)
         # A completed turn awaiting fainted replacements must not run field effects again.
         finished_replacement = ~state.field_pending
         state = state.replace(phase=jnp.int32(Phase.TURN))
@@ -470,9 +510,9 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
     """
     actor = state.active[player_idx]
     old_sleep = actor.sleep_counter
-    sleep = jnp.maximum(0, old_sleep - 1)
+    sleep = jnp.maximum(0, old_sleep - jnp.where(state.ability[player_idx, 0] == AbilityEnum.EARLY_BIRD, 2, 1))
     # Sleep decrements before acting; a counter reaching zero wakes the user.
-    wakes = (sleep == 0) & (old_sleep == 1)
+    wakes = (sleep == 0) & (old_sleep > 0)
     actor = actor.replace(sleep_counter=sleep, status=jnp.where(wakes, Status.NONE, actor.status))
     state = update_active_fields(state, player_idx, status=actor.status, sleep_counter=actor.sleep_counter)
     # Freeze is checked before flinch and restrictions. Defrost moves bypass
@@ -539,12 +579,55 @@ def step_move(
     state: BattleState,
     player_idx: int | jax.Array,
     index: int | jax.Array,
-    is_tera: bool | jax.Array) -> tuple[jax.Array, BattleState]:
-    """Resolve status, volatile and move restrictions before the chosen move."""
+    is_tera: bool | jax.Array, continued=False) -> tuple[jax.Array, BattleState]:
+    """Prepare a selection, charge release or Struggle for one move executor."""
+    struggle = ~jnp.asarray(continued) & (index == 4)
+    key, state, index, restriction_blocked = lax.cond(struggle,
+        _prepare_struggle_action,
+        lambda k, s, p, i: lax.cond(continued,
+            _prepare_charge_release,
+            lambda k, s, p, i: _prepare_selected_action(k, s, p, i, is_tera),
+            k, s, p, i), key, state, player_idx, index)
+    selected_move = state.active[player_idx].moves[index]
+    key, state, is_interrupted = before_move(key, state, player_idx, inclusive_paralysis=~struggle, restriction_blocked=restriction_blocked,
+        defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
+    key, state = jax.lax.cond(
+        is_interrupted.reshape(()), move_interrupted,
+        lambda k, s, p, i: move_used(k, s, p, i, continued, struggle),
+        key, state, player_idx, index)
+    # Protect and Spiky Shield return NOT_FAIL in Gen 9; other blocks can fail.
+    result = state.hit_results[0].outcome
+    failed = is_interrupted | (result == HitOutcome.MISS) | (result == HitOutcome.IMMUNE) | (result == HitOutcome.FAILED) | (result == HitOutcome.BLOCKED)
+    failed = jnp.where(struggle, is_interrupted, failed)
+    # Sleep Talk succeeds once it selects a move, even if that called move fails.
+    failed = jnp.where(~struggle & ~jnp.asarray(continued) & (selected_move.identifier[0] == 214) & state.volatile_status.sleep_talk_succeeded[player_idx, 0] & ~is_interrupted, False, failed)
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(move_result=v.move_result.at[player_idx, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
+    return key, resolve_faints(state)
+
+
+def _prepare_struggle_action(key, state, player, unused_index):
+    """Count a forced attempt without applying Encore or paying move-slot PP."""
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(
+        active_move_actions=v.active_move_actions.at[player, 0].add(1)))
+    return key, state, jnp.int32(0), jnp.bool_(False)
+
+
+def _prepare_selected_action(key, state, player_idx, index, is_tera):
+    """Resolve Encore, priority and transformation for a newly selected move."""
     from ninjax.restrictions import resolve_move
     original_index = index
-    index, restriction_blocked = resolve_move(state, player_idx, index)
-    v = state.volatile_status
+    moves, v = state.active.moves, state.volatile_status
+    index, restriction_blocked = resolve_move(
+        moves.identifier[player_idx, :, 0], moves.move_type[player_idx, :, 0],
+        moves.current_pp[player_idx, :, 0], index,
+        disabled_move_id=v.disabled_move_id[player_idx, 0],
+        disable_turns=v.disable_turns[player_idx, 0],
+        taunt_turns=v.taunt_turns[player_idx, 0],
+        encore_move_id=v.encore_move_id[player_idx, 0],
+        encore_turns=v.encore_turns[player_idx, 0],
+        gravity_duration=state.gravity_duration)
     v = v.replace(active_move_actions=v.active_move_actions.at[player_idx, 0].add(1))
     # Encore replaces an already ordered action without changing its priority.
     priority = jnp.where(v.queued_priority_valid[player_idx, 0], v.queued_priority[player_idx, 0],
@@ -555,20 +638,27 @@ def step_move(
     attacker = state.active[player_idx]
     state = update_active_fields(state, player_idx,
         is_terastallized=attacker.is_terastallized | jnp.bool([is_tera]))
-    selected_move = state.active[player_idx].moves[index]
-    key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
-        defrost_move=selected_move.defrost, sleep_usable=selected_move.identifier[0] == 214)
-    key, state = jax.lax.cond(
-        is_interrupted.reshape(()), move_interrupted, move_used,
-        key, state, player_idx, index)
-    # Protect and Spiky Shield return NOT_FAIL in Gen 9; other blocks can fail.
-    result = state.hit_results[0].outcome
-    failed = is_interrupted | (result == HitOutcome.MISS) | (result == HitOutcome.IMMUNE) | (result == HitOutcome.FAILED) | (result == HitOutcome.BLOCKED)
-    # Sleep Talk succeeds once it selects a move, even if that called move fails.
-    failed = jnp.where((selected_move.identifier[0] == 214) & state.volatile_status.sleep_talk_succeeded[player_idx, 0] & ~is_interrupted, False, failed)
+    return key, state, jnp.asarray(index, jnp.int32), restriction_blocked
+
+
+def _prepare_charge_release(key, state, player, unused_index):
+    """Clear the stored charge and ignore Encore/PP while honoring Disable."""
+    from ninjax.hit import HitResults
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(move_result=v.move_result.at[player_idx, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
-    return key, resolve_faints(state)
+    identifier = v.charging_move_id[player, 0]
+    matches = (state.active[player].moves.identifier[:, 0] == identifier) & (identifier != 0)
+    index = jnp.argmax(matches).astype(jnp.int32)
+    state = state.replace(hit_results=HitResults.empty(), event_move=identifier,
+        volatile_status=v.replace(
+            active_move_actions=v.active_move_actions.at[player, 0].add(1),
+            charging_move_id=v.charging_move_id.at[player, 0].set(0),
+            charge_target_side=v.charge_target_side.at[player, 0].set(0),
+            charge_target_position=v.charge_target_position.at[player, 0].set(0),
+            protect_chain=v.protect_chain.at[player, 0].set(0),
+            encore_overridden=v.encore_overridden.at[player, 0].set(False)))
+    state = emit(state, EventKind.CONDITION, player, detail=14, before=identifier, after=0)
+    blocked = ~jnp.any(matches) | ((v.disable_turns[player, 0] > 0) & (v.disabled_move_id[player, 0] == identifier))
+    return key, state, index, blocked
 
 
 def step_switch(
@@ -584,6 +674,8 @@ def step_switch(
     return key, swap_out(switch_key, state, player_index, index)
 
 
+
+
 def step_action(
     key: chex.PRNGKey,
     state: BattleState,
@@ -595,105 +687,54 @@ def step_action(
         action = BattleAction.from_legacy(action)
     state = state.replace(event_source=jnp.asarray(player_index, jnp.int32),
         event_cause=jnp.int32(Cause.MOVE), event_move=jnp.int32(0))
-    # this will execute whatever move is selected
-    def struggle(k, b):
-        """Apply before-move interruptions before a forced Struggle."""
-        v = b.volatile_status
-        b = b.replace(volatile_status=v.replace(active_move_actions=v.active_move_actions.at[player_index, 0].add(1)))
-        k, b, interrupted = before_move(k, b, player_index, inclusive_paralysis=False)
-        k, b = lax.cond(interrupted,
-            lambda k, s: move_interrupted(k, s, player_index, 0), execute_struggle, k, b)
-        v = b.volatile_status
-        b = b.replace(volatile_status=v.replace(move_result=v.move_result.at[player_index, 0].set(jnp.where(interrupted, MoveResult.FAILED, MoveResult.SUCCEEDED))))
-        return k, b
-
-    def execute_struggle(k, b):
-        """Resolve Struggle and invalidate the previous move for Encore/Disable."""
-        from ninjax.hit import HitResults
-        b = clear_destiny_bond(b, player_index)
-        v = b.volatile_status
-        b = b.replace(hit_results=HitResults.empty(),
-                      volatile_status=v.replace(last_move_id=v.last_move_id.at[player_index, 0].set(0)))
-        b = b.replace(event_move=jnp.int32(-1))
-        b = emit(b, EventKind.MOVE, player_index, detail=-1)
-        move = Move(move_type=jnp.array([0]), max_pp=jnp.array([1]), current_pp=jnp.array([1]),
-                    type=jnp.array([Type.NONE]), base_power=jnp.array([50]), accuracy=jnp.array([1.]),
-                    priority=jnp.array([0]), offensive_stat=jnp.array([StatEnum.ATTACK]),
-                    defensive_stat=jnp.array([StatEnum.DEFENSE]), crit_stage=jnp.array([0]))
-        k, b = do_damaging_move(k, b, player_index, move, 0, 0)
-        actor = b.active[player_index]
-        hp = jnp.maximum(0, actor.current_hp - jnp.maximum(1, jnp.round(actor.max_hp / 4)))
-        b = b.replace(event_cause=jnp.int32(Cause.RECOIL))
-        b = emit(b, EventKind.HP, player_index, before=actor.current_hp, after=hp,
-                 hp_change=hp-actor.current_hp,
-                 hp_fraction_change=(jnp.ceil(hp / actor.max_hp * 100) -
-                                     jnp.ceil(actor.current_hp / actor.max_hp * 100)) / 100,
-                 enabled=hp != actor.current_hp)
-        b = emit(b, EventKind.FAINT, player_index, enabled=(actor.current_hp > 0) & (hp == 0))
-        b = update_active_fields(b, player_index, current_hp=hp, is_alive=hp > 0)
-        b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player_index, b.winner))
-        return k, b
     key, state = lax.cond(action.transformation == Transformation.NONE,
-        lambda k, b: lax.cond((action.move_type == ActionType.ATTACK) & (action.index == 4), struggle,
-            lambda k, b: _ordinary_action(k, b, action, player_index), k, b),
+        lambda k, b: _ordinary_action(k, b, action, player_index),
         lambda k, b: (k, b), key, state)
     return key, resolve_faints(state)
 
 
 def _ordinary_action(key, state, action, player_index):
-    """Dispatch attacks, switches and state-dependent forced continuations."""
-    return lax.cond(action.move_type == ActionType.CONTINUED,
-        lambda k, s: step_continued(k, s, player_index),
-        lambda k, s: lax.cond((action.move_type == ActionType.ATTACK) | (action.move_type == ActionType.SWITCH),
-        lambda k, s: lax.cond(action.move_type == ActionType.ATTACK,
-            step_move, step_switch, k, s, player_index, action.index, False),
-        lambda k, s: (k, s), k, s), key, state)
+    """Select move preparation before one shared ordinary/charge execution."""
+    v = state.volatile_status
+    continued = action.move_type == ActionType.CONTINUED
+    release = continued & ~v.recharging[player_index, 0] & (v.charging_move_id[player_index, 0] != 0)
+    def other(k, s):
+        """Switch, spend recharge, or leave an explicit no-op unchanged."""
+        return lax.cond(action.move_type == ActionType.SWITCH,
+            lambda k, s: step_switch(k, s, player_index, action.index, False),
+            lambda k, s: lax.cond(continued & v.recharging[player_index, 0],
+                lambda k, s: _spend_recharge(k, s, player_index), lambda k, s: (k, s), k, s), k, s)
+    return lax.cond((action.move_type == ActionType.ATTACK) | release,
+        lambda k, s: step_move(k, s, player_index, action.index, False, release), other, key, state)
 
 
 def step_continued(key, state, player):
     """Spend recharge or attempt the stored charge move without another PP cost."""
+    action = BattleAction(jnp.int32(0), jnp.int32(ActionType.CONTINUED))
+    return _ordinary_action(key, state, action, player)
+
+
+def _spend_recharge(key, state, player):
+    """Spend recharge before sleep, freeze, flinch, confusion or paralysis."""
     from ninjax.hit import HitResults
-    from ninjax.game_logic import _apply_move_effects
-    def recharge(k, s):
-        """Recharge precedes sleep, freeze, flinch, confusion and paralysis checks."""
-        s = clear_destiny_bond(s, player)
-        v = s.volatile_status
-        s = s.replace(hit_results=HitResults.empty(), volatile_status=v.replace(
-            active_move_actions=v.active_move_actions.at[player, 0].add(1),
-            move_result=v.move_result.at[player, 0].set(MoveResult.SKIPPED),
-            recharging=v.recharging.at[player, 0].set(False),
-            protect_chain=v.protect_chain.at[player, 0].set(0)))
-        return k, emit(s, EventKind.CONDITION, player, detail=15, before=1, after=0)
-    def resume(k, s):
-        """Release a charge once, including when an interruption prevents the hit."""
-        v = s.volatile_status
-        v = v.replace(active_move_actions=v.active_move_actions.at[player, 0].add(1))
-        identifier = v.charging_move_id[player, 0]
-        matches = (s.active[player].moves.identifier[:, 0] == identifier) & (identifier != 0)
-        index = jnp.argmax(matches)
-        s = s.replace(hit_results=HitResults.empty(), event_move=identifier,
-            volatile_status=v.replace(charging_move_id=v.charging_move_id.at[player, 0].set(0),
-                charge_target_side=v.charge_target_side.at[player, 0].set(0),
-                charge_target_position=v.charge_target_position.at[player, 0].set(0),
-                protect_chain=v.protect_chain.at[player, 0].set(0),
-                encore_overridden=v.encore_overridden.at[player, 0].set(False)))
-        s = emit(s, EventKind.CONDITION, player, detail=14, before=identifier, after=0)
-        move = s.active[player].moves[index]
-        # Forced continuations ignore Encore and PP, but Disable can stop them.
-        blocked = ~jnp.any(matches) | ((v.disable_turns[player, 0] > 0) & (v.disabled_move_id[player, 0] == identifier))
-        k, s, interrupted = before_move(k, s, player, restriction_blocked=blocked, defrost_move=move.defrost)
-        def execute(k, s):
-            """Record a released move and run its normal hit resolution."""
-            s = clear_destiny_bond(s, player)
-            s = emit(s, EventKind.MOVE, player, detail=identifier)
-            return _apply_move_effects(k, s, player, index)
-        k, s = lax.cond(interrupted, lambda k, s: move_interrupted(k, s, player, index), execute, k, s)
-        outcome = s.hit_results[0].outcome
-        failed = interrupted | (outcome == HitOutcome.MISS) | (outcome == HitOutcome.IMMUNE) | (outcome == HitOutcome.FAILED) | (outcome == HitOutcome.BLOCKED)
-        v = s.volatile_status
-        return k, s.replace(volatile_status=v.replace(move_result=v.move_result.at[player, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
-    return lax.cond(state.volatile_status.recharging[player, 0], recharge,
-        lambda k, s: lax.cond(s.volatile_status.charging_move_id[player, 0] != 0, resume, lambda k, s: (k, s), k, s), key, state)
+    state = clear_destiny_bond(state, player)
+    v = state.volatile_status
+    state = state.replace(hit_results=HitResults.empty(), volatile_status=v.replace(
+        active_move_actions=v.active_move_actions.at[player, 0].add(1),
+        move_result=v.move_result.at[player, 0].set(MoveResult.SKIPPED),
+        recharging=v.recharging.at[player, 0].set(False),
+        protect_chain=v.protect_chain.at[player, 0].set(0)))
+    return key, emit(state, EventKind.CONDITION, player, detail=15, before=1, after=0)
+
+def _perish_faint(state, player):
+    """Resolve one expiring Perish Song counter as indirect HP loss."""
+    return take_damage_value(state, player, state.active.current_hp[player], False)
+
+
+def _unchanged_player_state(state, player):
+    """Keep the state when this player has no expiring counter."""
+    return state
+
 
 def step_field(
     key: chex.PRNGKey,
@@ -706,20 +747,25 @@ def step_field(
     new_terrain = jnp.where(terrain_duration > 0, state.terrain.terrain, 0)
 
     key, state = step_side_conditions(key, state)
+    from ninjax.ability_effects import residual_abilities
+    # Hydration and Shed Skin resolve at residual order 5, before poison/burn.
+    key, state = residual_abilities(key, state, speed_boost=False)
 
     # weather, terrain, status, items (leftovers etc)
     state = end_turn_damage(state)
 
-    from ninjax.held_effects import leftovers, refresh_paradox
+    from ninjax.held_effects import leftovers, refresh_paradox, residual_orbs, update_items
     state = leftovers(state)
     key, state = step_moody(key, state)
+    key, state = residual_abilities(key, state, status_cures=False)
+    key, state = residual_orbs(key, state)
+    state = update_items(state)
     # Perish Song resolves at the end of the turn, using effective speed order.
     speeds = state.boosted_stats[:, StatEnum.SPEED]
     effective = jnp.where(state.trick_room_duration > 0, -speeds, speeds)
     expiring = state.perish_turns[:, 0] == 1
     for player in range(2):
-        state = lax.cond(expiring[player],
-            lambda s: take_damage_value(s, player, s.active.current_hp[player], False), lambda s: s, state)
+        state = lax.cond(expiring[player], _perish_faint, _unchanged_player_state, state, player)
     key, tie_key = random.split(key)
     slowest = jnp.where(effective[0] == effective[1], random.randint(tie_key, (), 0, 2), jnp.argmin(effective))
     both_out = ~jnp.any((state.team.current_hp[..., 0] > 0) & state.roster)

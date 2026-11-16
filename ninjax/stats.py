@@ -1,5 +1,5 @@
 import jax
-from ninjax.tree import ArrayTree, broadcast_tree
+from ninjax.tree import ArrayTree, broadcast_tree, is_tree_placeholder
 from dataclasses import field
 
 
@@ -15,6 +15,9 @@ class Nature(ArrayTree):
     decreased: jax.Array = field(default_factory=lambda: jnp.array([1]))
 
     def __post_init__(self):
+        """Normalize nature indices while preserving JAX metadata placeholders."""
+        if is_tree_placeholder(self.increased):
+            return
         object.__setattr__(self, 'increased', jnp.asarray(self.increased, jnp.int32))
         object.__setattr__(self, 'decreased', jnp.asarray(self.decreased, jnp.int32))
 
@@ -29,6 +32,9 @@ class StatBoosts(ArrayTree):
 
 
     def __post_init__(self) -> None:
+        """Clamp real stages; leave diagnostic PyTree placeholders untouched."""
+        if is_tree_placeholder(self.normal_boosts):
+            return
         # use __setattr__ manually instead of attribute assignment since the class is frozen
         object.__setattr__(self, "normal_boosts", jnp.clip(self.normal_boosts, -6, 6))
         object.__setattr__(self, "acc_boosts", jnp.clip(self.acc_boosts, -6, 6))
@@ -51,6 +57,9 @@ class StatTable(ArrayTree):
     evs: jax.Array = field(default_factory=lambda: 84*jnp.ones(6, dtype=int32))
 
     def __post_init__(self):
+        """Broadcast real stat inputs and preserve metadata-only tree leaves."""
+        if is_tree_placeholder(self.base_stats):
+            return
         batch = jnp.broadcast_shapes(jnp.asarray(self.base_stats).shape[:-1], jnp.asarray(self.level).shape[:-1])
         for name in ('level', 'base_stats', 'ivs', 'evs'):
             size = 1 if name == 'level' else 6

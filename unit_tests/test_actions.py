@@ -32,8 +32,14 @@ def test_noop_and_action_validation(neutral_type):
     assert BattleAction(jnp.array([0, 0]), jnp.array([99, ActionType.CONTINUED])).encode()[0] == -1
     env = Battle(battle.team)
     state, _ = env.reset(key)
+    # A rejected action must preserve the preceding transition's event history.
+    events = state.battle.events.replace(count=jnp.int32(1),
+        data=state.battle.events.data.at[0, 0].set(1))
+    state = state.replace(battle=state.battle.replace(events=events))
     out, ts = env.step(state, invalid)
     assert ts.extras['invalid_action'] and out.turn == 0
+    assert jnp.array_equal(out.battle.events.data, events.data)
+    assert out.battle.events.count == events.count
     _, ts = env.step(state, BattleAction(jnp.zeros(2, jnp.int32), jnp.full(2, ActionType.CONTINUED)))
     assert ts.extras['invalid_action']
 

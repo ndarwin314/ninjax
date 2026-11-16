@@ -105,7 +105,7 @@ def test_effective_ability_drives_weather_and_boosts(neutral_type):
     state = state.replace(weather=Weather(W.SUN, 5))
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(ability_override=v.ability_override.at[0, 0].set(A.CLOUD_NINE)))
-    assert effective_weather(state) == W.NONE
+    assert effective_weather(state.weather.weather, state.ability, state.active.current_hp) == W.NONE
     state = state.replace(volatile_status=state.volatile_status.replace(ability_override=state.volatile_status.ability_override.at[0, 0].set(A.CONTRARY)))
     assert add_boosts(state, 0, StatEnum.ATTACK, 1).boosts.normal_boosts[0, 1] == -1
 

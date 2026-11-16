@@ -31,6 +31,7 @@ def compute_base_power(
     power = fixed_modifier(move.base_power, 1.5,
         (move.identifier == 797) & (terrain.terrain == TerrainEnum.PSYCHIC) &
         (~is_floating(attacker) | jnp.asarray(gravity_active)))
+    power = fixed_modifier(power, 1.25, (defender.ability == AbilityEnum.DRY_SKIN) & (move.type == Type.FIRE))
     power = fixed_modifier(power, 5461/4096,
         (move.identifier == 879) & (calculate_effectiveness_multiplier(move.type, defender.type_list) > 1))
     ability = attacker.ability
@@ -99,20 +100,29 @@ def compute_base_power(
     # tough claws
     power = conditional_mult_round(power, TOUGH_CLAWS, jnp.logical_and(move.contact, ability==AbilityEnum.TOUGH_CLAWS))
     # reckless
-    power = conditional_mult_round(power, RECKLESS, jnp.logical_and(move.recoil, ability==AbilityEnum.RECKLESS))
+    power = conditional_mult_round(power, RECKLESS, (move.recoil | (move.identifier == 136)) & (ability==AbilityEnum.RECKLESS))
     # strong jaw
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.biting, ability==AbilityEnum.STRONG_JAW))
     # mega launcher
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
     # punk rock
-    power = conditional_mult_round(power, 1.3, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
+    power = fixed_modifier(power, 5325/4096, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
+    from ninjax.enum_types import MoveFlags
+    power = fixed_modifier(power, 1.5, (ability == AbilityEnum.SHARPNESS) & ((move.move_flags & MoveFlags.SLICING) != 0))
     # Masks boost every damaging type for their matching stored Ogerpon form.
     # Apply after the earlier power hooks (Showdown item priority 15).
     from ninjax.enum_types import FormEnum, ItemEnum
     mask = (((attacker.item == ItemEnum.WELLSPRING_MASK) & (attacker.form == FormEnum.OGERPON_WELLSPRING)) |
             ((attacker.item == ItemEnum.HEARTHFLAME_MASK) & (attacker.form == FormEnum.OGERPON_HEARTHFLAME)) |
             ((attacker.item == ItemEnum.CORNERSTONE_MASK) & (attacker.form == FormEnum.OGERPON_CORNERSTONE)))
-    return fixed_modifier(power, 4915/4096, mask)
+    species = attacker.species
+    type_boost = (((attacker.item == ItemEnum.MAGNET) & (move.type == Type.ELECTRIC)) |
+                  ((attacker.item == ItemEnum.SILK_SCARF) & (move.type == Type.NORMAL)) |
+                  ((attacker.item == ItemEnum.SOUL_DEW) & ((species == 380) | (species == 381)) &
+                   ((move.type == Type.DRAGON) | (move.type == Type.PSYCHIC))) |
+                  ((attacker.item == ItemEnum.LUSTROUS_ORB) & (species == 484) &
+                   ((move.type == Type.DRAGON) | (move.type == Type.WATER))))
+    return fixed_modifier(power, 4915/4096, mask | type_boost)
 
 def compute_base_damage(
         attacker_ability: AbilityEnum,
@@ -200,7 +210,7 @@ def compute_damage_multipliers(
     base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_rain, move.type == Type.WATER))
     base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_rain, move.type == Type.FIRE))
 
-    crit_multiplier = 1.5 + 0.75 * (attacker.ability==AbilityEnum.SNIPER)[0]
+    crit_multiplier = 1.5
     # damage roll, idc about preserving the in game RNG generation
     base_damage = conditional_mult_round(base_damage, crit_multiplier, is_crit)
     base_damage = conditional_mult_round(base_damage, damage_roll, 1)
@@ -231,6 +241,9 @@ def compute_damage_multipliers(
     is_physical = move.move_type == MoveType.PHYSICAL
     is_guts = attacker.ability == AbilityEnum.GUTS
     base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
+    # Sniper is a final damage modifier, after the ordinary critical and random
+    # rolls. Folding it into the critical multiplier changes integer rounding.
+    base_damage = conditional_mult_round(base_damage, 1.5, is_crit & (attacker.ability == AbilityEnum.SNIPER))
     base_damage = conditional_mult_round(base_damage, 2, is_tinted_lens)
     base_damage = conditional_mult_round(base_damage, 0.75, is_filter)
     base_damage = conditional_mult_round(base_damage, 1.25, is_neuroforce)
@@ -254,9 +267,6 @@ def damage_post_modifiers(
     # ice scales
     is_ice_scales = defender_ability == AbilityEnum.ICE_SCALES
     damage = conditional_mult_round(damage, 1 / 2, jnp.logical_and(is_ice_scales, move.move_type == MoveType.SPECIAL))
-    # purifying salt
-    is_purifying_salt = defender_ability == AbilityEnum.PURIFYING_SALT
-    damage = conditional_mult_round(damage, 1 / 2, jnp.logical_and(is_purifying_salt, move.type == Type.GHOST))
     damage = conditional_mult_prod_round(
         damage,
         jnp.array([2, 1 / 2]),
@@ -271,6 +281,7 @@ def compute_offensive_stat(
         hp_percent: Array,
         status: Status):
 
+    """Apply represented offensive and opposing attack-stat modifiers."""
     # I'm copying this implementation from what i can find of DaWoblefet's damage dissertation
     # ignoring the rounding
 
@@ -320,9 +331,13 @@ def compute_offensive_stat(
         jnp.logical_or(move_type==Type.FIRE, move_type==Type.ICE)
     )
 
-    stat = conditional_mult(stat, 0.5, jnp.logical_or(water_bubble, thick_fat))
+    heatproof = (defender_ability == AbilityEnum.HEATPROOF) & (move_type == Type.FIRE)
+    salt = (defender_ability == AbilityEnum.PURIFYING_SALT) & (move_type == Type.GHOST)
+    # Purifying Salt halves the attacking stat, not final damage; the +2 in
+    # the base-damage formula makes these observably different at low powers.
+    stat = conditional_mult(stat, 0.5, water_bubble | thick_fat | heatproof | salt)
 
-    # transistor is the only 1.3x
+    # Transistor was reduced from 1.5x in generation 8 to 1.3x in generation 9.
     is_transistor = jnp.logical_and(move_type==Type.ELECTRIC, attacker_ability==AbilityEnum.TRANSISTOR)
     stat = conditional_mult_round(stat, one_point_three, is_transistor)
 
@@ -333,7 +348,7 @@ def compute_offensive_stat(
     return jnp.trunc(stat)
 
 def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
-
+    """Apply status-dependent defense and Fur Coat to the selected defensive stat."""
     # marvel scale
     stat = conditional_mult_round(
         starting_stats[stat_idx], 1.5,
@@ -341,4 +356,4 @@ def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
                    status!=Status.NONE, stat_idx == StatEnum.DEFENSE))
 
     # eviolite and assault vest
-    return stat
+    return conditional_mult_round(stat, 2, (defender_ability == AbilityEnum.FUR_COAT) & (stat_idx == StatEnum.DEFENSE))

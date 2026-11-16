@@ -177,7 +177,10 @@ def capture_conditions(before, after):
     for detail, name in ((10, 'trick_room_duration'), (11, 'gravity_duration')):
         add(EventKind.CONDITION, -1, detail, getattr(before, name), getattr(after, name))
     data = tuple(jnp.asarray(x) for x in (kinds, targets, details, old, new))
-    def record(state, row):
-        kind, target, detail, a, b = row
-        return emit(state, kind, target, detail, a, b, enabled=a != b), None
-    return jax.lax.scan(record, after, data)[0]
+    return jax.lax.scan(_record_condition, after, data)[0]
+
+
+def _record_condition(state, row):
+    """Record a changed field or side condition from one scan row."""
+    kind, target, detail, a, b = row
+    return emit(state, kind, target, detail, a, b, enabled=a != b), None

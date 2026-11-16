@@ -1,5 +1,5 @@
 import jax
-from ninjax.tree import ArrayTree
+from ninjax.tree import ArrayTree, is_tree_placeholder
 from dataclasses import field, fields
 
 import jax.numpy as jnp
@@ -75,6 +75,8 @@ class Move(ArrayTree):
         common shape when different moves are stacked, vmapped or scanned.
         Indices 1..5 name ordinary stats; 6 and 7 are accuracy and evasion.
         """
+        if is_tree_placeholder(self.current_pp):
+            return
         shape = jnp.shape(self.current_pp)
         change_fields = ('self_stat', 'self_stages', 'boost_stat', 'boost_stages',
                          'secondary_stat', 'secondary_stages')

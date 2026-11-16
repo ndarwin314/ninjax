@@ -27,6 +27,7 @@ def test_reference_projection_is_explicit():
 
 
 def test_policy_classes_and_uniform_choices():
+    """Keep ordinary action probabilities and honor forced continuation masks."""
     mask = jnp.zeros((2, 15), bool).at[:, :4].set(True).at[:, 8:14].set(True)
     choices = jax.vmap(random_actions, in_axes=(0, None))(jax.random.split(jax.random.key(7), 10000), mask)
     switching = np.asarray(choices >= 8)
@@ -36,6 +37,9 @@ def test_policy_classes_and_uniform_choices():
     assert np.all(counts[8:14] > 240)
     forced = random_actions(jax.random.key(2), mask.at[:, :4].set(False))
     assert jnp.all((forced >= 8) & (forced < 14))
+    forced_mask = jnp.zeros((2, 15), bool).at[0, 5].set(True).at[1, 14].set(True)
+    forced = random_actions(jax.random.key(2), forced_mask)
+    assert jnp.array_equal(forced, jnp.array([5, 14]))
 
 
 def test_damage_boosts_use_each_players_stages():

@@ -1,5 +1,75 @@
 # Curated mechanics implementation progress
 
+## Expanded passive ability and item coverage
+
+The [passive mechanics report](random-battle-passives.md) records the current
+expansion from 30 to **152 projected ability names** (149/203 in the pinned
+random-battle inventory) and from 19 to **35 held-item names**. It documents
+the new Showdown probes, correctness fixes, JAX helper validation and the
+remaining form/history/event-lifecycle work. The generated
+[coverage report](gen9-random-coverage.json) lists current omissions. Historical
+batch descriptions below retain their original validation scope.
+
+## Full Gen 9 random-battle suite: first batch
+
+The test inventory now covers all **879 species/role entries**, **348 distinct
+moves**, and **203 listed abilities** from the pinned Showdown
+`data/random-battles/gen9/sets.json`. These are complete candidate movepools per
+role, not an enumeration of every legal four-move combination or interaction.
+The engine catalogue now represents **232 of those moves** after adding 127
+metadata-driven moves. The remaining **116 moves are explicit test skips**.
+
+The additions reuse existing damage, priority, critical-rate, stat-change,
+secondary status/flinch/confusion, recoil, drain and half-HP healing hooks.
+Move projection now reads critical ratios, never-miss accuracy, healing and
+primary status metadata, toxic/paralysis secondaries and self-effect chances.
+Examples include Shell Smash, Quiver Dance, Nuzzle, Wicked Blow, Leaf Storm,
+Drain Punch and Diamond Storm. No state fields or dependencies were added.
+
+`tools/record_random_battle_mechanics.cjs` records exact integer damage for all
+16 random rolls on 109 new damaging moves, real Showdown outcomes for 12 setup
+moves, and forced secondary-effect outcomes. Tests compare engine hits at the
+corresponding random roll and compare setup/secondary stat stages and statuses.
+Neutral damage probes remove STAB, resistances, criticals, items and other
+abilities; passing them does not establish arbitrary interaction parity.
+The secondary probes exercise successful procs, not their probability distribution.
+
+The configured HTTP server was unavailable during capture. Reference probes use
+the already-installed simulator behind that server at revision
+`23b41aa29e2ff5ff80e03f57b257b595a5852047`, through its actual Battle/action APIs.
+The server was subsequently launched with `node pokemon-showdown start
+--skip-build 8000` from `/home/mathy/pokemon-showdown`, and an HTTP GET to
+`http://127.0.0.1:8000/` returned **200**. Server startup and the HTTP check
+required execution outside the sandbox: ordinary sandboxed requests still failed
+to connect. Existing oracle fixtures were generated through the simulator API;
+this HTTP availability check does not change their validation scope.
+Fixtures run offline; regeneration requires the local Showdown checkout:
+
+```sh
+SHOWDOWN_REVISION=23b41aa29e2ff5ff80e03f57b257b595a5852047 \
+  node tools/record_random_battle_mechanics.cjs /home/mathy/pokemon-showdown
+.venv/bin/python -m tools.audit_random_battle_mechanics
+.venv/bin/python -m pytest -q unit_tests/test_random_battle_mechanics.py
+```
+
+[The coverage report](gen9-random-coverage.json) lists missing moves and abilities
+not yet enabled by the curated projection. An unprojected ability may already
+have an engine hook; it still needs validation before enabling it here. Item
+selection is procedural, so the report explicitly labels its 100 generated-team
+item sample as non-exhaustive. That move-only batch did not enable new abilities
+or items; the subsequent passive expansion is described above.
+Further work includes additional projections and parity probes, conditional powers,
+self secondaries, move-locking/recharge variants, trapping, delayed effects and
+transformations. All existing curated limitations below still apply.
+
+Validation for this batch: the inventory/metadata/damage/setup run passed
+**1,233 tests with 116 explicit unsupported-move skips** (273.44 seconds).
+The separately added secondary comparisons passed **54 tests** (23.64 seconds),
+and four focused curated projection/self-effect regressions passed (19.20 seconds).
+These were eager mechanics runs with the project virtual environment and the
+persistent cache enabled at `.profiling/jax-cache`; no compilation benchmark or
+new full-environment transformation acceptance is claimed.
+
 The initial singles environment is implemented, and all 120 move slots in the
 30 curated sets now have supported implementations. Full Scarlet/Violet
 interaction parity is **not yet established**. The default curated runner keeps
@@ -9,10 +79,11 @@ explicit omissions. Moves outside the supported catalogue are still reported
 and made unavailable.
 
 Focused mechanics and environment tests passed during implementation, including
-the Beat Up, Sleep Talk, Whirlwind and final curated item additions. Compiled acceptance
-checks exist, but a complete acceptance pass for the latest expanded engine
-under `jit`, `vmap` and `scan` remains outstanding. Earlier compiled checks do
-not establish coverage of subsequent changes. The initial milestone requires a
+the Beat Up, Sleep Talk, Whirlwind and final curated item additions. Complete
+compiled singles battles now pass for seeds 0, 17 and 42 with abilities/items
+enabled. Full-environment `vmap` and `scan` acceptance remains outstanding.
+Earlier compiled checks do not establish coverage of subsequent changes.
+The initial milestone requires a
 usable singles Jumanji environment; doubles, transformations and self-play
 training infrastructure are outside that milestone.
 
@@ -20,8 +91,8 @@ The 2026-11-13 compiled full-battle retry used curated seed 0 with abilities and
 items enabled, two CPU cores and a 6 GiB process virtual-memory limit. It failed
 with `MemoryError: std::bad_alloc` while preparing the first compiled step
 (164.72 seconds in pytest). No compiled battle completed in that attempt.
-Reducing the whole-step compilation memory requirement remains a validation
-blocker; passing focused or eager tests does not clear this gate.
+That attempt left whole-step compilation as a validation blocker; the later
+action-dispatch consolidation described below clears this gate for three seeds.
 
 The corresponding full eager run (`jax.disable_jit()`, same seed and enabled
 abilities/items, same CPU and memory limits) **passed**: 40 turns, 51 decisions,
@@ -34,14 +105,29 @@ parity.
 
 Subsequent [compilation-memory work](compilation-performance.md) reduced the
 full-step trace from 802,117 to 70,666 equations and peak tracing RSS from
-1,801 to 619 MiB. Whole-step backend compilation still exceeds the tested
-memory budgets. Focused regression and shared-helper transformation checks
+1,801 to 619 MiB. At that stage, whole-step backend compilation still exceeded
+the tested memory budgets. Focused regression and shared-helper transformation checks
 cover the optimizations; the earlier eager rollout does not validate them.
-Isolated component compilation checks now pass for 17 of 18 components,
-including selected-move dispatch. Full move execution exceeds the 4 GiB RSS
-watchdog during backend compilation. The compilation-performance document
-records phase timings, memory checkpoints and compiled/eager comparisons;
-these checks do not clear full-battle acceptance.
+The initial isolated compilation checks passed 17 of 18 components; full move
+execution exceeded the 4 GiB RSS watchdog. After refactoring dispatch to share
+the hit pipeline, both selected-move dispatch and full move execution compile
+and match eager output within that budget. Dispatcher backend time fell from
+104.6 to 33.5 seconds, with peak RSS falling from 3,530 to 2,239 MiB. Full move
+execution now completes at 2,163 MiB. The compilation-performance document
+contains before/after flow diagrams, raw measurements and validation scope;
+component results do not clear full-battle acceptance.
+The first post-refactor full-step profiler still hit the 4 GiB RSS watchdog
+during backend compilation (4,107 MiB observed).
+
+The subsequent action-dispatch consolidation shares ordinary/charged move
+execution and uses one sequential replacement-switch loop. Full-step HLO after
+call-graph flattening falls from 587,633 to 381,214 instructions. Compilation
+and all-leaf eager comparison now fit within the 4 GiB RSS guard. Three full
+compiled battles with abilities/items enabled pass in one process at 3,173 MiB
+peak RSS: seed 0 takes 40 turns/51 decisions, seed 17 takes 25/32 and seed 42
+takes 26/35. Compile logs show one shared step compilation. The runner's policy
+also now selects the forced continue action for charge/recharge turns. These
+are three singles rollouts, not exhaustive interaction or batching acceptance.
 
 The first implementation batch adds:
 

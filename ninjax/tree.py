@@ -1,7 +1,19 @@
 """Array operations for immutable Flax PyTrees with explicit leading axes."""
 import jax
 import jax.numpy as jnp
+from numbers import Number
 from flax import struct
+
+
+def is_tree_placeholder(value):
+    """Recognize non-array metadata leaves used when JAX reconstructs a tree.
+
+    Cache-miss diagnostics compare tree structures using opaque placeholders.
+    Constructors must preserve these instead of normalizing them as arrays.
+    Accept ordinary numerical inputs and array protocols for real data.
+    """
+    return not (hasattr(value, 'dtype') or isinstance(value, (Number, list, tuple))
+                or hasattr(value, '__array__') or hasattr(value, '__jax_array__'))
 
 
 @jax.jit

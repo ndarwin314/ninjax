@@ -132,7 +132,13 @@ def observe(env, state):
     from ninjax.restrictions import allowed_moves
     disabled = t.moves.disabled[..., 0]
     disabled = disabled.at[jnp.arange(2), b.active_index[:, 0]].set(
-        disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b))
+        disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b.active.moves.identifier[..., 0], b.active.moves.move_type[..., 0],
+            disabled_move_id=b.volatile_status.disabled_move_id,
+            disable_turns=b.volatile_status.disable_turns,
+            taunt_turns=b.volatile_status.taunt_turns,
+            encore_move_id=b.volatile_status.encore_move_id,
+            encore_turns=b.volatile_status.encore_turns,
+            gravity_duration=b.gravity_duration))
     team = dict(species=masked(t.species[..., 0], species_known), species_known=species_known,
         form=masked(t.form[..., 0], species_known),
         hp_fraction=jnp.where(public, hp, 0), hp_known=public,

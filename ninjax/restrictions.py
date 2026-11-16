@@ -11,28 +11,35 @@ ENCORE_TURNS = 3
 TAUNT_TURNS = 3
 
 
-def allowed_moves(state):
-    """Return restriction eligibility by player and move slot, shape (2, 4)."""
-    v = state.volatile_status
-    moves = state.active.moves
-    ids = moves.identifier[..., 0]
-    return (~((v.disable_turns > 0) & (ids == v.disabled_move_id)) &
-            ~((v.taunt_turns > 0) & (moves.move_type[..., 0] == MoveType.STATUS)) &
-            ~((state.gravity_duration > 0) & (ids == 136)) &
-            ((v.encore_turns <= 0) | (ids == v.encore_move_id)))
+def allowed_moves(move_ids, move_types, *, disabled_move_id, disable_turns,
+                  taunt_turns, encore_move_id, encore_turns, gravity_duration):
+    """Return restriction eligibility (2, 4) from active move/volatile arrays.
+
+    Move IDs/categories have shape (2, 4), restriction arrays (2, 1), and
+    gravity duration is scalar. PP and Choice/item restrictions are separate.
+    """
+    return (~((disable_turns > 0) & (move_ids == disabled_move_id)) &
+            ~((taunt_turns > 0) & (move_types == MoveType.STATUS)) &
+            ~((gravity_duration > 0) & (move_ids == 136)) &
+            ((encore_turns <= 0) | (move_ids == encore_move_id)))
 
 
-def resolve_move(state, player, index):
-    """Override a queued move for Encore, then test Disable and Taunt."""
-    v = state.volatile_status
-    moves = state.active[player].moves
-    match = (moves.identifier[:, 0] == v.encore_move_id[player, 0]) & (moves.current_pp[:, 0] > 0)
-    use_encore = (v.encore_turns[player, 0] > 0) & jnp.any(match)
+def resolve_move(move_ids, move_types, current_pp, index, *, disabled_move_id,
+                 disable_turns, taunt_turns, encore_move_id, encore_turns,
+                 gravity_duration):
+    """Resolve a queued slot from (4,) move arrays and scalar restrictions.
+
+    Encore redirects only to a matching move with PP. Invalid/exhausted Encore
+    does not itself block the original selection; Disable/Taunt/gravity still
+    apply to the resolved slot.
+    """
+    match = (move_ids == encore_move_id) & (current_pp > 0)
+    use_encore = (encore_turns > 0) & jnp.any(match)
     index = jnp.where(use_encore, jnp.argmax(match), index)
-    move = moves[index]
-    blocked = ((v.disable_turns[player, 0] > 0) & (move.identifier[0] == v.disabled_move_id[player, 0])) | (
-        (v.taunt_turns[player, 0] > 0) & (move.move_type[0] == MoveType.STATUS))
-    blocked |= (state.gravity_duration > 0) & (move.identifier[0] == 136)
+    identifier = move_ids[index]
+    blocked = ((disable_turns > 0) & (identifier == disabled_move_id)) | (
+        (taunt_turns > 0) & (move_types[index] == MoveType.STATUS))
+    blocked |= (gravity_duration > 0) & (identifier == 136)
     return index, blocked
 
 

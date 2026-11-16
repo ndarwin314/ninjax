@@ -13,10 +13,68 @@ UNCHANGEABLE_ABILITIES = jnp.array([AbilityEnum.AS_ONE_CHILLING, AbilityEnum.AS_
     AbilityEnum.ZEN_MODE, AbilityEnum.ZERO_TO_HERO], jnp.int32)
 
 
-def underlying_ability(state, player):
-    """Return the active ability identity even while its effects are suppressed."""
-    override = state.volatile_status.ability_override[player, 0]
-    return jnp.where(override >= 0, override, state.active.ability[player, 0])
+def underlying_ability(base_ability, override):
+    """Resolve scalar ability identity, ignoring effect suppression.
+
+    A negative override means the active Pokémon's stored ability is used.
+    """
+    return jnp.where(override >= 0, override, base_ability)
+
+
+def opposing_drop_response(state, player, lowered_count):
+    """React to actual opposing stage reductions, including accuracy/evasion."""
+    from ninjax.side import add_boosts
+    from ninjax.enum_types import StatEnum
+    ability = state.ability[player, 0]
+    stat = jnp.where(ability == AbilityEnum.DEFIANT, StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK)
+    eligible = ((ability == AbilityEnum.DEFIANT) | (ability == AbilityEnum.COMPETITIVE)) & (lowered_count > 0)
+    return jax.lax.cond(eligible, lambda s: add_boosts(s, player, stat, 2*lowered_count), lambda s: s, state)
+
+
+def bad_dreams(state):
+    """Damage sleeping opposing singles Pokémon at residual order eight."""
+    from ninjax.side import take_damage_percent
+    from ninjax.events import Cause
+    def damage(player, s):
+        """Skip fainted sources, and attribute indirect damage to the opponent."""
+        other = 1-player
+        sleeping = (s.active.status[player, 0] == Status.SLEEP) | (s.ability[player, 0] == AbilityEnum.COMATOSE)
+        eligible = sleeping & (s.ability[other, 0] == AbilityEnum.BAD_DREAMS) & (s.active.current_hp[other, 0] > 0)
+        eligible &= s.ability[player, 0] != AbilityEnum.MAGIC_GUARD
+        source = s.event_source
+        s = s.replace(event_source=jnp.asarray(other, jnp.int32))
+        s = take_damage_percent(s, player, jnp.where(eligible, 1/8, 0), cause=Cause.INDIRECT)
+        return s.replace(event_source=source)
+    return jax.lax.fori_loop(0, 2, damage, state)
+
+
+def residual_abilities(key, state, status_cures=True, speed_boost=True):
+    """Resolve represented status cures and Speed Boost with explicit randomness.
+
+    The scheduler runs status cures before poison/burn damage, then Speed Boost
+    late in the turn. It does not activate on a normal switch-in's first turn.
+    """
+    from ninjax.held_effects import effective_weather, cure_status
+    from ninjax.enum_types import WeatherEnum, StatEnum
+    from ninjax.side import add_boosts
+    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
+    def apply(player, carry):
+        """Only roll Shed Skin for a living, statused holder."""
+        key, s = carry
+        mon = s.active[player]
+        ability = s.ability[player, 0]
+        living = mon.current_hp[0] > 0
+        def roll(k):
+            """Use the pinned Scarlet/Violet 33-in-100 Shed Skin probability."""
+            k, subkey = jax.random.split(k)
+            return k, jax.random.randint(subkey, (), 0, 100) < 33
+        key, shed = jax.lax.cond(jnp.asarray(status_cures) & living & (mon.status[0] != Status.NONE) & (ability == AbilityEnum.SHED_SKIN),
+            roll, lambda k: (k, jnp.bool_(False)), key)
+        cure = jnp.asarray(status_cures) & living & (mon.status[0] != Status.NONE) & (shed | ((ability == AbilityEnum.HYDRATION) & (weather == WeatherEnum.RAIN)))
+        s = jax.lax.cond(cure, lambda s: cure_status(s, player), lambda s: s, s)
+        speed = jnp.asarray(speed_boost) & living & (ability == AbilityEnum.SPEED_BOOST) & (s.volatile_status.entry_turn[player, 0] < s.turn_number)
+        return key, jax.lax.cond(speed, lambda s: add_boosts(s, player, StatEnum.SPEED, 1), lambda s: s, s)
+    return jax.lax.fori_loop(0, 2, apply, (key, state))
 
 
 def worry_seed(state, attacker):
@@ -28,7 +86,7 @@ def worry_seed(state, attacker):
     from ninjax.side import update_active_fields
     from ninjax.held_effects import refresh_paradox
     target = 1-attacker
-    old = underlying_ability(state, target)
+    old = underlying_ability(state.active.ability[target, 0], state.volatile_status.ability_override[target, 0])
     eligible = ((old != AbilityEnum.INSOMNIA) & (old != AbilityEnum.TRUANT) &
         ~jnp.any(UNCHANGEABLE_ABILITIES == old))
     shield = eligible & (state.active.item[target, 0] == ItemEnum.ABILITY_SHIELD)

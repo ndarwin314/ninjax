@@ -38,7 +38,8 @@ def make_move(name):
     physical = int(category) == int(MoveType.PHYSICAL)
     effects = {}
     stat_ids = {'atk': 1, 'def': 2, 'spa': 3, 'spd': 4, 'spe': 5, 'accuracy': 6, 'evasion': 7}
-    status_ids = {'brn': Status.BURN, 'psn': Status.POISON, 'slp': Status.SLEEP, 'frz': Status.FREEZE}
+    status_ids = {'brn': Status.BURN, 'psn': Status.POISON, 'tox': Status.TOXIC,
+                  'par': Status.PARALYZE, 'slp': Status.SLEEP, 'frz': Status.FREEZE}
     # Move metadata is projected on the host; traced transitions only consume
     # arrays. Stat-index and stage vectors are padded by Move on construction.
     for prefix, boosts in [('boost', data.get('boosts', {})),
@@ -49,6 +50,12 @@ def make_move(name):
     if data.get('boosts'):
         effects['target_self'] = jnp.array([True])
     secondary = data.get('secondary') or {}
+    effects['self_chance'] = jnp.array([data.get('self', {}).get('chance', 100) / 100])
+    if data.get('status'):
+        effects['status_effect'] = jnp.array([status_ids[data['status']]])
+    if data.get('heal'):
+        effects.update(target_self=jnp.array([True]),
+                       healing_fraction=jnp.array([data['heal'][0] / data['heal'][1]]))
     effects['secondary_chance'] = jnp.array([secondary.get('chance', 0) / 100])
     effects['secondary_status'] = jnp.array([status_ids.get(secondary.get('status'), 0)])
     effects['secondary_flinch'] = jnp.array([secondary.get('volatileStatus') == 'flinch'])
@@ -62,7 +69,7 @@ def make_move(name):
         effects['recoil_percent'] = jnp.array([data['recoil'][0] / data['recoil'][1]])
     effects['ignore_defensive'] = jnp.array([data.get('ignoreDefensive', False)])
     effects['always_crit'] = jnp.array([data.get('willCrit', False)])
-    effects['always_hit'] = jnp.array([name in ('Flower Trick', 'Clear Smog', 'Pain Split', 'Whirlwind')])
+    effects['always_hit'] = jnp.array([data.get('alwaysHit', False) or name in ('Flower Trick', 'Clear Smog', 'Pain Split', 'Whirlwind')])
     if name == 'Body Press':
         effects['offensive_stat'] = jnp.array([2])
     if name == 'Psyshock':
@@ -108,7 +115,8 @@ def make_move(name):
     for source, flag in [('sound', MoveFlags.SOUND), ('bullet', MoveFlags.BULLET),
                          ('pulse', MoveFlags.LAUNCHER), ('bite', MoveFlags.BITING),
                          ('heal', MoveFlags.HEALING), ('powder', MoveFlags.POWDER), ('defrost', MoveFlags.DEFROST),
-                         ('bypasssub', MoveFlags.BYPASS_SUBSTITUTE)]:
+                         ('bypasssub', MoveFlags.BYPASS_SUBSTITUTE), ('slicing', MoveFlags.SLICING),
+                         ('punch', MoveFlags.PUNCHING), ('wind', MoveFlags.WIND)]:
         if data.get('flags', {}).get(source):
             flags |= int(flag)
     if 'flags' in data:
@@ -121,7 +129,7 @@ def make_move(name):
                 type=jnp.array([int(Type[data['type'].upper()])]), base_power=jnp.array([data['power']]),
                 accuracy=jnp.array([data['accuracy']]), priority=jnp.array([data['priority']]),
                 offensive_stat=offensive, defensive_stat=defensive,
-                crit_stage=jnp.array([1 if name == 'Ivy Cudgel' else 0]), identifier=jnp.array([data['num']]),
+                crit_stage=jnp.array([data.get('critRatio', 2 if name == 'Ivy Cudgel' else 1) - 1]), identifier=jnp.array([data['num']]),
                 move_flags=jnp.array([flags]),
                 implemented=jnp.array([supported]), **effects)
 
@@ -164,7 +172,7 @@ def make_sandbox_teams(reference):
 
 @jax.jit
 def random_actions(key, mask):
-    """Uniform within move/switch classes, using the reference 90/10 policy."""
+    """Sample the 90/10 move/switch policy, honoring forced continue and no-op."""
     roll_key, move_key, switch_key = jax.random.split(key, 3)
     moves = mask[:, :5]
     switches = mask[:, 8:14]
@@ -172,6 +180,8 @@ def random_actions(key, mask):
     switch = 8 + jax.random.categorical(switch_key, jnp.where(switches, 0., -jnp.inf), axis=-1)
     choose_switch = jnp.any(switches, axis=1) & ((jax.random.uniform(roll_key, (2,)) < .1) | ~jnp.any(moves, axis=1))
     choice = jnp.where(choose_switch, switch, move).astype(jnp.int32)
+    # Charge releases and recharge turns expose only legacy action 5.
+    choice = jnp.where(mask[:, 5], 5, choice)
     return jnp.where(mask[:, 14], 14, choice)
 
 

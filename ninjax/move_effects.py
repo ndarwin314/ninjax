@@ -60,9 +60,28 @@ def after_every_hit(
         (defender.ability==AbilityEnum.THERMAL_EXCHANGE) & defender.is_alive & (move.type==Type.FIRE),
         StatEnum.ATTACK, 1
     )
+    # Simple damaging-hit reactions only boost a surviving holder.
+    alive = state.active.current_hp[defender_idx, 0] > 0
+    state = conditional_add_boosts(state, defender_idx, alive & (defender.ability[0] == AbilityEnum.WATER_COMPACTION) &
+        (move.type[0] == Type.WATER), StatEnum.DEFENSE, 2)
+    state = conditional_add_boosts(state, defender_idx, alive & (defender.ability[0] == AbilityEnum.JUSTIFIED) &
+        (move.type[0] == Type.DARK), StatEnum.ATTACK, 1)
+    rattled = (move.type[0] == Type.DARK) | (move.type[0] == Type.BUG) | (move.type[0] == Type.GHOST)
+    state = conditional_add_boosts(state, defender_idx, alive & (defender.ability[0] == AbilityEnum.RATTLED) & rattled, StatEnum.SPEED, 1)
     # do on contact effects
     makes_contact = jnp.logical_and(move.contact,  attacker.ability!=AbilityEnum.LONG_REACH)
     key, state = jax.lax.cond(makes_contact[0], do_contact, lambda k, s, a: (k, s), key, state, attacker_idx)
+    # Aftermath is contact retaliation after the holder faints. Damp prevents
+    # it, and Pads/Long Reach/Magic Guard protect the surviving attacker.
+    from ninjax.held_effects import contact_reactions_allowed
+    damp = jnp.any((state.ability[:, 0] == AbilityEnum.DAMP) & (state.active.current_hp[:, 0] > 0))
+    aftermath = ((defender.ability[0] == AbilityEnum.AFTERMATH) & (state.active.current_hp[defender_idx, 0] == 0) &
+        move.contact[0] & contact_reactions_allowed(attacker.ability[0], attacker.item[0]) & ~damp &
+        (attacker.ability[0] != AbilityEnum.MAGIC_GUARD) & (state.active.current_hp[attacker_idx, 0] > 0))
+    source = state.event_source
+    state = state.replace(event_source=jnp.asarray(defender_idx, jnp.int32))
+    state = take_damage_percent(state, attacker_idx, jnp.where(aftermath, 1/4, 0), cause=Cause.CONTACT)
+    state = state.replace(event_source=source)
     return key, state
 
 def after_move_finished(state: BattleState, defender: Pokemon, defender_idx, hp_start):
@@ -89,7 +108,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
     defender = active[1-attacker_idx]
     attacker = active[attacker_idx]
     from ninjax.held_effects import contact_reactions_allowed
-    reacts = contact_reactions_allowed(state, attacker_idx)
+    reacts = contact_reactions_allowed(state.ability[attacker_idx, 0], state.active.item[attacker_idx, 0])
     key, def_key, attack_key = random.split(key, 3)
 
     # defender triggers
@@ -130,7 +149,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
     is_toxic_chain = attacker.ability==AbilityEnum.TOXIC_CHAIN
     r = random.uniform(attack_key)
     triggered = jnp.less_equal(r, 0.3)
-    status = (is_poison_touch * Status.POISON +
+    status = (is_poison_touch * (defender.ability != AbilityEnum.SHIELD_DUST) * Status.POISON +
               is_toxic_chain * Status.TOXIC) * triggered
 
     # gooey, idk why i take 0 index here but it happens in some places and i think was necessary

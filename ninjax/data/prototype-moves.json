@@ -2049,5 +2049,2940 @@
       "failmimic": 1,
       "failinstruct": 1
     }
+  },
+  "Accelerock": {
+    "id": "accelerock",
+    "num": 709,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Aeroblast": {
+    "id": "aeroblast",
+    "num": 177,
+    "type": "Flying",
+    "category": "Special",
+    "power": 100,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1,
+      "metronome": 1,
+      "wind": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Agility": {
+    "id": "agility",
+    "num": 97,
+    "type": "Psychic",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 30,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "spe": 2
+    }
+  },
+  "Air Slash": {
+    "id": "airslash",
+    "num": 403,
+    "type": "Flying",
+    "category": "Special",
+    "power": 75,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Apple Acid": {
+    "id": "appleacid",
+    "num": 787,
+    "type": "Grass",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Aqua Cutter": {
+    "id": "aquacutter",
+    "num": 895,
+    "type": "Water",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Aqua Jet": {
+    "id": "aquajet",
+    "num": 453,
+    "type": "Water",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Armor Cannon": {
+    "id": "armorcannon",
+    "num": 890,
+    "type": "Fire",
+    "category": "Special",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "def": -1,
+        "spd": -1
+      }
+    }
+  },
+  "Astral Barrage": {
+    "id": "astralbarrage",
+    "num": 825,
+    "type": "Ghost",
+    "category": "Special",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Aura Sphere": {
+    "id": "aurasphere",
+    "num": 396,
+    "type": "Fighting",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1,
+      "metronome": 1,
+      "bullet": 1,
+      "pulse": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Behemoth Blade": {
+    "id": "behemothblade",
+    "num": 781,
+    "type": "Steel",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "failcopycat": 1,
+      "failmimic": 1,
+      "slicing": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Bite": {
+    "id": "bite",
+    "num": 44,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 60,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 25,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bite": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Bitter Malice": {
+    "id": "bittermalice",
+    "num": 841,
+    "type": "Ghost",
+    "category": "Special",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "atk": -1
+      }
+    }
+  },
+  "Blue Flare": {
+    "id": "blueflare",
+    "num": 551,
+    "type": "Fire",
+    "category": "Special",
+    "power": 130,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "status": "brn"
+    }
+  },
+  "Body Slam": {
+    "id": "bodyslam",
+    "num": 34,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 85,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "nonsky": 1,
+      "metronome": 1,
+      "minimize": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "par"
+    }
+  },
+  "Bolt Strike": {
+    "id": "boltstrike",
+    "num": 550,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 130,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "status": "par"
+    }
+  },
+  "Boomburst": {
+    "id": "boomburst",
+    "num": 586,
+    "type": "Normal",
+    "category": "Special",
+    "power": 140,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "sound": 1,
+      "bypasssub": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Brave Bird": {
+    "id": "bravebird",
+    "num": 413,
+    "type": "Flying",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      33,
+      100
+    ]
+  },
+  "Bug Buzz": {
+    "id": "bugbuzz",
+    "num": 405,
+    "type": "Bug",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "sound": 1,
+      "bypasssub": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Bulk Up": {
+    "id": "bulkup",
+    "num": 339,
+    "type": "Fighting",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "atk": 1,
+      "def": 1
+    }
+  },
+  "Bullet Punch": {
+    "id": "bulletpunch",
+    "num": 418,
+    "type": "Steel",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 30,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Coil": {
+    "id": "coil",
+    "num": 489,
+    "type": "Poison",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "atk": 1,
+      "def": 1,
+      "accuracy": 1
+    }
+  },
+  "Cosmic Power": {
+    "id": "cosmicpower",
+    "num": 322,
+    "type": "Psychic",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "def": 1,
+      "spd": 1
+    }
+  },
+  "Crabhammer": {
+    "id": "crabhammer",
+    "num": 152,
+    "type": "Water",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Dazzling Gleam": {
+    "id": "dazzlinggleam",
+    "num": 605,
+    "type": "Fairy",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Diamond Storm": {
+    "id": "diamondstorm",
+    "num": 591,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "chance": 50,
+      "boosts": {
+        "def": 2
+      }
+    },
+    "secondary": {}
+  },
+  "Discharge": {
+    "id": "discharge",
+    "num": 435,
+    "type": "Electric",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "par"
+    }
+  },
+  "Double-Edge": {
+    "id": "doubleedge",
+    "num": 38,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      33,
+      100
+    ]
+  },
+  "Dragon Ascent": {
+    "id": "dragonascent",
+    "num": 620,
+    "type": "Flying",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "def": -1,
+        "spd": -1
+      }
+    }
+  },
+  "Dragon Claw": {
+    "id": "dragonclaw",
+    "num": 337,
+    "type": "Dragon",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Drain Punch": {
+    "id": "drainpunch",
+    "num": 409,
+    "type": "Fighting",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "drain": [
+      1,
+      2
+    ]
+  },
+  "Draining Kiss": {
+    "id": "drainingkiss",
+    "num": 577,
+    "type": "Fairy",
+    "category": "Special",
+    "power": 50,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "drain": [
+      3,
+      4
+    ]
+  },
+  "Drill Run": {
+    "id": "drillrun",
+    "num": 529,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Dynamic Punch": {
+    "id": "dynamicpunch",
+    "num": 223,
+    "type": "Fighting",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.5,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "volatileStatus": "confusion"
+    }
+  },
+  "Energy Ball": {
+    "id": "energyball",
+    "num": 412,
+    "type": "Grass",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bullet": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Fiery Wrath": {
+    "id": "fierywrath",
+    "num": 822,
+    "type": "Dark",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Fire Blast": {
+    "id": "fireblast",
+    "num": 126,
+    "type": "Fire",
+    "category": "Special",
+    "power": 110,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "brn"
+    }
+  },
+  "Fire Punch": {
+    "id": "firepunch",
+    "num": 7,
+    "type": "Fire",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "brn"
+    }
+  },
+  "Fleur Cannon": {
+    "id": "fleurcannon",
+    "num": 705,
+    "type": "Fairy",
+    "category": "Special",
+    "power": 130,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "spa": -2
+      }
+    }
+  },
+  "Focus Blast": {
+    "id": "focusblast",
+    "num": 411,
+    "type": "Fighting",
+    "category": "Special",
+    "power": 120,
+    "accuracy": 0.7,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bullet": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Glacial Lance": {
+    "id": "glaciallance",
+    "num": 824,
+    "type": "Ice",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Head Smash": {
+    "id": "headsmash",
+    "num": 457,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 150,
+    "accuracy": 0.8,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      1,
+      2
+    ]
+  },
+  "Headbutt": {
+    "id": "headbutt",
+    "num": 29,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Headlong Rush": {
+    "id": "headlongrush",
+    "num": 838,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "def": -1,
+        "spd": -1
+      }
+    }
+  },
+  "Heat Wave": {
+    "id": "heatwave",
+    "num": 257,
+    "type": "Fire",
+    "category": "Special",
+    "power": 95,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "wind": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "brn"
+    }
+  },
+  "High Horsepower": {
+    "id": "highhorsepower",
+    "num": 667,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 95,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Hypnosis": {
+    "id": "hypnosis",
+    "num": 95,
+    "type": "Psychic",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.6,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "reflectable": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "status": "slp"
+  },
+  "Ice Beam": {
+    "id": "icebeam",
+    "num": 58,
+    "type": "Ice",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "frz"
+    }
+  },
+  "Ice Hammer": {
+    "id": "icehammer",
+    "num": 665,
+    "type": "Ice",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "spe": -1
+      }
+    }
+  },
+  "Ice Punch": {
+    "id": "icepunch",
+    "num": 8,
+    "type": "Ice",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "frz"
+    }
+  },
+  "Ice Shard": {
+    "id": "iceshard",
+    "num": 420,
+    "type": "Ice",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 30,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Iron Defense": {
+    "id": "irondefense",
+    "num": 334,
+    "type": "Steel",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "def": 2
+    }
+  },
+  "Iron Tail": {
+    "id": "irontail",
+    "num": 231,
+    "type": "Steel",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.75,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "boosts": {
+        "def": -1
+      }
+    }
+  },
+  "Jet Punch": {
+    "id": "jetpunch",
+    "num": 857,
+    "type": "Water",
+    "category": "Physical",
+    "power": 60,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Kowtow Cleave": {
+    "id": "kowtowcleave",
+    "num": 869,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 85,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Lava Plume": {
+    "id": "lavaplume",
+    "num": 436,
+    "type": "Fire",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "brn"
+    }
+  },
+  "Leaf Blade": {
+    "id": "leafblade",
+    "num": 348,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Leaf Storm": {
+    "id": "leafstorm",
+    "num": 437,
+    "type": "Grass",
+    "category": "Special",
+    "power": 130,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "spa": -2
+      }
+    }
+  },
+  "Leech Life": {
+    "id": "leechlife",
+    "num": 141,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "drain": [
+      1,
+      2
+    ]
+  },
+  "Liquidation": {
+    "id": "liquidation",
+    "num": 710,
+    "type": "Water",
+    "category": "Physical",
+    "power": 85,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "boosts": {
+        "def": -1
+      }
+    }
+  },
+  "Lunge": {
+    "id": "lunge",
+    "num": 679,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "atk": -1
+      }
+    }
+  },
+  "Luster Purge": {
+    "id": "lusterpurge",
+    "num": 295,
+    "type": "Psychic",
+    "category": "Special",
+    "power": 95,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 50,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Mach Punch": {
+    "id": "machpunch",
+    "num": 183,
+    "type": "Fighting",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 30,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Make It Rain": {
+    "id": "makeitrain",
+    "num": 874,
+    "type": "Steel",
+    "category": "Special",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "spa": -1
+      }
+    }
+  },
+  "Malignant Chain": {
+    "id": "malignantchain",
+    "num": 919,
+    "type": "Poison",
+    "category": "Special",
+    "power": 100,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 50,
+      "status": "tox"
+    }
+  },
+  "Matcha Gotcha": {
+    "id": "matchagotcha",
+    "num": 902,
+    "type": "Grass",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "defrost": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "status": "brn"
+    },
+    "drain": [
+      1,
+      2
+    ]
+  },
+  "Megahorn": {
+    "id": "megahorn",
+    "num": 224,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Milk Drink": {
+    "id": "milkdrink",
+    "num": 208,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "heal": [
+      1,
+      2
+    ]
+  },
+  "Mud Shot": {
+    "id": "mudshot",
+    "num": 341,
+    "type": "Ground",
+    "category": "Special",
+    "power": 55,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spe": -1
+      }
+    }
+  },
+  "Muddy Water": {
+    "id": "muddywater",
+    "num": 330,
+    "type": "Water",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "nonsky": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "boosts": {
+        "accuracy": -1
+      }
+    }
+  },
+  "Mystical Fire": {
+    "id": "mysticalfire",
+    "num": 595,
+    "type": "Fire",
+    "category": "Special",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spa": -1
+      }
+    }
+  },
+  "Night Slash": {
+    "id": "nightslash",
+    "num": 400,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Nuzzle": {
+    "id": "nuzzle",
+    "num": 609,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 20,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "status": "par"
+    }
+  },
+  "Origin Pulse": {
+    "id": "originpulse",
+    "num": 618,
+    "type": "Water",
+    "category": "Special",
+    "power": 110,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "pulse": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Overdrive": {
+    "id": "overdrive",
+    "num": 786,
+    "type": "Electric",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "sound": 1,
+      "bypasssub": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Petal Blizzard": {
+    "id": "petalblizzard",
+    "num": 572,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "wind": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Play Rough": {
+    "id": "playrough",
+    "num": 583,
+    "type": "Fairy",
+    "category": "Physical",
+    "power": 90,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "boosts": {
+        "atk": -1
+      }
+    }
+  },
+  "Poison Fang": {
+    "id": "poisonfang",
+    "num": 305,
+    "type": "Poison",
+    "category": "Physical",
+    "power": 50,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bite": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 50,
+      "status": "tox"
+    }
+  },
+  "Poison Jab": {
+    "id": "poisonjab",
+    "num": 398,
+    "type": "Poison",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "psn"
+    }
+  },
+  "Pounce": {
+    "id": "pounce",
+    "num": 884,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 50,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spe": -1
+      }
+    }
+  },
+  "Power Gem": {
+    "id": "powergem",
+    "num": 408,
+    "type": "Rock",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Power Whip": {
+    "id": "powerwhip",
+    "num": 438,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Precipice Blades": {
+    "id": "precipiceblades",
+    "num": 619,
+    "type": "Ground",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "nonsky": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Psychic": {
+    "id": "psychic",
+    "num": 94,
+    "type": "Psychic",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "boosts": {
+        "spd": -1
+      }
+    }
+  },
+  "Psycho Boost": {
+    "id": "psychoboost",
+    "num": 354,
+    "type": "Psychic",
+    "category": "Special",
+    "power": 140,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "spa": -2
+      }
+    }
+  },
+  "Psycho Cut": {
+    "id": "psychocut",
+    "num": 427,
+    "type": "Psychic",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Quiver Dance": {
+    "id": "quiverdance",
+    "num": 483,
+    "type": "Bug",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "dance": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "spa": 1,
+      "spd": 1,
+      "spe": 1
+    }
+  },
+  "Razor Shell": {
+    "id": "razorshell",
+    "num": 534,
+    "type": "Water",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 50,
+      "boosts": {
+        "def": -1
+      }
+    }
+  },
+  "Rock Polish": {
+    "id": "rockpolish",
+    "num": 397,
+    "type": "Rock",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "spe": 2
+    }
+  },
+  "Rock Tomb": {
+    "id": "rocktomb",
+    "num": 317,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 60,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spe": -1
+      }
+    }
+  },
+  "Sacred Fire": {
+    "id": "sacredfire",
+    "num": 221,
+    "type": "Fire",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "defrost": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 50,
+      "status": "brn"
+    }
+  },
+  "Scald": {
+    "id": "scald",
+    "num": 503,
+    "type": "Water",
+    "category": "Special",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "defrost": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "brn"
+    }
+  },
+  "Scorching Sands": {
+    "id": "scorchingsands",
+    "num": 815,
+    "type": "Ground",
+    "category": "Special",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "defrost": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "brn"
+    }
+  },
+  "Seed Bomb": {
+    "id": "seedbomb",
+    "num": 402,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bullet": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Seed Flare": {
+    "id": "seedflare",
+    "num": 465,
+    "type": "Grass",
+    "category": "Special",
+    "power": 120,
+    "accuracy": 0.85,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 40,
+      "boosts": {
+        "spd": -2
+      }
+    }
+  },
+  "Shadow Claw": {
+    "id": "shadowclaw",
+    "num": 421,
+    "type": "Ghost",
+    "category": "Physical",
+    "power": 70,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Shell Smash": {
+    "id": "shellsmash",
+    "num": 504,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "def": -1,
+      "spd": -1,
+      "atk": 2,
+      "spa": 2,
+      "spe": 2
+    }
+  },
+  "Shift Gear": {
+    "id": "shiftgear",
+    "num": 508,
+    "type": "Steel",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "spe": 2,
+      "atk": 1
+    }
+  },
+  "Slack Off": {
+    "id": "slackoff",
+    "num": 303,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "heal": [
+      1,
+      2
+    ]
+  },
+  "Sleep Powder": {
+    "id": "sleeppowder",
+    "num": 79,
+    "type": "Grass",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.75,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "reflectable": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "powder": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "status": "slp"
+  },
+  "Sludge Bomb": {
+    "id": "sludgebomb",
+    "num": 188,
+    "type": "Poison",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "bullet": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "psn"
+    }
+  },
+  "Sludge Wave": {
+    "id": "sludgewave",
+    "num": 482,
+    "type": "Poison",
+    "category": "Special",
+    "power": 95,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "psn"
+    }
+  },
+  "Soft-Boiled": {
+    "id": "softboiled",
+    "num": 135,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "heal": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "heal": [
+      1,
+      2
+    ]
+  },
+  "Spacial Rend": {
+    "id": "spacialrend",
+    "num": 460,
+    "type": "Dragon",
+    "category": "Special",
+    "power": 100,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Spirit Break": {
+    "id": "spiritbreak",
+    "num": 789,
+    "type": "Fairy",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 100,
+      "boosts": {
+        "spa": -1
+      }
+    }
+  },
+  "Steam Eruption": {
+    "id": "steameruption",
+    "num": 592,
+    "type": "Water",
+    "category": "Special",
+    "power": 110,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "defrost": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "status": "brn"
+    }
+  },
+  "Stone Edge": {
+    "id": "stoneedge",
+    "num": 444,
+    "type": "Rock",
+    "category": "Physical",
+    "power": 100,
+    "accuracy": 0.8,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 2,
+    "willCrit": false
+  },
+  "Strange Steam": {
+    "id": "strangesteam",
+    "num": 790,
+    "type": "Fairy",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 0.95,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "volatileStatus": "confusion"
+    }
+  },
+  "Stun Spore": {
+    "id": "stunspore",
+    "num": 78,
+    "type": "Grass",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 0.75,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 30,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "reflectable": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "powder": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "status": "par"
+  },
+  "Superpower": {
+    "id": "superpower",
+    "num": 276,
+    "type": "Fighting",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "self": {
+      "boosts": {
+        "atk": -1,
+        "def": -1
+      }
+    }
+  },
+  "Surf": {
+    "id": "surf",
+    "num": 57,
+    "type": "Water",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "nonsky": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Tail Glow": {
+    "id": "tailglow",
+    "num": 294,
+    "type": "Bug",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "spa": 3
+    }
+  },
+  "Thunder Punch": {
+    "id": "thunderpunch",
+    "num": 9,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "par"
+    }
+  },
+  "Thunderbolt": {
+    "id": "thunderbolt",
+    "num": 85,
+    "type": "Electric",
+    "category": "Special",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "par"
+    }
+  },
+  "Vacuum Wave": {
+    "id": "vacuumwave",
+    "num": 410,
+    "type": "Fighting",
+    "category": "Special",
+    "power": 40,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 1,
+    "pp": 30,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Victory Dance": {
+    "id": "victorydance",
+    "num": 837,
+    "type": "Fighting",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 10,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "dance": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "atk": 1,
+      "def": 1,
+      "spe": 1
+    }
+  },
+  "Volt Tackle": {
+    "id": "volttackle",
+    "num": 344,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 10,
+      "status": "par"
+    },
+    "recoil": [
+      33,
+      100
+    ]
+  },
+  "Water Pulse": {
+    "id": "waterpulse",
+    "num": 352,
+    "type": "Water",
+    "category": "Special",
+    "power": 60,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 20,
+    "contact": false,
+    "flags": {
+      "protect": 1,
+      "mirror": 1,
+      "distance": 1,
+      "metronome": 1,
+      "pulse": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "volatileStatus": "confusion"
+    }
+  },
+  "Waterfall": {
+    "id": "waterfall",
+    "num": 127,
+    "type": "Water",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Wave Crash": {
+    "id": "wavecrash",
+    "num": 834,
+    "type": "Water",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      33,
+      100
+    ]
+  },
+  "Wicked Blow": {
+    "id": "wickedblow",
+    "num": 817,
+    "type": "Dark",
+    "category": "Physical",
+    "power": 75,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 5,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "punch": 1
+    },
+    "critRatio": 1,
+    "willCrit": true
+  },
+  "Wild Charge": {
+    "id": "wildcharge",
+    "num": 528,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 90,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      1,
+      4
+    ]
+  },
+  "Wood Hammer": {
+    "id": "woodhammer",
+    "num": 452,
+    "type": "Grass",
+    "category": "Physical",
+    "power": 120,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "recoil": [
+      33,
+      100
+    ]
+  },
+  "Work Up": {
+    "id": "workup",
+    "num": 526,
+    "type": "Normal",
+    "category": "Status",
+    "power": 0,
+    "accuracy": 1,
+    "alwaysHit": true,
+    "priority": 0,
+    "pp": 30,
+    "contact": false,
+    "flags": {
+      "snatch": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "boosts": {
+      "atk": 1,
+      "spa": 1
+    }
+  },
+  "X-Scissor": {
+    "id": "xscissor",
+    "num": 404,
+    "type": "Bug",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1,
+      "slicing": 1
+    },
+    "critRatio": 1,
+    "willCrit": false
+  },
+  "Zen Headbutt": {
+    "id": "zenheadbutt",
+    "num": 428,
+    "type": "Psychic",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 0.9,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 20,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Zing Zap": {
+    "id": "zingzap",
+    "num": 716,
+    "type": "Electric",
+    "category": "Physical",
+    "power": 80,
+    "accuracy": 1,
+    "alwaysHit": false,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    },
+    "critRatio": 1,
+    "willCrit": false,
+    "secondary": {
+      "chance": 30,
+      "volatileStatus": "flinch"
+    }
+  },
+  "Tackle": {
+    "id": "tackle",
+    "num": 33,
+    "type": "Normal",
+    "category": "Physical",
+    "power": 40,
+    "accuracy": 1,
+    "priority": 0,
+    "pp": 35,
+    "contact": true,
+    "flags": {
+      "contact": 1,
+      "protect": 1,
+      "mirror": 1,
+      "metronome": 1
+    }
   }
 }

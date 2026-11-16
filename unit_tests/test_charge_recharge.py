@@ -90,6 +90,32 @@ def test_charge_interruption_and_switch_cleanup(neutral_type):
     assert cleared.volatile_status.charging_move_id[0, 0] == 0
 
 
+@pytest.mark.parametrize('disabled', [False, True])
+def test_shared_release_ignores_encore_and_selection_bookkeeping(neutral_type, disabled):
+    """A release finds its stored slot and checks Disable without paying again."""
+    key, state = neutral_type
+    state = equip_move(state, 'Calm Mind')
+    mon = state.active[0]
+    moves = jax.tree.map(lambda bank, move: bank.at[2].set(move), mon.moves, make_move('Electro Shot'))
+    state = update_active(state, 0, mon.replace(moves=moves))
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(
+        charging_move_id=v.charging_move_id.at[0, 0].set(905),
+        encore_turns=v.encore_turns.at[0, 0].set(2),
+        encore_move_id=v.encore_move_id.at[0, 0].set(347),
+        disable_turns=v.disable_turns.at[0, 0].set(2 if disabled else 0),
+        disabled_move_id=v.disabled_move_id.at[0, 0].set(905),
+        last_move_id=v.last_move_id.at[0, 0].set(905),
+        choice_lock=v.choice_lock.at[0, 0].set(2)))
+    _, out = step_action(key, state, continued(), 0)
+    assert jnp.array_equal(out.team.moves.current_pp, state.team.moves.current_pp)
+    assert out.volatile_status.last_move_id[0, 0] == 905
+    assert out.volatile_status.choice_lock[0, 0] == 2
+    assert out.volatile_status.charging_move_id[0, 0] == 0
+    assert out.boosts.normal_boosts[0, 3] == 0
+    assert (out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) != disabled
+
+
 def test_hyper_beam_recharge_precedes_status_checks(neutral_type):
     """A successful beam forces recharge without ticking sleep or confusion."""
     key, state = neutral_type

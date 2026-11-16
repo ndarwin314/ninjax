@@ -151,5 +151,73 @@
   ],
   "recorded_at": "2026-11-13T22:53:12.221757+00:00",
   "baseline": "compilation-components.json",
-  "change": "Common dispatcher after Sleep Talk slot selection; common hit pipeline after Explosion/Electro Shot preparation."
+  "change": "Common dispatcher after Sleep Talk slot selection; common hit pipeline after Explosion/Electro Shot preparation.",
+  "full_step_retry": {
+    "recorded_at": "2026-11-13T23:04:14.706728+00:00",
+    "status": "memory_limit",
+    "returncode": 137,
+    "phases": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0.0,
+        "peak_rss_mib": 519.8,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 8.886,
+        "peak_rss_mib": 628.0,
+        "equations": 68829,
+        "subgraphs": 653,
+        "primitives": {
+          "jit": 15831,
+          "add": 7565,
+          "lt": 5943,
+          "select_n": 5732,
+          "squeeze": 4038,
+          "broadcast_in_dim": 3830,
+          "reshape": 3586,
+          "convert_element_type": 2812,
+          "eq": 2684,
+          "and": 2422,
+          "mul": 1891,
+          "dynamic_slice": 1683
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 15.492,
+        "peak_rss_mib": 1287.1
+      },
+      {
+        "phase": "rss_limit_exceeded",
+        "peak_rss_mib": 4107.2,
+        "limit_mib": 4096
+      }
+    ],
+    "end_to_end": "Guarded pytest retry stopped before producing a completed test result; no compiled rollout is claimed."
+  },
+  "validation": {
+    "eager_mechanics_cases_passed": 48,
+    "compiled_sleep_talk_fixtures": [
+      "High Jump Kick",
+      "Explosion",
+      "Calm Mind",
+      "Rest",
+      "awake failure"
+    ],
+    "compiled_sleep_talk_test_seconds": 78.46,
+    "compiled_sleep_talk_peak_rss_mib": 2157.6
+  }
 }

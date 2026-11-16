@@ -32,13 +32,16 @@ SLEEP_IMMUNE_ABILITIES = jnp.array([AbilityEnum.PURIFYING_SALT, AbilityEnum.INSO
 
 
 def is_floating(mon):
-    """Check Flying type and effective Levitate before field grounding effects."""
-    return mon.is_type(Type.FLYING) | (mon.ability == AbilityEnum.LEVITATE)
+    """Check Flying type, effective Levitate and Air Balloon before grounding."""
+    from ninjax.enum_types import ItemEnum
+    return mon.is_type(Type.FLYING) | (mon.ability == AbilityEnum.LEVITATE) | (mon.item == ItemEnum.AIR_BALLOON)
 
 
 def is_sand_immune(mon):
     """Check represented type and effective ability immunities to sandstorm."""
-    return triple_or(mon.is_type(Type.STEEL), mon.is_type(Type.GROUND), mon.is_type(Type.ROCK)) | (mon.ability == AbilityEnum.SAND_FORCE)
+    return (triple_or(mon.is_type(Type.STEEL), mon.is_type(Type.GROUND), mon.is_type(Type.ROCK)) |
+            (mon.ability == AbilityEnum.SAND_FORCE) | (mon.ability == AbilityEnum.SAND_RUSH) |
+            (mon.ability == AbilityEnum.OVERCOAT))
 
 
 def is_powder_immune(mon):
@@ -52,12 +55,13 @@ def is_immune_to_move(mon, move, gravity_active=False):
                       (mon.type_list == Type.FLYING), Type.NONE, mon.type_list)
     checks_type = (move.move_type != MoveType.STATUS) | (move.identifier == 86)
     type_immunity = (calculate_effectiveness_multiplier(move.type, types) == 0) & checks_type
-    levitate = (mon.ability == AbilityEnum.LEVITATE) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active) & checks_type
+    from ninjax.enum_types import ItemEnum
+    levitate = ((mon.ability == AbilityEnum.LEVITATE) | (mon.item == ItemEnum.AIR_BALLOON)) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active) & checks_type
     return jnp.any(jnp.stack(jnp.broadcast_arrays(
         is_powder_immune(mon) & move.powder,
         (mon.ability == AbilityEnum.SOUNDPROOF) & move.sound,
         (mon.ability == AbilityEnum.BULLET_PROOF) & move.bullet,
-        (mon.ability == AbilityEnum.GOOD_AS_GOLD) & (move.move_type == MoveType.STATUS),
+        (mon.ability == AbilityEnum.GOOD_AS_GOLD) & (move.move_type == MoveType.STATUS) & (move.hazard_effect == 0) & ~move.target_self,
         type_immunity, levitate)))
 
 
@@ -76,7 +80,8 @@ def apply_confusion(key, state, player):
         duration = random.randint(subkey, (), 2, 6)
         v = state.volatile_status
         state = state.replace(volatile_status=v.replace(confusion_turns=v.confusion_turns.at[player, 0].set(duration)))
-        return key, emit(state, EventKind.CONDITION, player, detail=12, before=0, after=1)
+        from ninjax.held_effects import status_berry
+        return key, status_berry(emit(state, EventKind.CONDITION, player, detail=12, before=0, after=1), player)
     return jax.lax.cond(blocked, lambda x: x, apply, (key, state))
 
 
@@ -310,9 +315,10 @@ class BattleState(struct.PyTreeNode):
         immune |= (status == Status.PARALYZE) & (mon.is_type(Type.ELECTRIC) | jnp.any(PARALYSIS_IMMUNE_ABILITIES == ability))
         immune |= (status == Status.BURN) & (mon.is_type(Type.FIRE) | jnp.any(BURN_IMMUNE_ABILITIES == ability))
         immune |= (status == Status.FREEZE) & (mon.is_type(Type.ICE) | jnp.any(FREEZE_IMMUNE_ABILITIES == ability) |
-                                                (effective_weather(self) == WeatherEnum.SUN))
+                                                (effective_weather(self.weather.weather, self.ability, self.active.current_hp) == WeatherEnum.SUN))
         immune |= (status == Status.SLEEP) & jnp.any(SLEEP_IMMUNE_ABILITIES == ability)
-        grounded = (~(mon.is_type(Type.FLYING) | (ability == AbilityEnum.LEVITATE))) | (self.gravity_duration > 0)
+        immune |= (ability == AbilityEnum.LEAF_GUARD) & (effective_weather(self.weather.weather, self.ability, self.active.current_hp) == WeatherEnum.SUN)
+        grounded = ~is_floating(mon) | (self.gravity_duration > 0)
         immune |= grounded & ((self.terrain.terrain == TerrainEnum.MISTY) |
                               ((self.terrain.terrain == TerrainEnum.ELECTRIC) & (status == Status.SLEEP)))
         return immune | (ability == AbilityEnum.COMATOSE)
@@ -346,56 +352,15 @@ class BattleState(struct.PyTreeNode):
         # squeeze removes dimensions with length 1 which makes this broadcast correctly
         # its probably going to be helpful to use this in other places
 
-        # marvel scale
+        # Marvel Scale changes the displayed defensive stat; the damage path
+        # applies its own defensive-stat modifiers separately.
         temp = conditional_mult_round(stats[...,StatEnum.DEFENSE], 1.5,
                                       jnp.logical_and(ability==AbilityEnum.MARVEL_SCALE, active.has_status).squeeze())
         stats = stats.at[..., StatEnum.DEFENSE].set(temp)
 
-        # surge surfer
-        terrain = self.terrain.terrain
-        is_surge_surfer = jnp.logical_and(
-            ability==AbilityEnum.SURGE_SURFER,
-            terrain==TerrainEnum.ELECTRIC).squeeze()
-
-        # speed boosting weather abilities
-        weather = self.weather.weather
-        is_chlorophyll  = jnp.logical_and(
-            ability==AbilityEnum.CHLOROPHYLL,
-            weather==WeatherEnum.SUN).squeeze()
-        is_swift_swim = jnp.logical_and(
-            ability == AbilityEnum.SWIFT_SWIM,
-            weather == WeatherEnum.RAIN).squeeze()
-        is_slush_rush = jnp.logical_and(
-            ability == AbilityEnum.SLUSH_RUSH,
-            weather == WeatherEnum.SNOW).squeeze()
-        is_sand_rush = jnp.logical_and(
-            ability == AbilityEnum.SAND_RUSH,
-            weather == WeatherEnum.SANDSTORM).squeeze()
-        # Reduce over ability predicates, preserving the player axis so one
-        # Pokémon's weather ability cannot affect its opponent's speed.
-        arr = jnp.array([is_chlorophyll, is_slush_rush, is_sand_rush, is_swift_swim, is_surge_surfer])
-        temp = conditional_mult_round(
-            stats[..., StatEnum.SPEED],
-            2,
-            jnp.any(arr, axis=0))
-
-
-        # paralyzed
-        is_paralyzed = (status==Status.PARALYZE).squeeze()
-        # quick feet
-        is_quick_feet = jnp.logical_and(ability==AbilityEnum.QUICK_FEET, active.has_status).squeeze()
-        temp = conditional_mult_round(temp, 1.5, is_quick_feet)
-        # apply paralyze speed drop if paralyzed and not quick feet
-        temp = conditional_mult_round(temp, 0.5, jnp.logical_and(is_paralyzed, 1-is_quick_feet))
-
-        stats = stats.at[..., StatEnum.SPEED].set(temp)
-
-
         from ninjax.held_effects import modify_stats
         stats = jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
-        # Tailwind modifies stage-adjusted Speed; applying it before stages
-        # loses Scarlet/Violet's intermediate rounding on odd Speed values.
-        stats = stats.at[..., StatEnum.SPEED].multiply(jnp.where(self.tailwind[:, 0] > 0, 2, 1))
+        # Chain Speed ability/item/field modifiers after stage rounding.
         return jax.vmap(lambda i, values: modify_stats(self, i, values))(jnp.arange(2), stats)
 
     @property
@@ -418,16 +383,25 @@ class BattleState(struct.PyTreeNode):
         return [self.team[j].is_alive * (j != self.active_index) for j in range(6)]
 
 
+def _record_boost(stat, carry):
+    """Record a changed stage while carrying loop-invariant event values."""
+    state, old, new, side_idx = carry
+    a, b = old[stat], new[stat]
+    return emit(state, EventKind.BOOST, side_idx, stat, a, b, enabled=a != b), old, new, side_idx
+
+
+def _unchanged_boost_state(state, *unused):
+    """Keep state unchanged when a conditional boost does not apply."""
+    return state
+
+
 def set_boosts(state: BattleState, side_idx, new_boosts):
     """Replace one side's stat-stage record and return the updated state."""
     old = jnp.concatenate((state.boosts.normal_boosts[side_idx], state.boosts.acc_boosts[side_idx]))
     new_boosts = state.boosts.replace_row(side_idx, new_boosts)
     state = state.replace(boosts=new_boosts)
     new = jnp.concatenate((new_boosts.normal_boosts[side_idx], new_boosts.acc_boosts[side_idx]))
-    def record(stat, state):
-        a, b = old[stat], new[stat]
-        return emit(state, EventKind.BOOST, side_idx, stat, a, b, enabled=a != b)
-    return jax.lax.fori_loop(0, 8, record, state)
+    return jax.lax.fori_loop(0, 8, _record_boost, (state, old, new, side_idx))[0]
 
 
 def clear_boosts(state: BattleState, side_idx) -> BattleState:
@@ -450,44 +424,35 @@ def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
 
 def reduce_boosts(state: BattleState, side_idx, idx, val, bounceable=False) -> BattleState:
-    """Apply the currently implemented stage-reduction and ability handling.
+    """Apply an opposing normal-stat drop and react only to actual reductions.
 
-    Clear Body, Defiant, and Competitive handling is incomplete; in particular,
-    the caller's source and ``bounceable`` are not yet used to distinguish all
-    opposing and self-inflicted reductions.
+    Self-inflicted drops use ``add_boosts`` instead. Mirror Armor reflection
+    and arbitrary source-sensitive ability interactions remain unrepresented.
     """
     ability = state.ability
     not_clear_body = (ability[side_idx]!=AbilityEnum.CLEAR_BODY)[0]
-    # TODO: this doesn't account for the functionality of idx being an array
-    # in which case it should apply len(idx) times but that is hard to implement in JAX
-    is_defiant = ability[side_idx]==AbilityEnum.DEFIANT
-    is_competitive = ability[side_idx]==AbilityEnum.COMPETITIVE
-    state = jax.lax.cond(is_defiant.reshape(()),
-                 add_boosts,
-                 lambda b, s, i, v: b,
-                 state, side_idx, StatEnum.ATTACK, 2)
-    state = jax.lax.cond(is_competitive.reshape(()),
-                 add_boosts,
-                 lambda b, s, i, v: b,
-                 state, side_idx, StatEnum.SPECIAL_ATTACK, 2)
-    return add_boosts(state, side_idx, idx, -val * not_clear_body)
+    not_clear_body = not_clear_body & ~((ability[side_idx, 0] == AbilityEnum.BIG_PECKS) & (jnp.asarray(idx) == StatEnum.DEFENSE))
+    old = state.boosts.normal_boosts[side_idx]
+    state = add_boosts(state, side_idx, idx, -val * not_clear_body)
+    from ninjax.ability_effects import opposing_drop_response
+    return opposing_drop_response(state, side_idx, jnp.sum(state.boosts.normal_boosts[side_idx] < old))
 
 def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):
     """Set stages when the scalar JAX predicate ``cond`` is true."""
     return jax.lax.cond(jnp.asarray(cond).reshape(()), set_boosts,
-                        lambda state, side_idx, new_boosts: state,
+                        _unchanged_boost_state,
                         state, side_idx, new_boosts)
 
 def conditional_add_boosts(state: BattleState, side_idx, cond, idx, val) -> BattleState:
     """Add stages when the scalar JAX predicate ``cond`` is true."""
     return jax.lax.cond(jnp.asarray(cond).reshape(()), add_boosts,
-                        lambda state, side_idx, idx, val: state,
+                        _unchanged_boost_state,
                         state, side_idx, idx, val)
 
 def conditional_reduce_boosts(state: BattleState, side_idx, cond, idx, val, bounceable) -> BattleState:
     """Reduce stages when the scalar JAX predicate ``cond`` is true."""
     return jax.lax.cond(jnp.asarray(cond).reshape(()), reduce_boosts,
-                        lambda state, side_idx, idx, val, bounceable: state,
+                        _unchanged_boost_state,
                         state, side_idx, idx, val, bounceable)
 
 # Reuse this update graph across hit, item, and status branches during tracing.
@@ -570,21 +535,29 @@ def status_helper(key, active, status: Status):
 
 
 
-def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status) -> Tuple[chex.PRNGKey, BattleState]:
+def _unchanged_status(key, active, status):
+    """Preserve key and Pokémon when a status attempt is blocked."""
+    return key, active
+
+
+def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, activate_items=True) -> Tuple[chex.PRNGKey, BattleState]:
     """Attempt a major status, returning the key and updated battle state.
 
     Existing status, represented terrain/type/ability immunities, and a NONE status
-    prevent the update. A key is consumed only when ``status_helper`` runs.
+    prevent the update. Rest delays item activation until its healing completes.
+    A key is consumed only when ``status_helper`` runs.
     """
     active = state.active[side_idx]
     already_statused = active.status != Status.NONE
     is_immune = state.is_status_immune(side_idx, status)
     key, active = jax.lax.cond(
-        triple_or(already_statused, is_immune, status==Status.NONE)[0],
-        lambda k, a, s: (k, a),
+        (triple_or(already_statused, is_immune, status==Status.NONE) | (active.current_hp <= 0))[0],
+        _unchanged_status,
         status_helper,
         key, active, status)
-    return key, update_active_fields(state, side_idx, status=active.status, sleep_counter=active.sleep_counter)
+    state = update_active_fields(state, side_idx, status=active.status, sleep_counter=active.sleep_counter)
+    from ninjax.held_effects import status_berry
+    return key, jax.lax.cond(jnp.asarray(activate_items), lambda s: status_berry(s, side_idx), lambda s: s, state)
 
 # Damage is invoked by many residual/contact branches. Outlining the shared
 # operation avoids retracing its complete ability/item/event graph at each call.
@@ -599,6 +572,16 @@ def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_a
     their source side explicitly for deferred faint effects.
     """
     return _take_damage_value(state, defender_idx, damage, is_attack_damage, True, fixed_damage, source)
+
+def _innards_response(state, player, damage):
+    """Apply Innards Out once without recursively invoking the same ability."""
+    return _take_damage_value(state, player, damage, False, False)
+
+
+def _unchanged_damage_state(state, player, damage):
+    """Preserve state when Innards Out does not trigger."""
+    return state
+
 
 def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_innards, fixed_damage=False, source=-1):
     """Implement HP updates; optionally allow a single Innards Out response."""
@@ -659,8 +642,8 @@ def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_inna
     if allow_innards:
         state = jax.lax.cond(
             is_innards_out[0],
-            lambda b, i, d: _take_damage_value(b, i, d, False, False),
-            lambda b, i, d: b,
+            _innards_response,
+            _unchanged_damage_state,
             state, 1-defender_idx, old_health
         )
     # TODO: consider making separate functions for take damage value and take damage from attack

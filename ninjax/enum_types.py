@@ -119,6 +119,8 @@ class MoveFlags(IntFlag):
     POWDER = auto()
     DEFROST = auto()
     BYPASS_SUBSTITUTE = auto()
+    SLICING = auto()
+    WIND = auto()
 
     def __eq__(self, other):
         return jnp.equal(self, other)
@@ -416,6 +418,7 @@ class AbilityEnum(JaxEnum):
     VITAL_SPIRIT = auto()
     TERA_SHIFT = auto()
     INFILTRATOR = auto()
+    HEATPROOF = auto()
 
 
 
@@ -445,3 +448,17 @@ class ItemEnum(JaxEnum):
     KINGS_ROCK = auto()
     PROTECTIVE_PADS = auto()
     ABSORB_BULB = auto()
+    CHOICE_SCARF = auto()
+    WIDE_LENS = auto()
+    EXPERT_BELT = auto()
+    LIGHT_BALL = auto()
+    MAGNET = auto()
+    SILK_SCARF = auto()
+    SOUL_DEW = auto()
+    LUSTROUS_ORB = auto()
+    CHESTO_BERRY = auto()
+    LUM_BERRY = auto()
+    FLAME_ORB = auto()
+    TOXIC_ORB = auto()
+    WHITE_HERB = auto()
+    AIR_BALLOON = auto()

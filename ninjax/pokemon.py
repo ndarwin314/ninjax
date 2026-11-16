@@ -36,6 +36,9 @@ class Pokemon(ArrayTree):
 
     def __post_init__(self):
         """Broadcast Pokémon features across its entity axes."""
+        from ninjax.tree import is_tree_placeholder
+        if is_tree_placeholder(self.type_list):
+            return
         batch = jnp.shape(self.type_list)[:-1]
         object.__setattr__(self, 'type_list', jnp.asarray(self.type_list, jnp.int32))
         object.__setattr__(self, 'base_types', jnp.asarray(self.type_list if self.base_types is None else self.base_types, jnp.int32))
@@ -79,7 +82,8 @@ class Pokemon(ArrayTree):
 
     @property
     def is_poisoned(self):
-        return jnp.logical_and(self.status==Status.POISON, self.status==Status.TOXIC)
+        """Recognize either ordinary poison or escalating toxic poison."""
+        return (self.status == Status.POISON) | (self.status == Status.TOXIC)
 
     @property
     def level(self):

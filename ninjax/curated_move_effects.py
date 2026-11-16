@@ -21,7 +21,7 @@ def direct_status_move(key, state, player, move):
         # Reuse terrain and ability sleep checks, but allow Rest to replace a
         # burn/poison/paralysis. Failed sleep attempts restore the original state.
         candidate = update_active_fields(s, player, status=jnp.zeros_like(mon.status))
-        key, candidate = set_status(key, candidate, player, jnp.array([Status.SLEEP]))
+        key, candidate = set_status(key, candidate, player, jnp.array([Status.SLEEP]), activate_items=False)
         success = eligible & (candidate.active.status[player, 0] == Status.SLEEP)
         def heal(c):
             """Use the existing sleep counter's decrement-before-action convention."""
@@ -29,7 +29,8 @@ def direct_status_move(key, state, player, move):
             c = update_active_fields(c, player, sleep_counter=jnp.array([3]))
             c = c.replace(toxic_counter=c.toxic_counter.at[player].set(0))
             c = emit(c, EventKind.STATUS, player, before=mon.status[0], after=Status.SLEEP)
-            return take_damage_value(c, player, -mon.max_hp, False)
+            from ninjax.held_effects import status_berry
+            return status_berry(take_damage_value(c, player, -mon.max_hp, False), player)
         result = jax.lax.cond(success, heal, lambda _: s, candidate)
         # Rest's failure needs an explicit move outcome for Stomping Tantrum.
         from ninjax.game_logic import record_hit
@@ -57,45 +58,77 @@ def direct_status_move(key, state, player, move):
     return jax.lax.cond(move.identifier[0] == 156, rest, split, (key, state))
 
 
+def _unchanged_stages(state, player, stat, amount, opposing):
+    """Keep state unchanged for an unused stage-vector entry."""
+    return state
+
+
+def _reduce_stage(state, player, stat, amount, opposing):
+    """Invoke opposing-drop hooks for a normal stat."""
+    return reduce_boosts(state, player, stat, -amount)
+
+
+def _add_stage(state, player, stat, amount, opposing):
+    """Apply a normal stat increase or self-inflicted decrease."""
+    return add_boosts(state, player, stat, amount)
+
+
+def _ordinary_stage(state, player, stat, amount, opposing):
+    """Route normal stages through the existing ability hooks."""
+    return jax.lax.cond((amount < 0) & opposing, _reduce_stage, _add_stage,
+                        state, player, stat, amount, opposing)
+
+
+def _accuracy_stage(state, player, stat, amount, opposing):
+    """Apply accuracy/evasion stages in their separate two-column array."""
+    from ninjax.side import set_boosts
+    from ninjax.stats import StatBoosts
+    delta = amount * jnp.where(state.ability[player, 0] == A.CONTRARY, -1, 1)
+    immune = (state.ability[player, 0] == A.CLEAR_BODY) | ((state.ability[player, 0] == A.KEEN_EYE) & (stat == 6))
+    delta = jnp.where(opposing & (amount < 0) & immune, 0, delta)
+    old = state.boosts.acc_boosts[player]
+    state = set_boosts(state, player, StatBoosts(normal_boosts=state.boosts.normal_boosts[player],
+        acc_boosts=state.boosts.acc_boosts[player].at[stat-6].add(delta)))
+    from ninjax.ability_effects import opposing_drop_response
+    lowered = opposing & jnp.any(state.boosts.acc_boosts[player] < old)
+    return opposing_drop_response(state, player, lowered.astype(jnp.int32))
+
+
+def _valid_stage(state, player, stat, amount, opposing):
+    """Select the normal-stat or accuracy/evasion handler."""
+    return jax.lax.cond(stat <= 5, _ordinary_stage, _accuracy_stage,
+                        state, player, stat, amount, opposing)
+
+
 def stages(state, player, stat, amount, opposing=False):
     """Apply one stat change, invoking opposing-drop abilities only on drops."""
-    def ordinary(s):
-        """Apply an Attack through Speed change using the existing hooks."""
-        return jax.lax.cond((amount < 0) & opposing,
-            lambda s: reduce_boosts(s, player, stat, -amount),
-            lambda s: add_boosts(s, player, stat, amount), s)
-    def accuracy(s):
-        """Apply accuracy/evasion stages in their separate two-column array."""
-        from ninjax.side import set_boosts
-        from ninjax.stats import StatBoosts
-        delta = amount * jnp.where(s.ability[player, 0] == A.CONTRARY, -1, 1)
-        delta = jnp.where(opposing & (amount < 0) & (s.ability[player, 0] == A.CLEAR_BODY), 0, delta)
-        return set_boosts(s, player, StatBoosts(normal_boosts=s.boosts.normal_boosts[player],
-            acc_boosts=s.boosts.acc_boosts[player].at[stat-6].add(delta)))
     return jax.lax.cond((amount != 0) & (stat >= 1) & (stat <= 7),
-        lambda s: jax.lax.cond(stat <= 5, ordinary, accuracy, s), lambda s: s, state)
+                        _valid_stage, _unchanged_stages, state, player, stat, amount, opposing)
 
 
 def stat_changes(state, player, indices, amounts, opposing=False):
     """Apply a padded stat-change vector sequentially in a fixed JAX scan."""
-    def apply(s, change):
-        """Consume one stat index and its matching stage increment."""
-        return stages(s, player, change[0], change[1], opposing), None
-    return jax.lax.scan(apply, state, (indices, amounts))[0]
+    return jax.lax.scan(_apply_stat_change, (state, player, opposing), (indices, amounts))[0][0]
+
+
+def _apply_stat_change(carry, change):
+    """Consume one index/stage pair while retaining the player and source."""
+    state, player, opposing = carry
+    return (stages(state, player, change[0], change[1], opposing), player, opposing), None
 
 
 def move_overrides(state, player, move):
     """Resolve represented move power, typing and grounded terrain priority."""
     mon = state.effective_active[player]
     ident = move.identifier
-    weather = effective_weather(state)
+    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
     grounded = state.is_grounded(player)
     power = jnp.where((ident == 512) & (mon.item == I.NONE), 110, move.base_power)
     from ninjax.enum_types import MoveResult
     power = jnp.where((ident == 707) & (state.volatile_status.previous_move_result[player] == MoveResult.FAILED), power * 2, power)
     from ninjax.held_effects import item_transfer_allowed, conditional_mult_round
     target_item = state.active.item[1-player, 0]
-    knock_boost = (ident == 282) & (target_item != I.NONE) & item_transfer_allowed(state, 1-player, target_item)
+    knock_boost = (ident == 282) & (target_item != I.NONE) & item_transfer_allowed(state.active.species[1-player, 0], state.active.form[1-player, 0], target_item)
     power = conditional_mult_round(power, 1.5, knock_boost)
     positive = jnp.sum(jnp.maximum(state.boosts.normal_boosts[player, 1:], 0)) + jnp.sum(jnp.maximum(state.boosts.acc_boosts[player], 0))
     power = jnp.where(ident == 500, 20 + 20 * positive, power)
@@ -131,6 +164,35 @@ def move_overrides(state, player, move):
     return move.replace(base_power=power, type=move_type, priority=priority)
 
 
+def _unchanged_secondary(key, state, *unused):
+    """Keep both explicit key and state when a secondary is skipped."""
+    return key, state
+
+
+def _secondary_status(key, state, target, move):
+    """Apply the move's represented major-status secondary."""
+    return set_status(key, state, target, move.secondary_status)
+
+
+def _secondary_confusion(key, state, target, move):
+    """Apply the move's represented confusion secondary."""
+    from ninjax.side import apply_confusion
+    return apply_confusion(key, state, target)
+
+
+def _apply_secondary(key, state, player, move, ability):
+    """Apply a successful secondary in status, confusion, stat and flinch order."""
+    target = 1-player
+    key, state = jax.lax.cond(move.secondary_status[0] != 0,
+        _secondary_status, _unchanged_secondary, key, state, target, move)
+    key, state = jax.lax.cond(move.secondary_confusion[0],
+        _secondary_confusion, _unchanged_secondary, key, state, target, move)
+    state = stat_changes(state, target, move.secondary_stat, move.secondary_stages, True)
+    v = state.volatile_status
+    flinch = move.secondary_flinch[0] & (ability != A.INNER_FOCUS)
+    return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
+
+
 def secondary_effects(key, state, player, move):
     """Roll one supported secondary effect, respecting Shield Dust and survival."""
     key, roll_key = jax.random.split(key)
@@ -138,18 +200,8 @@ def secondary_effects(key, state, player, move):
     ability = state.ability[target, 0]
     chance = move.secondary_chance[0] * jnp.where(state.ability[player, 0] == A.SERENE_GRACE, 2., 1.)
     triggered = (jax.random.uniform(roll_key) < chance) & (ability != A.SHIELD_DUST) & (state.active.current_hp[target, 0] > 0)
-    def apply(args):
-        key, state = args
-        key, state = jax.lax.cond(move.secondary_status[0] != 0,
-            lambda args: set_status(args[0], args[1], target, move.secondary_status), lambda args: args, (key, state))
-        from ninjax.side import apply_confusion
-        key, state = jax.lax.cond(move.secondary_confusion[0],
-            lambda args: apply_confusion(args[0], args[1], target), lambda args: args, (key, state))
-        state = stat_changes(state, target, move.secondary_stat, move.secondary_stages, True)
-        v = state.volatile_status
-        flinch = move.secondary_flinch[0] & (ability != A.INNER_FOCUS)
-        return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
-    key, state = jax.lax.cond(triggered, apply, lambda args: args, (key, state))
+    key, state = jax.lax.cond(triggered, _apply_secondary, _unchanged_secondary,
+                              key, state, player, move, ability)
     from ninjax.held_effects import kings_rock_flinch
     return kings_rock_flinch(key, state, player, move)
 
@@ -176,13 +228,16 @@ def after_damage(state, player, move):
 def field_status(state, player, move):
     """Set screens and timers, swap side conditions, or clear stages field-wide."""
     ident = move.identifier[0]
+    old_tailwind = state.tailwind[player, 0]
     duration = jnp.where(state.active.item[player, 0] == I.LIGHT_CLAY, 8, 5)
     for name, enabled in [('light_screen', ident == 113),
-                          ('aurora_veil', (ident == 694) & (effective_weather(state) == W.SNOW)),
+                          ('aurora_veil', (ident == 694) & (effective_weather(state.weather.weather, state.ability, state.active.current_hp) == W.SNOW)),
                           ('tailwind', ident == 366)]:
         current = getattr(state, name)
         value = jnp.where(enabled & (current[player, 0] == 0), jnp.where(ident == 366, 4, duration), current[player, 0])
         state = state.replace(**{name: current.at[player, 0].set(value)})
+    state = jax.lax.cond((old_tailwind == 0) & (state.tailwind[player, 0] > 0) & (state.ability[player, 0] == A.WIND_RIDER),
+        lambda s: add_boosts(s, player, 1, 1), lambda s: s, state)
     state = state.replace(trick_room_duration=jnp.where(ident == 433, jnp.where(state.trick_room_duration > 0, 0, 5), state.trick_room_duration))
     state = jax.lax.cond(ident == 114, lambda s: clear_boosts(clear_boosts(s, 0), 1), lambda s: s, state)
     def defog(s):

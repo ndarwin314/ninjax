@@ -22,7 +22,7 @@ def test_worry_seed_wakes_and_reveals_until_switch(neutral_type):
     _, out = move_hits(key, state, 0, 0)
     assert out.ability[1, 0] == A.INSOMNIA and out.team.ability[1, 0, 0] == A.CLOUD_NINE
     assert out.active.status[1, 0] == Status.NONE and out.active.sleep_counter[1, 0] == 0
-    assert effective_weather(out) == W.SUN
+    assert effective_weather(out.weather.weather, out.ability, out.active.current_hp) == W.SUN
     assert out.known_abilities[1, 0] == A.INSOMNIA
     env = Battle(teams=state.team, params=BattleParams(information_mode=InformationMode.HIDDEN))
     episode, _ = env.reset(key)

@@ -1,0 +1,2 @@
+# Optional tools for profiling JAX/XLA compilation and execution.
+xprof

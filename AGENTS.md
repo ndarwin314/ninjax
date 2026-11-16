@@ -17,7 +17,6 @@
 - Add docstrings to functions you modify or create
 - Add comments to code in difficult to understand locations
 - Add comments to explain what mechanic different parts of the code are implementing
-- Skip compiled steps unless requested or major changes have been made
 
 ## Workflow
 - Inspect existing code before making changes.
@@ -25,6 +24,15 @@
 - Run relevant tests after modifying code.
 - Do not add dependencies without approval.
 - Do not modify unrelated files.
+- Enable JAX's persistent compilation cache for ordinary test runs.
+  Use <project-root>/.profiling/jax-cache.
+- Explicitly disable persistent compilation caching for compilation
+  benchmarks, including benchmarks launched through pytest.
+- Run compilation benchmarks in fresh processes and record the cache
+  setting alongside timing and memory results.
+- Use --jax-explain-cache-misses on pytest or tools/profile_compile.py when
+  diagnosing cache misses; retain the log with benchmark results.
+- Use persistent cache for mechanic tests
 
 ## Initial environment contract
 - Battle format: Singles and doubles 6 pokemon per team.

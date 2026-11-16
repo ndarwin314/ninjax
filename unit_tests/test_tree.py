@@ -5,6 +5,16 @@ import pytest
 
 from ninjax.prototype import make_move
 from ninjax.tree import stack
+from unit_tests.test_battle import neutral_type
+
+
+def test_tree_reconstruction_preserves_diagnostic_placeholders(neutral_type):
+    """JAX cache diagnostics can reconstruct state with opaque metadata leaves."""
+    _, state = neutral_type
+    leaves, definition = jax.tree.flatten(state)
+    placeholder = object()
+    rebuilt = jax.tree.unflatten(definition, [placeholder] * len(leaves))
+    assert all(value is placeholder for value in jax.tree.leaves(rebuilt))
 
 
 @pytest.mark.jit

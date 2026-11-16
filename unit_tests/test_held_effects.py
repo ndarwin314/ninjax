@@ -46,7 +46,7 @@ def test_cloud_nine_suppresses_without_erasing_weather(neutral_type):
     _, state = neutral_type
     state = state.replace(weather=Weather(W.SUN, 5), team=state.team.replace(
         ability=state.team.ability.at[0, 0, 0].set(A.CLOUD_NINE)))
-    assert jax.jit(effective_weather)(state) == W.NONE
+    assert jax.jit(effective_weather)(state.weather.weather, state.ability, state.active.current_hp) == W.NONE
     assert state.weather.weather == W.SUN
 
 

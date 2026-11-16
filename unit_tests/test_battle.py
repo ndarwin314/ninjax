@@ -112,6 +112,22 @@ def test_team_selection_and_visibility(neutral_type):
     assert jnp.all(ts.observation.team["stats"][0, 1] == 0)
 
 
+@pytest.mark.jit
+def test_compiled_struggle_matches_eager(neutral_type):
+    """Compare forced Struggle, including its key, events, PP and recoil."""
+    from ninjax.battle import step_action
+    import numpy as np
+    key, state = neutral_type
+    with jax.disable_jit():
+        expected = step_action(key, state, jnp.int32(4), jnp.int32(0))
+    actual = jax.jit(step_action)(key, state, jnp.int32(4), jnp.int32(0))
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected)):
+        if hasattr(a, 'dtype') and jax.dtypes.issubdtype(a.dtype, jax.dtypes.prng_key):
+            a, b = jax.random.key_data(a), jax.random.key_data(b)
+        np.testing.assert_allclose(a, b, rtol=1e-5, atol=1e-5)
+    np.testing.assert_array_equal(actual[1].team.moves.current_pp, state.team.moves.current_pp)
+
+
 def test_forced_struggle_and_knockout_outcomes(neutral_type):
     key, original = neutral_type
     moves = original.team.moves
@@ -144,8 +160,8 @@ def test_generic_move_effects(neutral_type):
     moves = original.team.moves
     configured = moves.replace(move_type=jnp.full_like(moves.move_type, MoveType.STATUS),
         status_effect=jnp.full_like(moves.status_effect, Status.BURN),
-        boost_stat=jnp.full_like(moves.boost_stat, StatEnum.ATTACK),
-        boost_stages=jnp.full_like(moves.boost_stages, -1),
+        boost_stat=jnp.full_like(moves.boost_stat, -1).at[..., 0].set(StatEnum.ATTACK),
+        boost_stages=jnp.zeros_like(moves.boost_stages).at[..., 0].set(-1),
         weather_effect=jnp.full_like(moves.weather_effect, WeatherEnum.RAIN),
         terrain_effect=jnp.full_like(moves.terrain_effect, TerrainEnum.GRASSY),
         hazard_effect=jnp.full_like(moves.hazard_effect, 3))
@@ -168,6 +184,38 @@ def test_generic_move_effects(neutral_type):
     assert jnp.array_equal(noop.team.current_hp, original.team.current_hp)
     assert jnp.array_equal(noop.team.status, original.team.status)
     assert jnp.all(noop.spikes == 0)
+
+def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
+    """Innards Out returns remaining HP as damage only when its holder faints."""
+    from ninjax.side import take_damage_value
+    key, state = neutral_type
+    team = state.team.replace(
+        ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.INNARDS_OUT),
+        current_hp=state.team.current_hp.at[1, 0, 0].set(5))
+    state = state.replace(team=team)
+    attacker_hp = state.active.current_hp[0, 0]
+    surviving = take_damage_value(state, 1, jnp.array([4]), True, source=0)
+    assert surviving.active.current_hp[0, 0] == attacker_hp
+    fainted = take_damage_value(state, 1, jnp.array([5]), True, source=0)
+    assert fainted.active.current_hp[1, 0] == 0
+    assert fainted.active.current_hp[0, 0] == attacker_hp - 5
+
+
+def test_boost_events_keep_stat_order(neutral_type):
+    """Stage updates emit only changed stats, in normal then accuracy order."""
+    from ninjax.events import EventKind
+    from ninjax.side import set_boosts
+    _, state = neutral_type
+    stages = StatBoosts(normal_boosts=jnp.array([0, 1, 0, 2, 0, 0]),
+                        acc_boosts=jnp.array([-1, 0]))
+    out = set_boosts(state, 0, stages)
+    events = out.events.unpack()
+    assert events.count == 3
+    assert jnp.array_equal(events.kind[:3], jnp.full(3, EventKind.BOOST))
+    assert jnp.array_equal(events.detail[:3], jnp.array([1, 3, 6]))
+    assert jnp.array_equal(events.before[:3], jnp.zeros(3))
+    assert jnp.array_equal(events.after[:3], jnp.array([1, 2, -1]))
+
 
 def test_stat_helper(neutral_type):
     key, state = neutral_type

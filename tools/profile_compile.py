@@ -5,6 +5,7 @@ Use a shell memory limit when profiling the full step on constrained machines.
 """
 import argparse
 from collections import Counter
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -63,7 +64,7 @@ def component_result(target, env, state, action):
     if target == 'power':
         active = battle.effective_active
         return compute_base_power(active[player], active[1-player], move,
-            battle.terrain, effective_weather(battle), battle.gravity_duration > 0)
+            battle.terrain, effective_weather(battle.weather.weather, battle.ability, battle.active.current_hp), battle.gravity_duration > 0)
     if target == 'secondary':
         return secondary_effects(key, battle, player, move)
     if target == 'contact':
@@ -104,7 +105,8 @@ def graph_counts(closed):
                 primitives=dict(counts.most_common(12)))
 
 
-def profile(stage='trace', target='step', rss_limit_mib=0, check=False):
+def profile(stage='trace', target='step', rss_limit_mib=0, check=False, profile_dir=None,
+            explain_cache_misses=False):
     """Report cold preparation phases, peak RSS and a bounded graph summary."""
     if rss_limit_mib:
         def guard():
@@ -124,6 +126,15 @@ def profile(stage='trace', target='step', rss_limit_mib=0, check=False):
     # Import after the CLI has applied affinity and memory limits, before any
     # JAX backend threads or device constants can be created.
     import jax
+    # Benchmarks must compile even when launched from pytest or a shell with
+    # persistent caching enabled. Apply before any fixture imports/compilation.
+    os.environ['JAX_ENABLE_COMPILATION_CACHE'] = 'false'
+    os.environ.pop('JAX_COMPILATION_CACHE_DIR', None)
+    jax.config.update('jax_enable_compilation_cache', False)
+    jax.config.update('jax_compilation_cache_dir', None)
+    if explain_cache_misses:
+        jax.config.update('jax_explain_cache_misses', True)
+        jax.config.update('jax_log_compiles', True)
     import jax.numpy as jnp
     from ninjax.battle import Battle
     from ninjax.curated import load_sets, make_item_pool, sample_teams
@@ -166,25 +177,50 @@ def profile(stage='trace', target='step', rss_limit_mib=0, check=False):
             **extra)), flush=True)
 
     report('start', jax_version=jax.__version__, backend=jax.default_backend(),
+           persistent_cache_enabled=jax.config.jax_enable_compilation_cache,
+           persistent_cache_dir=jax.config.jax_compilation_cache_dir,
+           explain_cache_misses=jax.config.jax_explain_cache_misses,
+           log_compiles=jax.config.jax_log_compiles,
            rss_limit_mib=rss_limit_mib, python_version=sys.version.split()[0],
            cpu_affinity=sorted(os.sched_getaffinity(0)), xla_flags=os.environ.get('XLA_FLAGS', ''))
-    # Trace once; lower the same traced program rather than retracing for IR.
-    traced = jax.jit(function).trace(*flat)
-    report('traced', **graph_counts(traced.jaxpr))
-    if stage == 'trace':
+    def prepare():
+        """Capture compiler events without retaining fixture/eager call events."""
+        # Trace once; lower the same program rather than retracing for IR.
+        with jax.profiler.TraceAnnotation('ninjax.trace'):
+            traced = jax.jit(function).trace(*flat)
+        report('traced', **graph_counts(traced.jaxpr))
+        if stage == 'trace':
+            return None
+        with jax.profiler.TraceAnnotation('ninjax.lower'):
+            lowered = traced.lower()
+        report('lowered')
+        if stage == 'lower':
+            return None
+        try:
+            with jax.profiler.TraceAnnotation('ninjax.compile'):
+                compiled = lowered.compile()
+        except MemoryError:
+            report('compile_memory_error')
+            raise
+        report('compiled')
+        actual = jax.block_until_ready(compiled(*flat))
+        report('executed')
+        return actual
+
+    capture = nullcontext()
+    if profile_dir:
+        options = jax.profiler.ProfileOptions()
+        # Python call tracing retains millions of events during JAX staging.
+        # Host compiler events and our phase annotations suffice for this job.
+        options.python_tracer_level = 0
+        capture = jax.profiler.trace(profile_dir, create_perfetto_trace=True,
+                                     profiler_options=options)
+    with capture:
+        actual = prepare()
+    if profile_dir:
+        report('profile_written', directory=str(profile_dir))
+    if stage != 'compile':
         return
-    lowered = traced.lower()
-    report('lowered')
-    if stage == 'lower':
-        return
-    try:
-        compiled = lowered.compile()
-    except MemoryError:
-        report('compile_memory_error')
-        raise
-    report('compiled')
-    actual = jax.block_until_ready(compiled(*flat))
-    report('executed')
     if check:
         import numpy as np
         with jax.disable_jit():
@@ -214,6 +250,9 @@ if __name__ == '__main__':
     parser.add_argument('--virtual-limit-mib', type=int, default=0)
     parser.add_argument('--cpu-count', type=int, default=0)
     parser.add_argument('--check', action='store_true', help='Compare every compiled result leaf against eager execution')
+    parser.add_argument('--profile-dir', help='Write an XProf/Perfetto compiler timeline, excluding fixture/eager work')
+    parser.add_argument('--jax-explain-cache-misses', action='store_true',
+                        help='Log JAX tracing cache-miss reasons and compilation timings')
     args = parser.parse_args()
     if min(args.rss_limit_mib, args.virtual_limit_mib, args.cpu_count) < 0:
         parser.error('Resource limits must be nonnegative')
@@ -227,4 +266,5 @@ if __name__ == '__main__':
         resource.setrlimit(resource.RLIMIT_AS, (hard, hard))
     if args.cpu_count:
         os.sched_setaffinity(0, sorted(os.sched_getaffinity(0))[:args.cpu_count])
-    profile(args.stage, args.target, args.rss_limit_mib, args.check)
+    profile(args.stage, args.target, args.rss_limit_mib, args.check, args.profile_dir,
+            args.jax_explain_cache_misses)
