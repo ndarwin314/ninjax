@@ -1,16 +1,22 @@
 """Damage and healing with protections, HP reactions and deferred faint records."""
 from functools import partial
+
 import chex
 import jax
 import jax.numpy as jnp
-from ninjax.enum_types import AbilityEnum, ItemEnum, StatEnum
-from ninjax.side.state import BattleState
-from ninjax.events import Cause, EventKind, emit
-from ninjax.side.item_effects import after_hp_change
-from ninjax.side.updates import conditional_add_boosts, update_active_fields
-from ninjax.side.faint_effects import record_faint
+
+from ninjax.calculations.logic import triple_and
+from ninjax.calculations.modifiers import conditional_mult_round
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.pokemon import StatEnum
 from ninjax.knowledge import remember_item
-from ninjax.utils import conditional_mult_round, triple_and
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.side.faint_effects import record_faint
+from ninjax.side.item_effects import after_hp_change
+from ninjax.side.state import BattleState
+from ninjax.side.updates import conditional_add_boosts, update_active_fields
+
 
 Array = jax.Array
 

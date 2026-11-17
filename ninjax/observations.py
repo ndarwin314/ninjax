@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from flax import struct
 from jumanji import specs
 
-from ninjax.events import CAPACITY, TransitionEvents
+from ninjax.records.events import CAPACITY, TransitionEvents
 from ninjax.restrictions import allowed_moves
 
 

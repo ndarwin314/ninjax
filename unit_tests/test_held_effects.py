@@ -1,20 +1,16 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import (
-    AbilityEnum as A,
-    ItemEnum as I,
-    StatEnum as S,
-    Type,
-    Weather,
-    WeatherEnum as W,
-)
-from ninjax.events import EventKind
+from ninjax.battle.residuals import step_moody
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Weather, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import StatEnum as S, Type
 from ninjax.moves.finalization import finish_damaging_move
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import effective_move
-from ninjax.residuals import step_moody
+from ninjax.records.events import EventKind
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import refresh_paradox
 from ninjax.side.queries import effective_weather, modify_stats

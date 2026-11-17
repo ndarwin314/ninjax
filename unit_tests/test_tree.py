@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from ninjax.tree import stack
 from unit_tests.test_battle import neutral_type
 

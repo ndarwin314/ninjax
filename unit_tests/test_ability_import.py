@@ -10,7 +10,7 @@ def test_ability_rules_import_inside_trace_does_not_leak():
         import sys
         import jax
         import jax.numpy as jnp
-        from ninjax.enum_types import AbilityEnum
+        from ninjax.enums.abilities import AbilityEnum
 
         assert 'ninjax.ability_rules' not in sys.modules
         def first_trace(value):

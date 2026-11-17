@@ -4,38 +4,28 @@
 import chex
 import jax.numpy as jnp
 
-from ninjax.enum_types import (
-    AbilityEnum,
-    FormEnum,
-    ItemEnum,
-    MoveFlags,
-    MoveType,
-    StatEnum,
-    Status,
-    Terrain,
-    TerrainEnum,
-    Type,
-    Weather,
-    WeatherEnum,
-)
-from ninjax.moves.model import Move
-from ninjax.pokemon import Pokemon
-from ninjax.side.queries import conditional_mult_round as fixed_modifier, is_floating
-from ninjax.utils import (
+from ninjax.calculations.logic import triple_and, triple_or
+from ninjax.calculations.modifiers import (
     IRON_FIST,
     RECKLESS,
     TERRAIN_MULTIPLIER,
     TOUGH_CLAWS,
-    calculate_effectiveness_multiplier,
     conditional_mult,
     conditional_mult_prod,
     conditional_mult_prod_round,
     conditional_mult_round,
     four_thirds,
     one_point_three,
-    triple_and,
-    triple_or,
 )
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.moves import MoveFlags, MoveType
+from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
+from ninjax.moves.model import Move
+from ninjax.pokemon import Pokemon
+from ninjax.side.queries import conditional_mult_round as fixed_modifier, is_floating
 
 
 Array = chex.Array
@@ -220,6 +210,7 @@ def compute_damage_multipliers(
     # at some point we can see if it makes any difference for speed to not do it this way
 
     # sun modifier
+    """Compute damage multipliers."""
     is_sun = weather.weather == WeatherEnum.SUN
     base_damage = conditional_mult_round(base_damage, 1.5, jnp.logical_and(is_sun, move.type == Type.FIRE))
     base_damage = conditional_mult_round(base_damage, 0.5, jnp.logical_and(is_sun, move.type == Type.WATER))
@@ -272,6 +263,7 @@ def damage_post_modifiers(
         damage: Array,
         defender_ability: AbilityEnum,
         move: Move) -> Array:
+    """Damage post modifiers."""
     damage = damage.astype(int)
     # so these might function the same as water bubble defensively which modifies the attackers attack but idk for sure
     is_fire_move = move.type == Type.FIRE
@@ -375,3 +367,12 @@ def compute_defensive_stat(starting_stats, defender_ability, status, stat_idx):
 
     # eviolite and assault vest
     return conditional_mult_round(stat, 2, (defender_ability == AbilityEnum.FUR_COAT) & (stat_idx == StatEnum.DEFENSE))
+
+
+def base_damage_compute(
+        attacker_level: int,
+        attack_stat: int,
+        defence_stat: int,
+        base_power: int):
+    """Compute the unmodified level, power, attack and defense damage expression."""
+    return (2 * attacker_level / 5 + 2) * base_power * attack_stat / defence_stat / 50 + 2

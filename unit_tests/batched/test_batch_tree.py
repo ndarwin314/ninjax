@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from ninjax.tree import stack
 
 

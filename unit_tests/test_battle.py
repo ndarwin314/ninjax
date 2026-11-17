@@ -4,39 +4,27 @@ import numpy as np
 import pytest
 from jax import random
 
-from ninjax.battle import (
-    Battle,
-    BattleParams,
-    InformationMode,
-    Phase,
-    step_action,
-    step_field,
-    step_switch,
-)
-from ninjax.damage import compute_base_damage, compute_damage_multipliers
-from ninjax.enum_types import (
-    AbilityEnum,
-    MoveType,
-    StatEnum,
-    Status,
-    Terrain,
-    TerrainEnum,
-    Type,
-    Weather,
-    WeatherEnum,
-)
-from ninjax.events import CAPACITY, Cause, EventBuffer, EventKind, emit
+from ninjax.battle.actions import step_action, step_switch
+from ninjax.battle.environment import Battle
+from ninjax.battle.field import step_field
+from ninjax.battle.residuals import end_turn_damage
+from ninjax.battle.types import BattleParams, InformationMode, Phase
+from ninjax.calculations.damage import compute_base_damage, compute_damage_multipliers
+from ninjax.calculations.stats import Nature, StatBoosts, StatTable
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.moves.effects import do_contact
 from ninjax.moves.execution import move_used
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.pokemon import Pokemon
-from ninjax.residuals import end_turn_damage
+from ninjax.records.events import CAPACITY, Cause, EventBuffer, EventKind, emit
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status, status_helper
 from ninjax.side.updates import add_boosts, clear_volatile_status, set_boosts
-from ninjax.stats import Nature, StatBoosts, StatTable
 from ninjax.tree import stack
 
 

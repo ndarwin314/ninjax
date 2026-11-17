@@ -10,8 +10,10 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 
-from ninjax.battle import Battle, BattleParams
-from ninjax.curated import (
+from ninjax.battle.environment import Battle
+from ninjax.battle.types import BattleParams
+from ninjax.teams.construction import make_sandbox_teams
+from ninjax.teams.curated import (
     DEFAULT_SETS,
     load_sets,
     make_ability_pool,
@@ -19,7 +21,6 @@ from ninjax.curated import (
     make_sandbox_pool,
     sample_teams,
 )
-from ninjax.team_builder import make_sandbox_teams
 
 
 @jax.jit

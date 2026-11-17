@@ -3,7 +3,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import ItemEnum, Status, Type
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.pokemon import Status, Type
 from ninjax.side.updates import update_active, update_active_fields
 from unit_tests.test_battle import neutral_type
 

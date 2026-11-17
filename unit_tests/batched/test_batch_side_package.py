@@ -5,7 +5,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.battle import Battle, BattleParams
+from ninjax.battle.environment import Battle
+from ninjax.battle.types import BattleParams
 from unit_tests.test_battle import neutral_type
 
 

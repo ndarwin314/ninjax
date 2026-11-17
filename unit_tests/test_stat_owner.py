@@ -1,8 +1,8 @@
 """Offensive stat owner selection before item and ability modifiers."""
 import jax.numpy as jnp
 
-from ninjax.enum_types import OffensiveStatOwner as Owner
-from ninjax.stats import StatBoosts, raw_boosted_stats, select_offensive_stats
+from ninjax.calculations.stats import StatBoosts, raw_boosted_stats, select_offensive_stats
+from ninjax.enums.moves import OffensiveStatOwner as Owner
 
 
 def test_user_and_target_offensive_stages():

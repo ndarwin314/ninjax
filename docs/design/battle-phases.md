@@ -1,7 +1,7 @@
 # Switching and residual phases
 
-`ninjax.switching` owns switch requests and switch execution.
-`ninjax.residuals` owns end-of-turn effects. Both depend on concrete `side`
+`ninjax.battle.switching` owns switch requests and switch execution.
+`ninjax.battle.residuals` owns end-of-turn effects. Both depend on concrete `side`
 submodules rather than the move dispatcher or the environment.
 
 | Owner | Public entry points |
@@ -15,7 +15,7 @@ Commitment performs departure, resets, entry hazards and surviving entry hooks.
 The request is an action-local PyTree; it is not stored in battle state. The
 move dispatcher still commits a forced switch before the next actor proceeds.
 
-`battle.step_field` remains the scheduler. It retains the existing sequence of
+`battle.field.step_field` remains the scheduler. It retains the existing sequence of
 side-condition updates, status cures, weather/terrain/status HP effects,
 Leftovers, Moody, Speed Boost, status orbs, item updates, Perish Song, timer
 updates and deferred faint resolution. This extraction preserves the current
@@ -30,8 +30,8 @@ to point toward the residual module rather than back from it.
 Repository callers use direct imports:
 
 ```python
-from ninjax.switching import prepare_forced_switch, execute_forced_switch
-from ninjax.residuals import end_turn_damage, residual_abilities
+from ninjax.battle.switching import prepare_forced_switch, execute_forced_switch
+from ninjax.battle.residuals import end_turn_damage, residual_abilities
 ```
 
 The obsolete `game_logic.py` and `held_effects.py` compatibility files have been

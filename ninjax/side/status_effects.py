@@ -1,16 +1,21 @@
 """Major status and confusion application with explicit keys and item reactions."""
 from functools import partial
+from typing import Tuple
+
 import chex
 import jax
 import jax.numpy as jnp
 import jax.random as random
-from ninjax.enum_types import AbilityEnum, Status, TerrainEnum
-from ninjax.side.state import BattleState
-from ninjax.events import EventKind, emit
-from typing import Tuple
+
+from ninjax.calculations.logic import triple_or
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import TerrainEnum
+from ninjax.enums.pokemon import Status
+from ninjax.records.events import EventKind, emit
 from ninjax.side.item_effects import status_berry
-from ninjax.utils import triple_or
+from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
+
 
 def _apply_confusion_apply(args, *, player):
     """Sample the volatile duration and publish its start."""

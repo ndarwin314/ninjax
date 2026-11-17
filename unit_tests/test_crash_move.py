@@ -1,7 +1,9 @@
 """High Jump Kick uses its recorded attempt outcome for crash damage."""
 import jax.numpy as jnp
-from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, Type
+
+from ninjax.battle.actions import step_move
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.pokemon import Type
 from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move

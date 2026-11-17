@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.curated import load_sets, make_sandbox_pool, sample_teams
+from ninjax.teams.curated import load_sets, make_sandbox_pool, sample_teams
 
 
 def test_sampled_teams_and_explicit_omissions():

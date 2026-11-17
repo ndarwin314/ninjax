@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.ability_effects import frisk
-from ninjax.enum_types import ItemEnum as I
+from ninjax.enums.items import ItemEnum as I
 from unit_tests.test_abilities import frisk_state
 from unit_tests.test_battle import neutral_type
 

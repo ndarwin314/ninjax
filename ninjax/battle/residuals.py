@@ -9,15 +9,20 @@ import chex
 import jax
 import jax.numpy as jnp
 import jax.random as random
-from ninjax.enum_types import AbilityEnum, ItemEnum as I, StatEnum, Status, TerrainEnum, WeatherEnum
-from ninjax.side.state import BattleState
-from ninjax.events import Cause
-from ninjax.side.updates import add_boosts, conditional_add_boosts
+
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import TerrainEnum, WeatherEnum
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import StatEnum, Status
+from ninjax.records.events import Cause
+from ninjax.restrictions import tick
+from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.item_effects import cure_status
 from ninjax.side.queries import effective_weather, is_floating, is_sand_immune
+from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
-from ninjax.side.hp_effects import take_damage_percent
-from ninjax.restrictions import tick
+from ninjax.side.updates import add_boosts, conditional_add_boosts
+
 
 __all__ = (
     'end_turn_damage',

@@ -1,20 +1,25 @@
 """Multi hit helpers for immutable JAX battle state."""
+from functools import partial
+from typing import Tuple
+
 import chex
+import jax
 import jax.numpy as jnp
 import jax.random as random
-import jax
-from ninjax.side.state import BattleState
-from ninjax.moves.model import Move
-from typing import Tuple
-from ninjax.enum_types import AbilityEnum, ItemEnum, StatEnum, Status
-from ninjax.moves.properties import move_accuracy
-from ninjax.moves.hit_resolution import resolve_damaging_hit
-from ninjax.events import EventKind, emit
-from ninjax.hit import HitOutcome, record_hit
-from functools import partial
-from ninjax.side.updates import conditional_add_boosts
-from ninjax.side.stat_effects import conditional_reduce_boosts
+
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import finish_damaging_move
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.model import Move
+from ninjax.moves.properties import move_accuracy
+from ninjax.records.events import EventKind, emit
+from ninjax.records.hits import HitOutcome, record_hit
+from ninjax.side.stat_effects import conditional_reduce_boosts
+from ninjax.side.state import BattleState
+from ninjax.side.updates import conditional_add_boosts
+
 
 def do_damaging_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     """Resolve a damaging move and finalize it once.

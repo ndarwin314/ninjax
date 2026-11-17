@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.battle import before_move
+from ninjax.battle.interruptions import before_move
 from unit_tests.test_battle import neutral_type
 
 

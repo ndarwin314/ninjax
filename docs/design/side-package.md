@@ -19,13 +19,13 @@ The foundation (`state`, `queries`, `updates`) does not import reactive modules
 or high-level ability handlers. Item update hooks use basic writes rather
 than calling HP/status resolution recursively. HP and status resolution can then
 invoke those hooks without an import cycle. High-level residual effects live in
-`ninjax.residuals`, while switching lives in `ninjax.switching`.
+`ninjax.battle.residuals`, while switching lives in `ninjax.battle.switching`.
 Move-completion item hooks live in `ninjax.moves.finalization`; the old
 `held_effects.py` compatibility file has been removed. Callers import item and
 residual helpers from their concrete owners. See [battle phases](battle-phases.md)
 for those boundaries.
 
-Pure stage arithmetic lives in `ninjax.stats`. Public item knowledge lives in
+Pure stage arithmetic lives in `ninjax.calculations.stats`. Public item knowledge lives in
 `ninjax.knowledge`, independent of ability handlers. Python ability identity
 constants live in `ninjax.ability_rules`; importing them during a JAX trace does
 not initialize the state or effect modules.

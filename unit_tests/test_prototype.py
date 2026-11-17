@@ -7,9 +7,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from ninjax.calculations.stats import StatBoosts, raw_boosted_stats
 from ninjax.prototype import random_actions, run
-from ninjax.stats import StatBoosts, raw_boosted_stats
-from ninjax.team_builder import make_sandbox_teams
+from ninjax.teams.construction import make_sandbox_teams
 
 
 REFERENCE = Path(__file__).parent / 'fixtures/showdown/battle-1.json'

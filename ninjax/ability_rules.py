@@ -1,5 +1,6 @@
 """Python ability identity rules safe to import during a JAX trace."""
-from ninjax.enum_types import AbilityEnum
+from ninjax.enums.abilities import AbilityEnum
+
 
 UNCHANGEABLE_ABILITIES = (AbilityEnum.AS_ONE_CHILLING, AbilityEnum.AS_ONE_GRIM,
     AbilityEnum.BATTLE_BOND, AbilityEnum.COMATOSE, AbilityEnum.DISGUISE, AbilityEnum.GULP_MISSILE,

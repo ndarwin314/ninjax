@@ -3,17 +3,13 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.battle import action_order, step_move
-from ninjax.curated import load_sets, make_sandbox_pool
-from ninjax.enum_types import (
-    AbilityEnum as A,
-    ItemEnum as I,
-    Terrain,
-    TerrainEnum as T,
-    Type,
-    Weather,
-    WeatherEnum as W,
-)
+from ninjax.battle.actions import step_move
+from ninjax.battle.ordering import action_order
+from ninjax.battle.residuals import step_side_conditions
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Terrain, TerrainEnum as T, Weather, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import Type
 from ninjax.moves.effects import secondary_effects
 from ninjax.moves.finalization import finish_damaging_move
 from ninjax.moves.hit_resolution import resolve_damaging_hit
@@ -21,10 +17,10 @@ from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import move_hits
 from ninjax.moves.status import do_status_move
-from ninjax.residuals import step_side_conditions
 from ninjax.side.field_conditions import field_status
 from ninjax.side.updates import update_active
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
+from ninjax.teams.curated import load_sets, make_sandbox_pool
 from ninjax.tree import stack
 from unit_tests.test_battle import neutral_type
 

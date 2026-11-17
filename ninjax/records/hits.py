@@ -1,9 +1,9 @@
 """Fixed-size per-attempt hit records for singles and future doubles targeting."""
 from enum import IntEnum
 
-from flax import struct
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 
 class HitOutcome(IntEnum):

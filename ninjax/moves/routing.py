@@ -12,28 +12,23 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import underlying_ability
-from ninjax.enum_types import (
-    AbilityEnum,
-    MoveFlags,
-    MoveType,
-    ProtectionKind,
-    StatEnum,
-    TerrainEnum,
-    Type,
-)
-from ninjax.events import Cause, EventKind, emit
-from ninjax.hit import HitOutcome, HitRecipient, record_hit
+from ninjax.battle.switching import _no_forced_switch, execute_forced_switch, prepare_forced_switch
+from ninjax.calculations.logic import quad_or, triple_or
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import TerrainEnum
+from ninjax.enums.moves import MoveFlags, MoveType, ProtectionKind
+from ninjax.enums.pokemon import StatEnum, Type
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import effective_move, move_accuracy, substitute_intercepts
 from ninjax.moves.status import _status_move_effects
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.queries import contact_reactions_allowed
 from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts
-from ninjax.switching import _no_forced_switch, execute_forced_switch, prepare_forced_switch
-from ninjax.utils import quad_or, triple_or
 
 
 def _identity(x):

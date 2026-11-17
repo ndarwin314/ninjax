@@ -1,18 +1,20 @@
 """Immutable battle PyTrees and read-only views; no reactive effect imports."""
+from dataclasses import field
 from functools import partial
+
 import jax
 import jax.numpy as jnp
-from ninjax.enum_types import (
-    AbilityEnum,
-    StatEnum,
-    Status,
-    Terrain,
-    TerrainEnum,
-    TurnType,
-    Type,
-    Weather,
-    WeatherEnum,
-)
+from flax import struct
+
+from ninjax.calculations.modifiers import conditional_mult_round
+from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP
+from ninjax.calculations.stats import StatBoosts
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import Terrain, TerrainEnum, TurnType, Weather, WeatherEnum
+from ninjax.enums.pokemon import StatEnum, Status, Type
+from ninjax.pokemon import Pokemon
+from ninjax.records.events import EventBuffer
+from ninjax.records.hits import HitResults
 from ninjax.side.queries import (
     BURN_IMMUNE_ABILITIES,
     FREEZE_IMMUNE_ABILITIES,
@@ -24,13 +26,7 @@ from ninjax.side.queries import (
     is_immune_to_move,
     modify_stats,
 )
-from ninjax.events import EventBuffer
-from ninjax.hit import HitResults
-from ninjax.pokemon import Pokemon
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, conditional_mult_round
-from ninjax.stats import StatBoosts
-from dataclasses import field
-from flax import struct
+
 
 Array = jax.Array
 

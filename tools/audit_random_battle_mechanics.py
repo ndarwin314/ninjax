@@ -7,8 +7,8 @@ all role candidates, not every legal four-move combination or interaction.
 import json
 from pathlib import Path
 
-from ninjax.curated import CURATED_ABILITIES, CURATED_ITEMS
-from ninjax.team_builder import CATALOGUE
+from ninjax.teams.construction import CATALOGUE
+from ninjax.teams.curated import CURATED_ABILITIES, CURATED_ITEMS
 
 
 def coverage_report(reference):

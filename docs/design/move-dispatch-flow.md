@@ -3,8 +3,8 @@
 These diagrams describe the current **singles implementation**, not a complete
 Scarlet/Violet rules specification. Read them in order: the first gives the
 whole path; the others expand its major components. The main entry is
-[`Battle.step`](../../ninjax/battle.py); move execution is split between
-[`battle.py`](../../ninjax/battle.py) and the
+[`Battle.step`](../../ninjax/battle/environment.py); move execution is split between
+[`battle.py`](../../ninjax/battle/environment.py) and the
 [`moves`](../../ninjax/moves/) package. Selection and called moves live in
 [`moves.execution`](../../ninjax/moves/execution.py); accuracy, immunity and
 hit branch selection live in [`moves.routing`](../../ninjax/moves/routing.py).

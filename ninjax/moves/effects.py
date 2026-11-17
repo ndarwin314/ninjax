@@ -1,35 +1,30 @@
 """Effects helpers for immutable JAX battle state."""
 from functools import partial
+from typing import Tuple
+
 import chex
 import jax
 import jax.numpy as jnp
 import jax.random as random
-from ninjax.enum_types import (
-    AbilityEnum,
-    MoveType,
-    StatEnum,
-    TerrainEnum,
-    Type,
-    Status,
-    ItemEnum,
-    AbilityEnum as A,
-    TerrainEnum as T,
-    Terrain,
-)
-from ninjax.side.state import BattleState
-from ninjax.events import Cause, EventKind, emit
+
+from ninjax.calculations.logic import in_range
+from ninjax.calculations.modifiers import ROUGH_SKIN_DAMAGE
+from ninjax.enums.abilities import AbilityEnum, AbilityEnum as A
+from ninjax.enums.field import Terrain, TerrainEnum, TerrainEnum as T
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum, Status, Type
+from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
-from ninjax.side.updates import conditional_add_boosts, add_boosts, clear_boosts
-from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
-from ninjax.side.queries import contact_reactions_allowed, is_powder_immune
+from ninjax.records.events import Cause, EventKind, emit
 from ninjax.side.field_conditions import set_terrain
 from ninjax.side.hp_effects import take_damage_percent
-from ninjax.utils import in_range, ROUGH_SKIN_DAMAGE
-from typing import Tuple
-from ninjax.knowledge import remember_item
-from ninjax.side.status_effects import set_status, apply_confusion
 from ninjax.side.item_effects import kings_rock_flinch
-
+from ninjax.side.queries import contact_reactions_allowed, is_powder_immune
+from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
+from ninjax.side.state import BattleState
+from ninjax.side.status_effects import apply_confusion, set_status
+from ninjax.side.updates import add_boosts, clear_boosts, conditional_add_boosts
 
 
 def _after_every_hit_update_field(k, s, a):

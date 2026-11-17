@@ -3,8 +3,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import ItemEnum as I, Status
-from ninjax.residuals import residual_abilities
+from ninjax.battle.residuals import residual_abilities
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import Status
 from ninjax.side.item_effects import update_items
 from ninjax.side.stat_effects import stat_changes
 from unit_tests.test_battle import neutral_type

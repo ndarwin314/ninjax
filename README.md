@@ -84,7 +84,7 @@ team construction and environment integration, not full mechanics coverage of
 the curated sets. The original parsed item and ability names remain available
 for implementing and testing their mechanics later.
 
-For Python callers, `ninjax.curated.load_sets` reads the exports,
+For Python callers, `ninjax.teams.curated.load_sets` reads the exports,
 `make_sandbox_pool` builds a Pokémon bank with an omissions report, and
 `sample_teams(key, pool)` returns `(teams, set_indices)`. Sampling supports `jit`
 and `vmap` and leaves the key management to the caller.
@@ -155,12 +155,12 @@ as a no-effect ability in singles; its doubles reduction is not validated.
 See the [remaining-ability validation matrix](docs/design/remaining-ability-validation.md)
 for scope and limitations. Unsupported abilities are listed in `omissions`;
 an enabled ability has `ability: null` in that report. Items are still neutral.
-Python callers can build these teams with `ninjax.curated.make_ability_pool`.
+Python callers can build these teams with `ninjax.teams.curated.make_ability_pool`.
 
 Add `--items` to enable the curated items with existing engine hooks, alone or
 alongside `--abilities`. Unsupported items remain listed in `omissions`; an
 enabled item has `item: null`. Python callers can use
-`ninjax.curated.make_item_pool(sets, abilities=True)`. These hooks do not yet
+`ninjax.teams.curated.make_item_pool(sets, abilities=True)`. These hooks do not yet
 cover every interaction; see the curated mechanics progress document.
 
 Frisk stores revealed items by owner/team slot. Observations expose this through

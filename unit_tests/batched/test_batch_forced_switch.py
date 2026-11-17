@@ -3,8 +3,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import AbilityEnum
-from ninjax.switching import prepare_forced_switch, execute_forced_switch
+from ninjax.battle.switching import execute_forced_switch, prepare_forced_switch
+from ninjax.enums.abilities import AbilityEnum
 from unit_tests.test_battle import neutral_type
 
 

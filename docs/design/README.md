@@ -22,7 +22,10 @@ See [side state and mechanics](side-package.md) for package exports, dependency
 boundaries and imports for state updates and reactive mechanics.
 
 See [switching and residual phases](battle-phases.md) for switch requests,
-end-of-turn effect ownership and compatibility imports.
+end-of-turn effect ownership and concrete imports.
+
+See [package ownership](package-organization.md) for battle, teams, records,
+calculations and enum modules, their dependency direction and import examples.
 
 See [move mechanics](moves-package.md) for the move package, per-hit versus
 once-per-move responsibilities and migration from curated callbacks.

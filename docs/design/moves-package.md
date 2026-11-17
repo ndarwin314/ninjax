@@ -28,7 +28,7 @@ can invoke switching but does not import damage routing or move selection.
 
 `moves.execution` calls `moves.routing`, which calls damage/status mechanics
 without importing selection or the battle scheduler. The scheduler in
-`battle.py` imports the execution entry points directly. The compatibility files
+`battle.actions` imports the execution entry points directly. The compatibility files
 `game_logic.py`, `move.py`, `move_effects.py` and `held_effects.py` have been
 removed; callers must import the concrete owners. The public package exports
 remain `ninjax.moves.Move` and `ninjax.side.BattleState`/`VolatileStatus`.

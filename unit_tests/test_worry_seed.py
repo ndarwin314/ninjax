@@ -3,12 +3,16 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.ability_effects import worry_seed
-from ninjax.battle import Battle, BattleParams, InformationMode
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Weather, WeatherEnum as W
+from ninjax.battle.environment import Battle
+from ninjax.battle.switching import swap_out
+from ninjax.battle.types import BattleParams, InformationMode
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Weather, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import Status
 from ninjax.moves.routing import move_hits
 from ninjax.side.queries import effective_weather
 from ninjax.side.updates import update_active
-from ninjax.switching import swap_out
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

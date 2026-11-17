@@ -8,10 +8,13 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import worry_seed
-from ninjax.enum_types import AbilityEnum, ProtectionKind, Status
-from ninjax.events import Cause, EventKind, emit
-from ninjax.hit import HitOutcome, HitRecipient, record_hit
+from ninjax.battle.switching import force_switch_target
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.moves import ProtectionKind
+from ninjax.enums.pokemon import Status
 from ninjax.moves.model import Move
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.restrictions import apply_restriction
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
 from ninjax.side.field_conditions import field_status, set_terrain, set_weather
@@ -21,7 +24,6 @@ from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
 from ninjax.side.updates import update_active_fields
-from ninjax.switching import force_switch_target
 
 
 def _direct_status_move_heal(c, *, player, mon):

@@ -1,32 +1,23 @@
 """Properties helpers for immutable JAX battle state."""
 import jax.numpy as jnp
-from ninjax.enum_types import (
-    AbilityEnum,
-    MoveType,
-    Type,
-    ItemEnum,
-    MoveFlags,
-    WeatherEnum,
-    AbilityEnum as A,
-    FormEnum,
-    ItemEnum as I,
-    MoveResult,
-    TerrainEnum as T,
-    WeatherEnum as W,
-)
-from ninjax.side.queries import (
-    conditional_mult_round as fixed_modifier,
-    effective_weather,
-    conditional_mult_round,
-    item_transfer_allowed,
-)
-from ninjax.utils import (
-    ACCURACY_MULTIPLIER_LOOKUP,
+
+from ninjax.calculations.modifiers import (
     COMPOUND_EYES_MULTIPLIER,
     VICTORY_STAR,
     WEATHER_VEIL_MODIFIER,
 )
-
+from ninjax.calculations.stat_formulas import ACCURACY_MULTIPLIER_LOOKUP
+from ninjax.enums.abilities import AbilityEnum, AbilityEnum as A
+from ninjax.enums.field import TerrainEnum as T, WeatherEnum, WeatherEnum as W
+from ninjax.enums.items import ItemEnum, ItemEnum as I
+from ninjax.enums.moves import MoveFlags, MoveResult, MoveType
+from ninjax.enums.pokemon import FormEnum, Type
+from ninjax.side.queries import (
+    conditional_mult_round as fixed_modifier,
+    conditional_mult_round,
+    effective_weather,
+    item_transfer_allowed,
+)
 
 
 def _move_overrides_weight(mon):

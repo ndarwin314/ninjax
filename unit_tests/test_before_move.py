@@ -2,10 +2,11 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.battle import before_move
-from ninjax.enum_types import Status
+
+from ninjax.battle.interruptions import before_move
+from ninjax.enums.pokemon import Status
 from ninjax.side.updates import update_active
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.parametrize('status,counter,flinch', [

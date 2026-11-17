@@ -1,17 +1,18 @@
-import jax
-from ninjax.tree import ArrayTree, broadcast_tree, is_tree_placeholder
 from dataclasses import field
 
-
+import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import OffensiveStatOwner
-from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
+from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP, calculate_stats
+from ninjax.enums.moves import OffensiveStatOwner
+from ninjax.tree import ArrayTree, broadcast_tree, is_tree_placeholder
+
 
 Array = jax.Array
 int32 = jnp.int32
 
 class Nature(ArrayTree):
+    """Nature indices controlling the increased and decreased Pokémon stats."""
     increased: jax.Array = field(default_factory=lambda: jnp.array([1]))
     decreased: jax.Array = field(default_factory=lambda: jnp.array([1]))
 
@@ -23,11 +24,13 @@ class Nature(ArrayTree):
         object.__setattr__(self, 'decreased', jnp.asarray(self.decreased, jnp.int32))
 
     def row_update(self, idx: int, new_nature: 'Nature'):
+        """Row update."""
         increased = self.increased.at[idx].set(new_nature.increased)
         decreased = self.decreased.at[idx].set(new_nature.decreased)
         return self.replace(increased=increased, decreased=decreased)
 
 class StatBoosts(ArrayTree):
+    """Clamped six-stat and accuracy/evasion stage PyTrees."""
     normal_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(6, dtype=int32))
     acc_boosts: jax.Array = field(default_factory=lambda: jnp.zeros(2, dtype=int32))
 
@@ -41,16 +44,19 @@ class StatBoosts(ArrayTree):
         object.__setattr__(self, "acc_boosts", jnp.clip(self.acc_boosts, -6, 6))
 
     def replace_row(self, idx: int, new_boosts: 'StatBoosts'):
+        """Replace row."""
         normal_boosts = self.normal_boosts.at[idx].set(new_boosts.normal_boosts)
         acc_boosts = self.acc_boosts.at[idx].set(new_boosts.acc_boosts)
         return self.replace(normal_boosts=normal_boosts, acc_boosts=acc_boosts)
 
     def __add__(self, other):
+        """Add."""
         normal_boosts = self.normal_boosts + other.normal_boosts
         acc_boosts = self.acc_boosts + other.acc_boosts
         return StatBoosts(normal_boosts=normal_boosts, acc_boosts=acc_boosts)
 
 class StatTable(ArrayTree):
+    """Level, nature, base stats, IVs and EVs used to construct battle stats."""
     level: jax.Array = field(default_factory=lambda: jnp.array([100]))
     nature: Nature = field(default_factory=Nature)
     base_stats: jax.Array = field(default_factory=lambda: 100 * jnp.ones(6, dtype=int32))
@@ -68,6 +74,7 @@ class StatTable(ArrayTree):
         object.__setattr__(self, 'nature', broadcast_tree(self.nature, batch))
 
     def row_update(self, idx: int, new_stats: 'StatTable'):
+        """Row update."""
         level = self.level.at[idx].set(new_stats.level)
         ivs = self.ivs.at[idx].set(new_stats.ivs)
         evs = self.evs.at[idx].set(new_stats.evs)
@@ -76,12 +83,8 @@ class StatTable(ArrayTree):
 
     @property
     def stats(self):
+        """Stats."""
         return calculate_stats(self.level, self.nature, self.base_stats, self.ivs, self.evs)
-
-
-
-
-
 
 
 def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):

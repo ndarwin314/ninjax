@@ -3,9 +3,11 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import AbilityEnum as A, FormEnum as F, ItemEnum as I
-from ninjax.side.queries import can_remove_item
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import FormEnum as F
 from ninjax.side.item_effects import remove_item, swap_items
+from ninjax.side.queries import can_remove_item
 from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 

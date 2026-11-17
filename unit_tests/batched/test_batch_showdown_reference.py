@@ -4,8 +4,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ninjax.enum_types import Type
-from ninjax.utils import calculate_effectiveness_multiplier
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.pokemon import Type
 from unit_tests.test_showdown_reference import GAMES
 
 

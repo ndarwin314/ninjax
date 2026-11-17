@@ -2,14 +2,16 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import AbilityEnum as A, StatEnum, Status, Weather, WeatherEnum as W
+from ninjax.battle.switching import swap_out
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Weather, WeatherEnum as W
+from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.queries import effective_weather
 from ninjax.side.status_effects import set_status
 from ninjax.side.updates import add_boosts, clear_volatile_status
-from ninjax.switching import swap_out
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

@@ -9,16 +9,17 @@ from pathlib import Path
 
 import jax.numpy as jnp
 
+from ninjax.calculations.stats import Nature, StatTable
 from ninjax.data.load_json import dex
-from ninjax.enum_types import (
-    FormEnum, MoveFlags, MoveType, StatEnum, Status, TerrainEnum, Type, WeatherEnum,
-)
+from ninjax.enums.field import TerrainEnum, WeatherEnum
+from ninjax.enums.moves import MoveFlags, MoveType
+from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from ninjax.stats import Nature, StatTable
 from ninjax.tree import stack
 
-CATALOGUE = json.loads((Path(__file__).parent / 'data' / 'prototype-moves.json').read_text())
+
+CATALOGUE = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'prototype-moves.json').read_text())
 STAT_NAMES = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
 
 # Showdown's Terastallized form names use the same Ivy Cudgel typing.

@@ -2,14 +2,15 @@
 import jax.numpy as jnp
 import pytest
 
-from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I
-from ninjax.events import Cause, EventBuffer
+from ninjax.battle.actions import step_move
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.items import ItemEnum as I
 from ninjax.moves.status import do_status_move
+from ninjax.records.events import Cause, EventBuffer
 from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.updates import clear_volatile_status, update_active
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

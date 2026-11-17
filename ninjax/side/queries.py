@@ -1,19 +1,14 @@
 """Read-only field, immunity, item and stat queries; no state writes."""
 import jax.numpy as jnp
-from ninjax.enum_types import (
-    AbilityEnum as A,
-    AbilityEnum,
-    FormEnum,
-    ItemEnum as I,
-    ItemEnum,
-    MoveType,
-    StatEnum as S,
-    Status,
-    TerrainEnum as T,
-    Type,
-    WeatherEnum as W,
-)
-from ninjax.utils import calculate_effectiveness_multiplier, triple_or
+
+from ninjax.calculations.logic import triple_or
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.abilities import AbilityEnum as A, AbilityEnum
+from ninjax.enums.field import TerrainEnum as T, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I, ItemEnum
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import FormEnum, StatEnum as S, Status, Type
+
 
 BURN_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE)
 PARALYSIS_IMMUNE_ABILITIES = (AbilityEnum.LIMBER, AbilityEnum.PURIFYING_SALT)

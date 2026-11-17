@@ -1,20 +1,17 @@
 """Item mutations and update hooks built on basic state writes."""
 from functools import partial
+
 import jax
 import jax.numpy as jnp
-from ninjax.enum_types import (
-    AbilityEnum as A,
-    ItemEnum as I,
-    MoveType,
-    StatEnum as S,
-    Status,
-    TerrainEnum as T,
-    Type,
-    WeatherEnum as W,
-)
-from ninjax.events import EventKind, emit
-from ninjax.stats import StatBoosts
-from ninjax.side.updates import add_boosts, set_boosts, update_active_fields
+
+from ninjax.calculations.stats import StatBoosts
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import TerrainEnum as T, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum as S, Status, Type
+from ninjax.knowledge import remember_item
+from ninjax.records.events import EventKind, emit
 from ninjax.side.queries import (
     berry_allowed,
     can_remove_item,
@@ -22,7 +19,8 @@ from ninjax.side.queries import (
     is_choice_item,
     item_transfer_allowed,
 )
-from ninjax.knowledge import remember_item
+from ninjax.side.updates import add_boosts, set_boosts, update_active_fields
+
 
 def _status_berry_cure(s, *, player, lum, confused):
     """Consume before clearing conditions so item knowledge remains accurate."""

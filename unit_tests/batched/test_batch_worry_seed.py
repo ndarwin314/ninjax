@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.ability_effects import worry_seed
-from ninjax.enum_types import AbilityEnum as A
+from ninjax.enums.abilities import AbilityEnum as A
 from unit_tests.test_battle import neutral_type
 
 

@@ -3,10 +3,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import MoveType
-from ninjax.residuals import step_side_conditions
+from ninjax.battle.residuals import step_side_conditions
+from ninjax.enums.moves import MoveType
 from ninjax.restrictions import apply_restriction, resolve_move
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

@@ -3,9 +3,9 @@ from dataclasses import field
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import Status, Type
+from ninjax.calculations.stats import StatTable
+from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.model import Move
-from ninjax.stats import StatTable
 from ninjax.tree import ArrayTree, broadcast_tree, is_tree_placeholder
 
 

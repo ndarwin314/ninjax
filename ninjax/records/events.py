@@ -1,12 +1,15 @@
 """Fixed-capacity, ordered transition events; no Python containers grow while tracing."""
 from enum import IntEnum
-from flax import struct
+
 import jax
 import jax.numpy as jnp
+from flax import struct
+
 
 CAPACITY = 128
 
 class EventKind(IntEnum):
+    """Eventkind."""
     HP = 1
     STATUS = 2
     BOOST = 3
@@ -26,6 +29,7 @@ class EventKind(IntEnum):
     MOVE_FAILED = 17
 
 class Cause(IntEnum):
+    """Cause."""
     OTHER = 0
     MOVE = 1
     INDIRECT = 2
@@ -43,6 +47,7 @@ class Cause(IntEnum):
 
 @struct.dataclass
 class TransitionEvents:
+    """Fixed-capacity public event arrays with valid-entry and overflow tracking."""
     valid: jax.Array
     kind: jax.Array
     source: jax.Array
@@ -60,6 +65,7 @@ class TransitionEvents:
 
     @classmethod
     def empty(cls):
+        """Empty."""
         return cls(valid=jnp.zeros(CAPACITY, bool),
                    **{name: jnp.zeros(CAPACITY, jnp.int32) for name in
                       ('kind', 'source', 'target', 'slot', 'detail', 'cause', 'move', 'before', 'after', 'hp_change')},
@@ -71,7 +77,7 @@ INT_FIELDS = ('valid', 'kind', 'source', 'target', 'slot', 'detail', 'cause', 'm
 
 @struct.dataclass
 class EventBuffer:
-    """Packed internal storage keeps every append to two indexed writes."""
+    """Compact ordered event rows with a fixed capacity and overflow tracking."""
     data: jax.Array
     hp_fraction_change: jax.Array
     count: jax.Array
@@ -79,55 +85,68 @@ class EventBuffer:
 
     @classmethod
     def empty(cls):
+        """Empty."""
         return cls(jnp.zeros((CAPACITY, len(INT_FIELDS)), jnp.int32),
                    jnp.zeros(CAPACITY, jnp.float32), jnp.int32(0), jnp.bool_(False))
 
     def unpack(self):
+        """Unpack."""
         return TransitionEvents(**{name: getattr(self, name) for name in INT_FIELDS},
             hp_fraction_change=self.hp_fraction_change, count=self.count, overflow=self.overflow)
 
     @property
     def valid(self):
+        """Valid."""
         return self.data[..., 0].astype(bool)
 
     @property
     def kind(self):
+        """Kind."""
         return self.data[..., 1]
 
     @property
     def source(self):
+        """Source."""
         return self.data[..., 2]
 
     @property
     def target(self):
+        """Target."""
         return self.data[..., 3]
 
     @property
     def slot(self):
+        """Slot."""
         return self.data[..., 4]
 
     @property
     def detail(self):
+        """Detail."""
         return self.data[..., 5]
 
     @property
     def cause(self):
+        """Cause."""
         return self.data[..., 6]
 
     @property
     def move(self):
+        """Move."""
         return self.data[..., 7]
 
     @property
     def before(self):
+        """Before."""
         return self.data[..., 8]
 
     @property
     def after(self):
+        """After."""
         return self.data[..., 9]
 
     @property
     def hp_change(self):
+        """Hp change."""
         return self.data[..., 10]
 
 def emit(state, kind, target=-1, detail=0, before=0, after=0,
@@ -160,6 +179,7 @@ def capture_conditions(before, after):
     """
     kinds, targets, details, old, new = [], [], [], [], []
     def add(kind, target, detail, a, b):
+        """Add."""
         kinds.append(kind)
         targets.append(target)
         details.append(detail)

@@ -3,7 +3,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import AbilityEnum as A, StatEnum as S
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.pokemon import StatEnum as S
 from ninjax.side.stat_effects import reduce_boosts, stat_changes
 from ninjax.side.updates import add_boosts, update_active_fields
 from unit_tests.test_battle import neutral_type

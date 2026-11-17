@@ -2,15 +2,17 @@
 import jax.numpy as jnp
 import pytest
 
-from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Type
-from ninjax.hit import HitOutcome, HitRecipient, HitResult, HitResults
+from ninjax.battle.actions import step_move
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.multi_hit import resolve_multi_hit
 from ninjax.moves.routing import move_hits, move_misses
 from ninjax.moves.status import create_substitute
+from ninjax.records.hits import HitOutcome, HitRecipient, HitResult, HitResults
 from ninjax.side.updates import clear_volatile_status, update_active
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

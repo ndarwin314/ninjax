@@ -3,10 +3,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import Status
+from ninjax.enums.pokemon import Status
 from ninjax.moves.status import direct_status_move, do_status_move
 from ninjax.side.updates import update_active
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

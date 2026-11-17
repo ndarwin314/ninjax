@@ -1,12 +1,15 @@
 """Immutable leaf and stage writes without reactive item or ability hooks."""
 from functools import partial
+
 import jax
 import jax.numpy as jnp
-from ninjax.enum_types import AbilityEnum
-from ninjax.side.state import BattleState
-from ninjax.events import EventKind, emit
+
+from ninjax.calculations.stats import StatBoosts
+from ninjax.enums.abilities import AbilityEnum
 from ninjax.pokemon import Pokemon
-from ninjax.stats import StatBoosts
+from ninjax.records.events import EventKind, emit
+from ninjax.side.state import BattleState
+
 
 def _clear_volatile_row(value, *, side_idx):
     """Clear volatile row."""

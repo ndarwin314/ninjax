@@ -4,11 +4,15 @@ import jax.numpy as jnp
 import pytest
 from jax import random
 
-from ninjax.battle import Battle, BattleParams, Phase, step_switch
-from ninjax.enum_types import AbilityEnum, StatEnum, Status, Type, Weather, WeatherEnum
-from ninjax.events import Cause, EventBuffer, EventKind
+from ninjax.battle.actions import step_switch
+from ninjax.battle.environment import Battle
+from ninjax.battle.types import BattleParams, Phase
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import Weather, WeatherEnum
+from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.moves.execution import move_used
 from ninjax.moves.multi_hit import do_damaging_move
+from ninjax.records.events import Cause, EventBuffer, EventKind
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.status_effects import set_status
 from ninjax.side.updates import add_boosts, clear_volatile_status

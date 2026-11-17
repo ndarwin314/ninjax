@@ -2,13 +2,16 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.damage import compute_base_power
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, MoveType, StatEnum as S, Status
-from ninjax.events import EventKind
+from ninjax.calculations.damage import compute_base_power
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum as S, Status
 from ninjax.moves.effects import after_every_hit
 from ninjax.moves.execution import move_used
 from ninjax.moves.multi_hit import resolve_multi_hit
-from ninjax.team_builder import make_move
+from ninjax.records.events import EventKind
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

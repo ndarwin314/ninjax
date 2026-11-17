@@ -12,18 +12,15 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import prepare_type_change
-from ninjax.enum_types import (
-    AbilityEnum,
-    MoveType,
-    StatEnum,
-    Status,
-    WeatherEnum,
-)
-from ninjax.events import Cause, EventKind, emit
-from ninjax.hit import HitOutcome, HitResults, record_hit
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import WeatherEnum
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import _struggle_recoil, finish_attempt
 from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import _apply_move_effects, move_misses
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome, HitResults, record_hit
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
 from ninjax.side.queries import effective_weather, is_choice_item
 from ninjax.side.state import BattleState

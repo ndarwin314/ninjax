@@ -7,15 +7,16 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ninjax.enum_types import Type
-from ninjax.stats import Nature, StatTable
-from ninjax.utils import calculate_effectiveness_multiplier
+from ninjax.calculations.damage import compute_base_damage
+from ninjax.calculations.stats import Nature, StatTable
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.pokemon import Type
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from ninjax.side.state import BattleState
 from ninjax.side.hp_effects import take_damage_percent
+from ninjax.side.state import BattleState
 from ninjax.tree import stack
-from ninjax.damage import compute_base_damage
+
 
 ROOT = Path(__file__).parent / 'fixtures' / 'showdown'
 GAMES = [json.loads(p.read_text()) for p in sorted(ROOT.glob('battle-*.json'), key=lambda p: int(p.stem.split('-')[1]))]

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.moves.properties import effective_move
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

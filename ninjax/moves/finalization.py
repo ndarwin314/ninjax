@@ -4,17 +4,19 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import AbilityEnum, ItemEnum as I, StatEnum as S, StatEnum
-from ninjax.events import Cause, EventKind, emit
-from ninjax.hit import HitOutcome
+from ninjax.calculations.logic import quad_and
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import StatEnum as S, StatEnum
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome
 from ninjax.side.hp_effects import take_damage_percent, take_damage_value
 from ninjax.side.item_effects import consume, update_items
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts, conditional_add_boosts, update_active_fields
-from ninjax.utils import quad_and
 
 
 def _apply_self_stat_changes(s, *, attacker_idx, move):

@@ -11,11 +11,12 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.data.load_json import dex
-from ninjax.enum_types import AbilityEnum, ItemEnum
-from ninjax.team_builder import STAT_NAMES, make_sandbox_teams
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.teams.construction import STAT_NAMES, make_sandbox_teams
 
 
-DEFAULT_SETS = Path(__file__).parent / 'data' / 'curated-sets.txt'
+DEFAULT_SETS = Path(__file__).resolve().parents[1] / 'data' / 'curated-sets.txt'
 STAT_LABELS = dict(zip(('HP', 'Atk', 'Def', 'SpA', 'SpD', 'Spe'), STAT_NAMES))
 _ORDER = ('atk', 'def', 'spe', 'spa', 'spd')
 NATURES = {name: (_ORDER[i], _ORDER[j]) for i, row in enumerate((
@@ -26,6 +27,7 @@ NATURES = {name: (_ORDER[i], _ORDER[j]) for i, row in enumerate((
 
 @dataclass(frozen=True)
 class CuratedSet:
+    """Curatedset."""
     species: str
     item: str
     ability: str
@@ -99,6 +101,7 @@ def parse_sets(text: str) -> tuple[CuratedSet, ...]:
 
 
 def load_sets(path=DEFAULT_SETS):
+    """Load sets."""
     return parse_sets(Path(path).read_text())
 
 

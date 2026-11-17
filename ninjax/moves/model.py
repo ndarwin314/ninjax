@@ -1,11 +1,12 @@
 """Move PyTree schema and metadata normalization, independent of execution."""
-import jax
-from ninjax.tree import ArrayTree, is_tree_placeholder
 from dataclasses import field, fields
 
+import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import MoveFlags
+from ninjax.enums.moves import MoveFlags
+from ninjax.tree import ArrayTree, is_tree_placeholder
+
 
 class Move(ArrayTree):
     """Move arrays have entity axes followed by move and feature axes.

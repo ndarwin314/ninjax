@@ -2,8 +2,8 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import OffensiveStatOwner as Owner
-from ninjax.stats import select_offensive_stats
+from ninjax.calculations.stats import select_offensive_stats
+from ninjax.enums.moves import OffensiveStatOwner as Owner
 from unit_tests.test_battle import neutral_type
 
 

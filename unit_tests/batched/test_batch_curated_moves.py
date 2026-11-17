@@ -6,7 +6,7 @@ import pytest
 from ninjax.moves.properties import move_overrides
 from ninjax.side.field_conditions import field_status
 from ninjax.side.stat_effects import stat_changes
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 

@@ -3,9 +3,16 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.curated import load_sets, parse_sets, make_sandbox_pool, make_item_pool, sample_teams
-from ninjax.enum_types import ItemEnum, AbilityEnum
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum
 from ninjax.prototype import run_curated
+from ninjax.teams.curated import (
+    load_sets,
+    make_item_pool,
+    make_sandbox_pool,
+    parse_sets,
+    sample_teams,
+)
 
 
 def test_curated_file_and_defaults():

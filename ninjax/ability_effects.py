@@ -5,9 +5,11 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.ability_rules import UNCHANGEABLE_ABILITIES
-from ninjax.enum_types import AbilityEnum, ItemEnum, Status, Type
-from ninjax.events import EventKind, emit
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.pokemon import Status, Type
 from ninjax.knowledge import remember_item
+from ninjax.records.events import EventKind, emit
 from ninjax.side.item_effects import refresh_paradox
 from ninjax.side.updates import update_active_fields
 

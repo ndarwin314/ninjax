@@ -7,22 +7,28 @@ This is controlled mechanics validation, not a claim of whole-battle parity.
 import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type, Status, StatEnum as S, MoveType, Weather, WeatherEnum as W, Terrain, TerrainEnum as T
-from ninjax.side.queries import modify_stats
-from ninjax.side.item_effects import refresh_paradox
-from ninjax.switching import swap_is_alive, swap_out
+
+from ninjax.ability_effects import prepare_type_change
+from ninjax.battle.environment import Battle
+from ninjax.battle.residuals import end_turn_damage, step_moody
+from ninjax.battle.switching import swap_is_alive, swap_out
+from ninjax.battle.types import Phase
+from ninjax.calculations.damage import compute_base_damage, compute_base_power
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Terrain, TerrainEnum as T, Weather, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import StatEnum as S, Status, Type
+from ninjax.moves.execution import move_used
+from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import move_hits
-from ninjax.residuals import step_moody, end_turn_damage
-from ninjax.ability_effects import prepare_type_change
-from ninjax.battle import Battle, Phase
-from ninjax.damage import compute_base_damage, compute_base_power
-from ninjax.team_builder import make_move
+from ninjax.records.events import EventKind
+from ninjax.side.item_effects import refresh_paradox
+from ninjax.side.queries import modify_stats
 from ninjax.side.updates import update_active
-from ninjax.moves.execution import move_used
-from ninjax.events import EventKind
-from ninjax.moves.multi_hit import do_damaging_move
+from ninjax.teams.construction import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def ability_state(state, ability, player=0):

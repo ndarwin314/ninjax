@@ -1,9 +1,12 @@
 """Faint records, direct fainting and deferred Destiny Bond resolution."""
 from functools import partial
+
 import jax
 import jax.numpy as jnp
-from ninjax.events import Cause, EventKind, emit
+
+from ninjax.records.events import Cause, EventKind, emit
 from ninjax.side.updates import update_active_fields
+
 
 def _clear_fainted_destiny_bond(s, *, target):
     """Clear fainted destiny bond."""

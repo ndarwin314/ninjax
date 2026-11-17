@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.hit import HitOutcome, HitRecipient, record_hit
+from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from unit_tests.test_battle import neutral_type
 
 

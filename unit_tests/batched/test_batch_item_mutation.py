@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.enum_types import ItemEnum as I
+from ninjax.enums.items import ItemEnum as I
 from ninjax.side.item_effects import swap_items
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_item_mutation import items

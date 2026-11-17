@@ -1,9 +1,12 @@
 """Explosion and Memento self-faint at their respective resolution points."""
 import jax.numpy as jnp
 import pytest
-from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type
-from ninjax.hit import HitOutcome
+
+from ninjax.battle.actions import step_move
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.pokemon import Type
+from ninjax.records.hits import HitOutcome
 from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move

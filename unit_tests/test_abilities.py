@@ -4,29 +4,24 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.ability_effects import frisk
-from ninjax.battle import Battle, BattleParams
-from ninjax.curated import CURATED_ABILITIES, load_sets, make_ability_pool
-from ninjax.damage import compute_base_power
-from ninjax.enum_types import (
-    AbilityEnum as A,
-    ItemEnum as I,
-    MoveType,
-    Status,
-    Terrain,
-    TerrainEnum as T,
-    Type,
-    Weather,
-    WeatherEnum as W,
-)
+from ninjax.battle.environment import Battle
+from ninjax.battle.residuals import end_turn_damage
+from ninjax.battle.switching import swap_is_alive, swap_out
+from ninjax.battle.types import BattleParams
+from ninjax.calculations.damage import compute_base_power
+from ninjax.enums.abilities import AbilityEnum as A
+from ninjax.enums.field import Terrain, TerrainEnum as T, Weather, WeatherEnum as W
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveType
+from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import after_every_hit
 from ninjax.moves.routing import move_hits
 from ninjax.prototype import run_curated
-from ninjax.residuals import end_turn_damage
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import consume
 from ninjax.side.status_effects import set_status
-from ninjax.switching import swap_is_alive, swap_out
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
+from ninjax.teams.curated import CURATED_ABILITIES, load_sets, make_ability_pool
 from unit_tests.test_battle import neutral_type
 
 

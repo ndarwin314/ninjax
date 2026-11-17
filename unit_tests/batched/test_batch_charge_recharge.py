@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.battle import Battle
+from ninjax.battle.environment import Battle
 from unit_tests.test_battle import neutral_type
 
 

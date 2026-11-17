@@ -2,7 +2,8 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.battle import ActionType, Battle, BattleAction, Transformation
+from ninjax.battle.environment import Battle
+from ninjax.battle.types import ActionType, BattleAction, Transformation
 from unit_tests.test_battle import neutral_type
 
 

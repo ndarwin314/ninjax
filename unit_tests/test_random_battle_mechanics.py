@@ -13,13 +13,15 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ninjax.team_builder import CATALOGUE, make_move
-from ninjax.enum_types import AbilityEnum, Type, Status
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import secondary_effects
-from ninjax.side.updates import update_active
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.status import do_status_move
+from ninjax.side.updates import update_active
+from ninjax.teams.construction import CATALOGUE, make_move
 from unit_tests.test_battle import neutral_type
+
 
 REFERENCE = json.loads((Path(__file__).parent / 'fixtures/showdown/gen9-random-mechanics.json').read_text())
 

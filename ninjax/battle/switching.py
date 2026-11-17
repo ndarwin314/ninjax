@@ -9,10 +9,24 @@ import chex
 import jax
 import jax.numpy as jnp
 import jax.random as random
-from ninjax.enum_types import AbilityEnum, ItemEnum, StatEnum, TerrainEnum, Type, WeatherEnum
+
+from ninjax.ability_effects import frisk
+from ninjax.calculations.logic import quad_or
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import TerrainEnum, WeatherEnum
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.pokemon import StatEnum, Type
+from ninjax.knowledge import remember_item
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
+from ninjax.side.field_conditions import set_terrain, set_weather
+from ninjax.side.hp_effects import take_damage_percent
+from ninjax.side.item_effects import cure_status, update_items
+from ninjax.side.queries import is_floating
+from ninjax.side.stat_effects import conditional_reduce_boosts
 from ninjax.side.state import BattleState
-from ninjax.events import Cause, EventKind, emit
-from ninjax.hit import HitOutcome, HitRecipient, record_hit
+from ninjax.side.status_effects import set_status
 from ninjax.side.updates import (
     add_boosts,
     clear_boosts,
@@ -20,15 +34,7 @@ from ninjax.side.updates import (
     conditional_add_boosts,
     update_active_fields,
 )
-from ninjax.utils import calculate_effectiveness_multiplier, quad_or
-from ninjax.side.stat_effects import conditional_reduce_boosts
-from ninjax.side.item_effects import cure_status, update_items
-from ninjax.ability_effects import frisk
-from ninjax.side.queries import is_floating
-from ninjax.knowledge import remember_item
-from ninjax.side.status_effects import set_status
-from ninjax.side.field_conditions import set_terrain, set_weather
-from ninjax.side.hp_effects import take_damage_percent
+
 
 __all__ = (
     'ForcedSwitchRequest',

@@ -1,31 +1,39 @@
 """Hit resolution helpers for immutable JAX battle state."""
-import jax.numpy as jnp
+from functools import partial
+
 import jax
+import jax.numpy as jnp
 import jax.random as random
-from ninjax.enum_types import AbilityEnum, ItemEnum, MoveType, OffensiveStatOwner, Status, Type, Weather
-from ninjax.events import EventKind, emit, Cause
-from ninjax.utils import conditional_mult_round, calculate_effectiveness_multiplier, CRIT_STAGES
-from ninjax.side.hp_effects import take_damage_value
-from ninjax.moves.effects import after_every_hit, secondary_effects, after_damage
-from ninjax.side.item_effects import after_hit, remove_item, consume
-from ninjax.side.state import BattleState
-from ninjax.hit import HitOutcome, HitRecipient, record_hit
-from ninjax.moves.model import Move
-from ninjax.damage import (
+
+from ninjax.calculations.damage import (
     compute_base_damage,
     compute_base_power,
     compute_damage_multipliers,
     damage_post_modifiers,
 )
+from ninjax.calculations.modifiers import CRIT_STAGES, conditional_mult_round
+from ninjax.calculations.stats import raw_boosted_stats
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import Weather
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.moves import MoveType, OffensiveStatOwner
+from ninjax.enums.pokemon import Status, Type
+from ninjax.moves.effects import after_damage, after_every_hit, secondary_effects
+from ninjax.moves.model import Move
+from ninjax.moves.properties import substitute_intercepts
+from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.item_effects import after_hit, consume, remove_item
 from ninjax.side.queries import (
-    effective_weather,
     conditional_mult_round as fixed_modifier,
+    effective_weather,
     modify_stats,
 )
-from functools import partial
-from ninjax.stats import raw_boosted_stats
-from ninjax.moves.properties import substitute_intercepts
+from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
+
 
 # Generation 9 Unseen Fist deals full damage when bypassing Protect.
 UNSEEN_FIST_PROTECT_MULTIPLIER = 1.0

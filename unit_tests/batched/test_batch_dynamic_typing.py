@@ -3,9 +3,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.enum_types import FormEnum as F, Type
+from ninjax.enums.pokemon import FormEnum as F, Type
 from ninjax.moves.properties import effective_move
-from ninjax.team_builder import make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 
