@@ -1,0 +1,5626 @@
+{
+  "revision": "23b41aa29e2ff5ff80e03f57b257b595a5852047",
+  "damage": [
+    {
+      "config": {
+        "ability": "Adaptability",
+        "move": "Flamethrower",
+        "sourceType": "Fire"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Fire"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        154,
+        152,
+        150,
+        148,
+        146,
+        146,
+        144,
+        142,
+        140,
+        140,
+        138,
+        136,
+        134,
+        132,
+        132,
+        130
+      ]
+    },
+    {
+      "config": {
+        "ability": "Blaze",
+        "move": "Flamethrower",
+        "hp": 0.25
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 85,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        115,
+        113,
+        112,
+        111,
+        110,
+        109,
+        108,
+        106,
+        105,
+        104,
+        103,
+        102,
+        101,
+        100,
+        98,
+        97
+      ]
+    },
+    {
+      "config": {
+        "ability": "Overgrow",
+        "move": "Giga Drain",
+        "hp": 0.25
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 85,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85,
+        84,
+        83,
+        82,
+        81
+      ]
+    },
+    {
+      "config": {
+        "ability": "Torrent",
+        "move": "Waterfall",
+        "hp": 0.25
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 85,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        102,
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86
+      ]
+    },
+    {
+      "config": {
+        "ability": "Swarm",
+        "move": "Bug Buzz",
+        "hp": 0.25
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 85,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        115,
+        113,
+        112,
+        111,
+        110,
+        109,
+        108,
+        106,
+        105,
+        104,
+        103,
+        102,
+        101,
+        100,
+        98,
+        97
+      ]
+    },
+    {
+      "config": {
+        "ability": "Huge Power",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        69,
+        68,
+        67,
+        66,
+        66,
+        65,
+        64,
+        64,
+        63,
+        62,
+        62,
+        61,
+        60,
+        60,
+        59,
+        58
+      ]
+    },
+    {
+      "config": {
+        "ability": "Pure Power",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        69,
+        68,
+        67,
+        66,
+        66,
+        65,
+        64,
+        64,
+        63,
+        62,
+        62,
+        61,
+        60,
+        60,
+        59,
+        58
+      ]
+    },
+    {
+      "config": {
+        "ability": "Guts",
+        "move": "Tackle",
+        "status": "brn"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        52,
+        51,
+        50,
+        50,
+        49,
+        49,
+        48,
+        48,
+        47,
+        47,
+        46,
+        46,
+        45,
+        45,
+        44,
+        44
+      ]
+    },
+    {
+      "config": {
+        "ability": "Toxic Boost",
+        "move": "Tackle",
+        "status": "psn"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        52,
+        51,
+        50,
+        50,
+        49,
+        49,
+        48,
+        48,
+        47,
+        47,
+        46,
+        46,
+        45,
+        45,
+        44,
+        44
+      ]
+    },
+    {
+      "config": {
+        "ability": "Toxic Boost",
+        "move": "Tackle",
+        "status": "tox"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        52,
+        51,
+        50,
+        50,
+        49,
+        49,
+        48,
+        48,
+        47,
+        47,
+        46,
+        46,
+        45,
+        45,
+        44,
+        44
+      ]
+    },
+    {
+      "config": {
+        "ability": "Dragon's Maw",
+        "move": "Dragon Claw"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        102,
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86
+      ]
+    },
+    {
+      "config": {
+        "ability": "Rocky Payload",
+        "move": "Power Gem"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        102,
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86
+      ]
+    },
+    {
+      "config": {
+        "ability": "Transistor",
+        "move": "Thunderbolt"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85
+      ]
+    },
+    {
+      "config": {
+        "ability": "Strong Jaw",
+        "move": "Bite"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        77,
+        76,
+        75,
+        74,
+        73,
+        73,
+        72,
+        71,
+        70,
+        70,
+        69,
+        68,
+        67,
+        66,
+        66,
+        65
+      ]
+    },
+    {
+      "config": {
+        "ability": "Iron Fist",
+        "move": "Fire Punch"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        77,
+        76,
+        75,
+        74,
+        73,
+        73,
+        72,
+        71,
+        70,
+        70,
+        69,
+        68,
+        67,
+        66,
+        66,
+        65
+      ]
+    },
+    {
+      "config": {
+        "ability": "Tough Claws",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        45,
+        44,
+        44,
+        43,
+        43,
+        42,
+        42,
+        41,
+        41,
+        40,
+        40,
+        40,
+        39,
+        39,
+        38,
+        38
+      ]
+    },
+    {
+      "config": {
+        "ability": "Mega Launcher",
+        "move": "Dragon Pulse"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        108,
+        106,
+        105,
+        104,
+        103,
+        102,
+        101,
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        93,
+        92,
+        91
+      ]
+    },
+    {
+      "config": {
+        "ability": "Punk Rock",
+        "move": "Boomburst"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        154,
+        152,
+        150,
+        149,
+        147,
+        146,
+        144,
+        143,
+        141,
+        140,
+        138,
+        137,
+        135,
+        133,
+        132,
+        130
+      ]
+    },
+    {
+      "config": {
+        "ability": "Sharpness",
+        "move": "Leaf Blade"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        115,
+        113,
+        112,
+        111,
+        110,
+        109,
+        108,
+        106,
+        105,
+        104,
+        103,
+        102,
+        101,
+        100,
+        98,
+        97
+      ]
+    },
+    {
+      "config": {
+        "ability": "Water Bubble",
+        "move": "Waterfall"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        136,
+        134,
+        133,
+        131,
+        130,
+        129,
+        127,
+        126,
+        125,
+        123,
+        122,
+        121,
+        119,
+        118,
+        116,
+        115
+      ]
+    },
+    {
+      "config": {
+        "ability": "Tinted Lens",
+        "move": "Giga Drain",
+        "targetType": "Grass"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Grass"
+        ]
+      },
+      "rolls": [
+        64,
+        64,
+        62,
+        62,
+        62,
+        60,
+        60,
+        60,
+        58,
+        58,
+        58,
+        56,
+        56,
+        56,
+        54,
+        54
+      ]
+    },
+    {
+      "config": {
+        "ability": "Hustle",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        52,
+        51,
+        50,
+        50,
+        49,
+        49,
+        48,
+        48,
+        47,
+        47,
+        46,
+        46,
+        45,
+        45,
+        44,
+        44
+      ]
+    },
+    {
+      "config": {
+        "ability": "Reckless",
+        "move": "Double-Edge"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        122,
+        120,
+        119,
+        118,
+        117,
+        115,
+        114,
+        113,
+        112,
+        111,
+        109,
+        108,
+        107,
+        106,
+        104,
+        103
+      ]
+    },
+    {
+      "config": {
+        "ability": "Reckless",
+        "move": "High Jump Kick"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        133,
+        131,
+        130,
+        129,
+        127,
+        126,
+        125,
+        123,
+        122,
+        121,
+        119,
+        118,
+        117,
+        115,
+        114,
+        113
+      ]
+    },
+    {
+      "config": {
+        "ability": "Sniper",
+        "move": "Wicked Blow",
+        "crit": true
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        145,
+        144,
+        142,
+        141,
+        139,
+        138,
+        136,
+        135,
+        133,
+        132,
+        130,
+        129,
+        127,
+        126,
+        124,
+        123
+      ]
+    },
+    {
+      "config": {
+        "ability": "Power Spot",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32,
+        32,
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29
+      ]
+    },
+    {
+      "config": {
+        "defender": "Thick Fat",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        39,
+        38,
+        38,
+        37,
+        37,
+        37,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33
+      ]
+    },
+    {
+      "config": {
+        "defender": "Heatproof",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        39,
+        38,
+        38,
+        37,
+        37,
+        37,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33
+      ]
+    },
+    {
+      "config": {
+        "defender": "Fur Coat",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        18,
+        17,
+        17,
+        17,
+        17,
+        17,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        15,
+        15,
+        15,
+        15
+      ]
+    },
+    {
+      "config": {
+        "defender": "Fur Coat",
+        "move": "Psyshock"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32,
+        32,
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29
+      ]
+    },
+    {
+      "config": {
+        "defender": "Ice Scales",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        38,
+        38,
+        37,
+        37,
+        36,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32
+      ]
+    },
+    {
+      "config": {
+        "defender": "Punk Rock",
+        "move": "Boomburst"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        59,
+        58,
+        58,
+        57,
+        57,
+        56,
+        55,
+        55,
+        54,
+        54,
+        53,
+        52,
+        52,
+        51,
+        51,
+        50
+      ]
+    },
+    {
+      "config": {
+        "defender": "Purifying Salt",
+        "move": "Shadow Ball"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32,
+        32,
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29
+      ]
+    },
+    {
+      "config": {
+        "defender": "Filter",
+        "move": "Flamethrower",
+        "targetType": "Grass"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Grass"
+        ]
+      },
+      "rolls": [
+        115,
+        114,
+        112,
+        111,
+        109,
+        109,
+        108,
+        106,
+        105,
+        105,
+        103,
+        102,
+        100,
+        99,
+        99,
+        97
+      ]
+    },
+    {
+      "config": {
+        "defender": "Solid Rock",
+        "move": "Flamethrower",
+        "targetType": "Grass"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Grass"
+        ]
+      },
+      "rolls": [
+        115,
+        114,
+        112,
+        111,
+        109,
+        109,
+        108,
+        106,
+        105,
+        105,
+        103,
+        102,
+        100,
+        99,
+        99,
+        97
+      ]
+    },
+    {
+      "config": {
+        "defender": "Prism Armor",
+        "move": "Flamethrower",
+        "targetType": "Grass"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Grass"
+        ]
+      },
+      "rolls": [
+        115,
+        114,
+        112,
+        111,
+        109,
+        109,
+        108,
+        106,
+        105,
+        105,
+        103,
+        102,
+        100,
+        99,
+        99,
+        97
+      ]
+    },
+    {
+      "config": {
+        "defender": "Fluffy",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        17,
+        17,
+        17,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        14
+      ]
+    },
+    {
+      "config": {
+        "defender": "Fluffy",
+        "move": "Fire Punch"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        65,
+        64,
+        63,
+        63,
+        62,
+        61,
+        61,
+        60,
+        59,
+        59,
+        58,
+        57,
+        57,
+        56,
+        55,
+        55
+      ]
+    },
+    {
+      "config": {
+        "defender": "Multiscale",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        38,
+        38,
+        37,
+        37,
+        36,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32
+      ]
+    },
+    {
+      "config": {
+        "defender": "Shadow Shield",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        38,
+        38,
+        37,
+        37,
+        36,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32
+      ]
+    },
+    {
+      "config": {
+        "defender": "Water Bubble",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        39,
+        38,
+        38,
+        37,
+        37,
+        37,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34,
+        33,
+        33,
+        33
+      ]
+    },
+    {
+      "config": {
+        "defender": "Dry Skin",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85,
+        84,
+        83,
+        82,
+        81
+      ]
+    },
+    {
+      "config": {
+        "defender": "Tablets of Ruin",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        27,
+        26,
+        26,
+        26,
+        25,
+        25,
+        25,
+        25,
+        24,
+        24,
+        24,
+        24,
+        23,
+        23,
+        23,
+        22
+      ]
+    },
+    {
+      "config": {
+        "item": "Expert Belt",
+        "move": "Flamethrower",
+        "targetType": "Grass"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "Grass"
+        ]
+      },
+      "rolls": [
+        185,
+        182,
+        180,
+        178,
+        175,
+        175,
+        173,
+        170,
+        168,
+        168,
+        166,
+        163,
+        161,
+        158,
+        158,
+        156
+      ]
+    },
+    {
+      "config": {
+        "item": "Expert Belt",
+        "move": "Flamethrower"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        77,
+        76,
+        75,
+        74,
+        73,
+        73,
+        72,
+        71,
+        70,
+        70,
+        69,
+        68,
+        67,
+        66,
+        66,
+        65
+      ]
+    },
+    {
+      "config": {
+        "item": "Magnet",
+        "move": "Thunderbolt"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85,
+        84,
+        83,
+        82,
+        81,
+        80,
+        80,
+        79,
+        78
+      ]
+    },
+    {
+      "config": {
+        "item": "Magnet",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32,
+        32,
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29
+      ]
+    },
+    {
+      "config": {
+        "item": "Silk Scarf",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        42,
+        41,
+        41,
+        40,
+        40,
+        39,
+        39,
+        39,
+        38,
+        38,
+        37,
+        37,
+        36,
+        36,
+        36,
+        35
+      ]
+    },
+    {
+      "config": {
+        "item": "Light Ball",
+        "move": "Tackle",
+        "species": "Pikachu"
+      },
+      "source": {
+        "species": 25,
+        "baseStats": {
+          "hp": 35,
+          "atk": 55,
+          "def": 40,
+          "spa": 50,
+          "spd": 50,
+          "spe": 90
+        },
+        "stats": {
+          "atk": 147,
+          "def": 117,
+          "spa": 137,
+          "spd": 137,
+          "spe": 217
+        },
+        "maxhp": 212,
+        "hp": 212,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        43,
+        42,
+        42,
+        41,
+        41,
+        40,
+        40,
+        39,
+        39,
+        39,
+        38,
+        38,
+        37,
+        37,
+        36,
+        36
+      ]
+    },
+    {
+      "config": {
+        "item": "Light Ball",
+        "move": "Thunderbolt",
+        "species": "Pikachu"
+      },
+      "source": {
+        "species": 25,
+        "baseStats": {
+          "hp": 35,
+          "atk": 55,
+          "def": 40,
+          "spa": 50,
+          "spd": 50,
+          "spe": 90
+        },
+        "stats": {
+          "atk": 147,
+          "def": 117,
+          "spa": 137,
+          "spd": 137,
+          "spe": 217
+        },
+        "maxhp": 212,
+        "hp": 212,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        89,
+        88,
+        87,
+        86,
+        85,
+        84,
+        83,
+        82,
+        81,
+        80,
+        80,
+        79,
+        78,
+        77,
+        76,
+        75
+      ]
+    },
+    {
+      "config": {
+        "item": "Light Ball",
+        "move": "Tackle"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        35,
+        34,
+        34,
+        33,
+        33,
+        33,
+        32,
+        32,
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29
+      ]
+    },
+    {
+      "config": {
+        "item": "Soul Dew",
+        "move": "Dragon Pulse",
+        "species": "Latios"
+      },
+      "source": {
+        "species": 381,
+        "baseStats": {
+          "hp": 80,
+          "atk": 90,
+          "def": 80,
+          "spa": 130,
+          "spd": 110,
+          "spe": 110
+        },
+        "stats": {
+          "atk": 217,
+          "def": 197,
+          "spa": 297,
+          "spd": 257,
+          "spe": 257
+        },
+        "maxhp": 302,
+        "hp": 302,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        109,
+        107,
+        106,
+        105,
+        104,
+        103,
+        102,
+        101,
+        100,
+        99,
+        98,
+        97,
+        95,
+        94,
+        93,
+        92
+      ]
+    },
+    {
+      "config": {
+        "item": "Soul Dew",
+        "move": "Psychic",
+        "species": "Latias"
+      },
+      "source": {
+        "species": 380,
+        "baseStats": {
+          "hp": 80,
+          "atk": 80,
+          "def": 90,
+          "spa": 110,
+          "spd": 130,
+          "spe": 110
+        },
+        "stats": {
+          "atk": 197,
+          "def": 217,
+          "spa": 257,
+          "spd": 297,
+          "spe": 257
+        },
+        "maxhp": 302,
+        "hp": 302,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        100,
+        99,
+        98,
+        97,
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85
+      ]
+    },
+    {
+      "config": {
+        "item": "Soul Dew",
+        "move": "Tackle",
+        "species": "Latios"
+      },
+      "source": {
+        "species": 381,
+        "baseStats": {
+          "hp": 80,
+          "atk": 90,
+          "def": 80,
+          "spa": 130,
+          "spd": 110,
+          "spe": 110
+        },
+        "stats": {
+          "atk": 217,
+          "def": 197,
+          "spa": 297,
+          "spd": 257,
+          "spe": 257
+        },
+        "maxhp": 302,
+        "hp": 302,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        32,
+        31,
+        31,
+        31,
+        30,
+        30,
+        30,
+        29,
+        29,
+        29,
+        28,
+        28,
+        28,
+        27,
+        27,
+        27
+      ]
+    },
+    {
+      "config": {
+        "item": "Lustrous Orb",
+        "move": "Dragon Pulse",
+        "species": "Palkia"
+      },
+      "source": {
+        "species": 484,
+        "baseStats": {
+          "hp": 90,
+          "atk": 120,
+          "def": 100,
+          "spa": 150,
+          "spd": 120,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 277,
+          "def": 237,
+          "spa": 337,
+          "spd": 277,
+          "spe": 237
+        },
+        "maxhp": 322,
+        "hp": 322,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        123,
+        121,
+        120,
+        119,
+        118,
+        116,
+        115,
+        114,
+        113,
+        111,
+        110,
+        109,
+        108,
+        107,
+        105,
+        104
+      ]
+    },
+    {
+      "config": {
+        "item": "Lustrous Orb",
+        "move": "Waterfall",
+        "species": "Palkia"
+      },
+      "source": {
+        "species": 484,
+        "baseStats": {
+          "hp": 90,
+          "atk": 120,
+          "def": 100,
+          "spa": 150,
+          "spd": 120,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 277,
+          "def": 237,
+          "spa": 337,
+          "spd": 277,
+          "spe": 237
+        },
+        "maxhp": 322,
+        "hp": 322,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        96,
+        95,
+        94,
+        93,
+        92,
+        91,
+        90,
+        89,
+        88,
+        87,
+        86,
+        85,
+        84,
+        83,
+        82,
+        81
+      ]
+    },
+    {
+      "config": {
+        "item": "Lustrous Orb",
+        "move": "Tackle",
+        "species": "Palkia"
+      },
+      "source": {
+        "species": 484,
+        "baseStats": {
+          "hp": 90,
+          "atk": 120,
+          "def": 100,
+          "spa": 150,
+          "spd": 120,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 277,
+          "def": 237,
+          "spa": 337,
+          "spd": 277,
+          "spe": 237
+        },
+        "maxhp": 322,
+        "hp": 322,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "rolls": [
+        41,
+        40,
+        40,
+        39,
+        39,
+        38,
+        38,
+        38,
+        37,
+        37,
+        36,
+        36,
+        36,
+        35,
+        35,
+        34
+      ]
+    }
+  ],
+  "speed": [
+    {
+      "config": {
+        "item": "Choice Scarf"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 355
+    },
+    {
+      "config": {
+        "item": "Choice Scarf",
+        "stage": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 532
+    },
+    {
+      "config": {
+        "item": "Choice Scarf",
+        "status": "par"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 177
+    },
+    {
+      "config": {
+        "ability": "Chlorophyll",
+        "weather": "sunnyday",
+        "stage": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 710
+    },
+    {
+      "config": {
+        "ability": "Swift Swim",
+        "weather": "raindance"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 474
+    },
+    {
+      "config": {
+        "ability": "Slush Rush",
+        "weather": "snowscape"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 474
+    },
+    {
+      "config": {
+        "ability": "Sand Rush",
+        "weather": "sandstorm"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 474
+    },
+    {
+      "config": {
+        "ability": "Chlorophyll",
+        "weather": "sunnyday",
+        "defender": "Cloud Nine"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 237
+    },
+    {
+      "config": {
+        "ability": "Quick Feet",
+        "status": "par",
+        "stage": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 532
+    },
+    {
+      "config": {
+        "ability": "Quick Feet",
+        "status": "brn"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 355
+    },
+    {
+      "config": {
+        "ability": "Surge Surfer",
+        "terrain": "electricterrain"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 474
+    },
+    {
+      "config": {
+        "item": "Choice Scarf",
+        "tailwind": true,
+        "stage": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expected": 1065
+    }
+  ],
+  "statuses": [
+    {
+      "ability": "Limber",
+      "status": "par",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Water Veil",
+      "status": "brn",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Water Bubble",
+      "status": "brn",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Thermal Exchange",
+      "status": "brn",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Insomnia",
+      "status": "slp",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Vital Spirit",
+      "status": "slp",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "psn",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "tox",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "par",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "brn",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "slp",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Purifying Salt",
+      "status": "frz",
+      "weather": "",
+      "expected": ""
+    },
+    {
+      "ability": "Leaf Guard",
+      "status": "brn",
+      "weather": "sunnyday",
+      "expected": ""
+    },
+    {
+      "ability": "Leaf Guard",
+      "status": "brn",
+      "weather": "raindance",
+      "expected": "brn"
+    }
+  ],
+  "berries": [
+    {
+      "item": "Chesto Berry",
+      "status": "slp",
+      "confusion": false,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Chesto Berry",
+      "status": "brn",
+      "confusion": false,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "brn",
+      "expectedItem": "chestoberry",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Lum Berry",
+      "status": "tox",
+      "confusion": false,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Lum Berry",
+      "status": "par",
+      "confusion": false,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Lum Berry",
+      "status": "",
+      "confusion": true,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Lum Berry",
+      "status": "brn",
+      "confusion": true,
+      "ability": "",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 342,
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Sitrus Berry",
+      "status": "",
+      "confusion": false,
+      "ability": "Cheek Pouch",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 100,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 100,
+      "expectedHP": 299,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    },
+    {
+      "item": "Lum Berry",
+      "status": "brn",
+      "confusion": false,
+      "ability": "Cheek Pouch",
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 100,
+        "types": [
+          "???"
+        ]
+      },
+      "initialHP": 100,
+      "expectedHP": 214,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedConfusion": false
+    }
+  ],
+  "residuals": [
+    {
+      "config": {
+        "item": "Flame Orb"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 342,
+      "expectedStatus": "brn",
+      "expectedItem": "flameorb",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "item": "Toxic Orb"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 342,
+      "expectedStatus": "tox",
+      "expectedItem": "toxicorb",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Poison Heal",
+        "status": "psn",
+        "hp": 0.5
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 171,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 213,
+      "expectedStatus": "psn",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Poison Heal",
+        "status": "tox",
+        "hp": 0.5
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 171,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 213,
+      "expectedStatus": "tox",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Hydration",
+        "status": "brn",
+        "weather": "raindance"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Speed Boost"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 1,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Ice Body",
+        "weather": "snowscape",
+        "hp": 0.5
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 171,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 192,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "item": "White Herb",
+        "firstMove": "Shell Smash"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 342,
+      "expectedStatus": "",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 2,
+        "def": 0,
+        "spa": 2,
+        "spd": 0,
+        "spe": 2,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Bad Dreams",
+        "status": "slp"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedHP": 300,
+      "expectedStatus": "slp",
+      "expectedItem": "",
+      "expectedBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "config": {
+        "defender": "Aftermath",
+        "move": "Tackle",
+        "targetHP": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 1,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 257,
+      "expectedTargetHP": 0,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Aftermath",
+        "move": "Tackle",
+        "targetHP": 1,
+        "item": "Protective Pads"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 1,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 0,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Aftermath",
+        "move": "Tackle",
+        "targetHP": 1,
+        "ability": "Damp"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 1,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 0,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Aftermath",
+        "move": "Shadow Ball",
+        "targetHP": 1
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 1,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 0,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Wind Rider",
+        "move": "Hurricane"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 342,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 1,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "defender": "Wind Rider",
+        "move": "Heat Wave"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 342,
+      "expectedSourceBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 1,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    },
+    {
+      "config": {
+        "ability": "Wind Rider",
+        "move": "Tailwind"
+      },
+      "source": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "target": {
+        "species": 151,
+        "baseStats": {
+          "hp": 100,
+          "atk": 100,
+          "def": 100,
+          "spa": 100,
+          "spd": 100,
+          "spe": 100
+        },
+        "stats": {
+          "atk": 237,
+          "def": 237,
+          "spa": 237,
+          "spd": 237,
+          "spe": 237
+        },
+        "maxhp": 342,
+        "hp": 342,
+        "types": [
+          "???"
+        ]
+      },
+      "expectedSourceHP": 342,
+      "expectedTargetHP": 342,
+      "expectedSourceBoosts": {
+        "atk": 1,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      },
+      "expectedTargetBoosts": {
+        "atk": 0,
+        "def": 0,
+        "spa": 0,
+        "spd": 0,
+        "spe": 0,
+        "accuracy": 0,
+        "evasion": 0
+      }
+    }
+  ]
+}

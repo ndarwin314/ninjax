@@ -11,7 +11,9 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.data.load_json import dex
-from ninjax.prototype import STAT_NAMES, make_sandbox_teams
+from ninjax.team_builder import STAT_NAMES, make_sandbox_teams
+from ninjax.enum_types import AbilityEnum
+from ninjax.enum_types import ItemEnum
 
 DEFAULT_SETS = Path(__file__).parent / 'data' / 'curated-sets.txt'
 STAT_LABELS = dict(zip(('HP', 'Atk', 'Def', 'SpA', 'SpD', 'Spe'), STAT_NAMES))
@@ -223,7 +225,7 @@ def make_ability_pool(sets):
     A None ability in the omissions report means it was enabled. Ability IDs use
     the engine's enum. Unsupported moves and abilities are still reported.
     """
-    from ninjax.enum_types import AbilityEnum
+
     pool, omissions = make_sandbox_pool(sets)
     abilities = []
     for config, report in zip(sets, omissions, strict=True):
@@ -264,7 +266,7 @@ def make_item_pool(sets, abilities=False):
     Ability projection is independent and can be enabled for interactions such
     as Booster Energy with Protosynthesis or Quark Drive.
     """
-    from ninjax.enum_types import ItemEnum
+
     pool, omissions = (make_ability_pool if abilities else make_sandbox_pool)(sets)
     items = []
     for config, report in zip(sets, omissions, strict=True):

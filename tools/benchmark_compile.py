@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import jax
 import jax.numpy as jnp
 from ninjax.battle import Battle
-from ninjax.move import Move
+from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
 from ninjax.tree import stack
 

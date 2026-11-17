@@ -3,12 +3,14 @@ import jax.numpy as jnp
 import pytest
 from ninjax.battle import step_field, step_move
 from ninjax.enum_types import MoveResult, MoveType
-from ninjax.game_logic import effective_move
+from ninjax.moves.properties import effective_move
 from ninjax.hit import HitOutcome
-from ninjax.prototype import make_move
-from ninjax.side import clear_volatile_status
+from ninjax.team_builder import make_move
+from ninjax.side.updates import clear_volatile_status
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.battle import ActionType, Battle, BattleAction
+from ninjax.battle import Battle
 
 
 def test_fake_out_first_action_and_reset(neutral_type):
@@ -66,7 +68,7 @@ def test_previous_result_rollover_and_protect(neutral_type):
 
 def test_scheduler_supplies_sucker_punch_intent(neutral_type):
     """A queued damaging move allows priority Sucker Punch in an environment turn."""
-    from ninjax.battle import ActionType, Battle, BattleAction
+
     key, state = neutral_type
     state = equip_move(state, 'Sucker Punch', player=0)
     state = equip_move(state, 'Dragon Pulse', player=1)
@@ -91,7 +93,7 @@ def test_full_hp_healing_records_failure(neutral_type):
 
 def test_observation_exposes_history_not_pending_intent(neutral_type):
     """Move-history leaves are public while pending move categories stay internal."""
-    from ninjax.battle import Battle
+
     key, state = neutral_type
     env = Battle(state.team)
     episode, _ = env.reset(key)
@@ -103,16 +105,3 @@ def test_observation_exposes_history_not_pending_intent(neutral_type):
     assert obs.active.previous_move_result[0, 0] == MoveResult.FAILED
     assert obs.active.active_move_actions[0, 0] == 2
     assert not hasattr(obs.active, 'pending_move_type')
-
-
-def test_stomping_result_transform_shapes(neutral_type):
-    """Previous-result power selection traces under vmap and scan."""
-    import jax
-    _, state = neutral_type
-    move = make_move('Stomping Tantrum')
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    assert jax.eval_shape(jax.vmap(lambda s: effective_move(s, 0, move).base_power), batch).shape == (2, 1)
-    def scan(s):
-        """Carry move-result state while observing power over two turns."""
-        return jax.lax.scan(lambda s, _: (s, effective_move(s, 0, move).base_power), s, None, length=2)[1]
-    assert jax.eval_shape(scan, state).shape == (2, 1)

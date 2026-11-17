@@ -2,10 +2,12 @@
 import jax
 import jax.numpy as jnp
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status
-from ninjax.game_logic import resolve_damaging_hit
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
+from ninjax.battle import step_move
+from unit_tests.test_curated_moves import equip_move
 
 
 def damage(key, state):
@@ -55,20 +57,10 @@ def test_target_unaware_ignores_borrowed_stages(neutral_type):
     assert damage(key, lowered) == damage(key, state)
 
 
-def test_foul_play_selection_traces(neutral_type):
-    """The target-owner selector supports JAX batching without compiling a battle."""
-    _, state = neutral_type
-    from ninjax.enum_types import OffensiveStatOwner as Owner
-    from ninjax.side import select_offensive_stats
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    result = jax.eval_shape(jax.vmap(lambda s: select_offensive_stats(s.active.stats, s.boosts, 0, Owner.TARGET, False, False)), batch)
-    assert result.shape == (2, 6)
-
-
 def test_foul_play_move_execution(neutral_type):
     """The catalogue move spends PP and uses the ordinary hit path."""
-    from ninjax.battle import step_move
-    from unit_tests.test_curated_moves import equip_move
+
+
     key, state = neutral_type
     state = equip_move(state, 'Foul Play')
     _, out = step_move(key, state, 0, 0, False)

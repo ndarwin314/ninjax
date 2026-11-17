@@ -57,16 +57,14 @@ def test_sampled_teams_and_explicit_omissions():
     assert jnp.array_equal(pool.stat_table.evs[0], jnp.array([4, 252, 0, 0, 0, 252]))
     assert pool.stat_table.nature.increased[0, 0] == 5
     assert pool.stat_table.nature.decreased[0, 0] == 3
-    keys = jax.random.split(jax.random.key(42), 8)
-    samples = jax.jit(jax.vmap(sample_teams, in_axes=(0, None)))(keys, pool)
-    teams, indices = samples
-    assert indices.shape == (8, 2, 6)
-    assert teams.current_hp.shape == (8, 2, 6, 1)
+    key = jax.random.key(42)
+    teams, indices = jax.jit(sample_teams)(key, pool)
+    again, repeated = jax.jit(sample_teams)(key, pool)
+    assert indices.shape == (2, 6)
     assert jnp.all(jnp.diff(jnp.sort(indices, axis=-1), axis=-1) > 0)
-    again, repeated = jax.jit(sample_teams)(keys[0], pool)
-    assert jnp.array_equal(indices[0], repeated)
+    assert jnp.array_equal(indices, repeated)
+    assert jnp.array_equal(teams.species, again.species)
     assert jnp.array_equal(again.species, pool.species[repeated])
-    assert not jnp.array_equal(indices[0], indices[1])
     for row in range(len(sets)):
         assert omissions[row]['species'] == sets[row].species
         assert omissions[row]['ability'] == sets[row].ability

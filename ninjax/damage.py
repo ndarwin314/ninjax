@@ -1,22 +1,18 @@
-from typing import Tuple
 
-import jax
-import jax.random as random
+
+
 import jax.numpy as jnp
 import chex
 
 
-from ninjax.utils import STAT_MULTIPLIER_LOOKUP, ACCURACY_MULTIPLIER_LOOKUP
-
 from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side import boosted_stats_helper, is_floating
+from ninjax.side.queries import is_floating
 from ninjax.pokemon import Pokemon
-from ninjax.move import Move
-from ninjax.utils import (
-    conditional_mult_round, TERRAIN_MULTIPLIER, TYPE_EFFECTIVENESS, CRIT_STAGES,calculate_effectiveness_multiplier,
-    COMPOUND_EYES_MULTIPLIER, conditional_mult, WEATHER_VEIL_MODIFIER, triple_and, triple_or, quad_or, ROUGH_SKIN_DAMAGE,
-    in_range, IRON_FIST, TOUGH_CLAWS, one_third, RECKLESS, VICTORY_STAR, four_thirds, quad_and,
-    conditional_mult_prod_round, conditional_mult_prod, one_point_three)
+from ninjax.moves.model import Move
+from ninjax.utils import conditional_mult_round, TERRAIN_MULTIPLIER, calculate_effectiveness_multiplier, conditional_mult, triple_and, triple_or, IRON_FIST, TOUGH_CLAWS, RECKLESS, four_thirds, conditional_mult_prod_round, conditional_mult_prod, one_point_three
+from ninjax.side.queries import conditional_mult_round as fixed_modifier
+from ninjax.enum_types import MoveFlags
+from ninjax.enum_types import FormEnum, ItemEnum
 
 
 Array = chex.Array
@@ -27,7 +23,7 @@ def compute_base_power(
         move: Move,
         terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False) -> chex.Array:
     """Calculate represented power modifiers, including grounded terrain effects."""
-    from ninjax.held_effects import conditional_mult_round as fixed_modifier
+
     power = fixed_modifier(move.base_power, 1.5,
         (move.identifier == 797) & (terrain.terrain == TerrainEnum.PSYCHIC) &
         (~is_floating(attacker) | jnp.asarray(gravity_active)))
@@ -51,7 +47,6 @@ def compute_base_power(
     power = conditional_mult_round(power, 3/4, jnp.logical_and(aura, aura_break))
 
 
-    from ninjax.held_effects import conditional_mult_round as fixed_modifier
     power = fixed_modifier(power, 5325/4096,
         (ability == AbilityEnum.SAND_FORCE) & (weather == WeatherEnum.SANDSTORM) &
         ((move.type == Type.ROCK) | (move.type == Type.GROUND) | (move.type == Type.STEEL)))
@@ -107,11 +102,11 @@ def compute_base_power(
     power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
     # punk rock
     power = fixed_modifier(power, 5325/4096, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
-    from ninjax.enum_types import MoveFlags
+
     power = fixed_modifier(power, 1.5, (ability == AbilityEnum.SHARPNESS) & ((move.move_flags & MoveFlags.SLICING) != 0))
     # Masks boost every damaging type for their matching stored Ogerpon form.
     # Apply after the earlier power hooks (Showdown item priority 15).
-    from ninjax.enum_types import FormEnum, ItemEnum
+
     mask = (((attacker.item == ItemEnum.WELLSPRING_MASK) & (attacker.form == FormEnum.OGERPON_WELLSPRING)) |
             ((attacker.item == ItemEnum.HEARTHFLAME_MASK) & (attacker.form == FormEnum.OGERPON_HEARTHFLAME)) |
             ((attacker.item == ItemEnum.CORNERSTONE_MASK) & (attacker.form == FormEnum.OGERPON_CORNERSTONE)))
@@ -150,7 +145,7 @@ def compute_base_damage(
     offensive_stat = conditional_mult_round(offensive_stat, 1.5,
         triple_and(jnp.asarray(flash_fire_boosted), attacker_ability == AbilityEnum.FLASH_FIRE, move.type == Type.FIRE))
     defensive_stat = compute_defensive_stat(defender_stats, defender_ability, defender_status, move.defensive_stat)
-    from ninjax.held_effects import conditional_mult_round as fixed_modifier
+
     # ruin abilities
     sword_of_ruin = (attacker_ability==AbilityEnum.SWORD_OF_RUIN) & (defender_ability != AbilityEnum.SWORD_OF_RUIN)
     beads_of_ruin = (attacker_ability == AbilityEnum.BEADS_OF_RUIN) & (defender_ability != AbilityEnum.BEADS_OF_RUIN)

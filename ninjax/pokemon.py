@@ -4,9 +4,10 @@ from dataclasses import field
 
 import jax.numpy as jnp
 
-from ninjax.move import Move
+from ninjax.moves.model import Move
 from ninjax.stats import StatTable
 from ninjax.enum_types import Type, Status
+from ninjax.tree import is_tree_placeholder
 
 class Pokemon(ArrayTree):
     """Team leaves use (2 players, 6 slots, features); moves add a move axis."""
@@ -36,7 +37,7 @@ class Pokemon(ArrayTree):
 
     def __post_init__(self):
         """Broadcast Pokémon features across its entity axes."""
-        from ninjax.tree import is_tree_placeholder
+
         if is_tree_placeholder(self.type_list):
             return
         batch = jnp.shape(self.type_list)[:-1]

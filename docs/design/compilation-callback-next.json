@@ -1,0 +1,1544 @@
+{
+  "before": {
+    "raw_log": ".profiling/cache-diagnostics/callback-refactor.log",
+    "phases": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0.0,
+        "peak_rss_mib": 502.4,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": true,
+        "log_compiles": true,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 6.059,
+        "peak_rss_mib": 581.3,
+        "equations": 49488,
+        "subgraphs": 438,
+        "primitives": {
+          "jit": 10769,
+          "add": 5694,
+          "lt": 4533,
+          "select_n": 4444,
+          "broadcast_in_dim": 2950,
+          "squeeze": 2919,
+          "reshape": 2199,
+          "convert_element_type": 2050,
+          "eq": 1966,
+          "and": 1687,
+          "mul": 1337,
+          "dynamic_slice": 1256
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 9.944,
+        "peak_rss_mib": 852.4
+      },
+      {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 69.798,
+        "peak_rss_mib": 2862.4
+      },
+      {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 69.804,
+        "peak_rss_mib": 2862.4
+      },
+      {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 114.523,
+        "peak_rss_mib": 2862.4,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    ],
+    "backend_seconds": 59.854,
+    "redefinition_warnings": 118,
+    "sites": {
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674": 3,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721": 3,
+      "replace_active /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:309": 1,
+      "_unchanged_damage_state /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622": 1,
+      "status_helper /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:315": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:555": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:557": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:499": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:533": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:535": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:538": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:564": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:790": 1,
+      "_prepare_move_use /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:824": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:834": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:859": 1,
+      "fail /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:948": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:977": 1,
+      "selected /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:918": 1,
+      "prepare /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:912": 1,
+      "detonate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:887": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:915": 1,
+      "charge /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1010": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:916": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1062": 1,
+      "attempt /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1098": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1101": 1,
+      "_prepare_normal_hit /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1189": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1251": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:171": 1,
+      "apply /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:174": 1,
+      "_add_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70": 1,
+      "_accuracy_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81": 1,
+      "_unchanged_stages /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:179": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:188": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:193": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:199": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:200": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344": 1,
+      "do_status_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426": 1,
+      "switch /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38": 1,
+      "split /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40": 1,
+      "other /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402": 1,
+      "activate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:214": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:228": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:231": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512": 1,
+      "do_stat_boost_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521": 1,
+      "do_flash_fire_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527": 1,
+      "do_healing_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516": 1,
+      "is_immune /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1149": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1063": 1,
+      "move_misses /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1276": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:929": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:935": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:937": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1003": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:981": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:989": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774": 1,
+      "other /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:669": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:674": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:660": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:351": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:368": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:377": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:268": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:284": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:286": 1
+    },
+    "warnings": [
+      {
+        "line": 1931,
+        "site": "replace_active /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:309",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:325:16 (Battle._advance):\n  never seen function:\n    replace_active id=140364896766256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:309\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 1979,
+        "site": "_unchanged_damage_state /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:684:16 (_take_damage_value):\n  never seen function:\n    _unchanged_damage_state id=140365161064304 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2007,
+        "site": "status_helper /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:596:18 (set_status):\n  never seen function:\n    status_helper id=140365161062896 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2020,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674:12 (swap_out):\n  never seen function:\n    <lambda> id=140364896779632 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2030,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:315",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:313:30 (Battle._advance.<locals>.replace_active.<locals>.replace_player):\n  never seen function:\n    <lambda> id=140364896776816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:315\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2056,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:555",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:553:45 (step_move):\n  never seen function:\n    <lambda> id=140364884995488 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:555\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2064,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:557",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:555:27 (step_move.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364884996016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:557\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2087,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:499",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:498:33 (before_move):\n  never seen function:\n    <lambda> id=140364884996016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:499\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2116,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:533",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:533:24 (before_move.<locals>.confusion_check.<locals>.roll_hit):\n  never seen function:\n    <lambda> id=140364882147664 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:533\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2121,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:535",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:534:15 (before_move.<locals>.confusion_check):\n  never seen function:\n    <lambda> id=140364882143440 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:535\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2126,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:538",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:537:27 (before_move):\n  never seen function:\n    <lambda> id=140364882134816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:538\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2134,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:564",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:562:17 (step_move):\n  never seen function:\n    <lambda> id=140364884996016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:564\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2142,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:790",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:789:17 (move_used):\n  never seen function:\n    <lambda> id=140364879962256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:790\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2150,
+        "site": "_prepare_move_use /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:824",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:790:27 (move_used.<locals>.<lambda>):\n  never seen function:\n    _prepare_move_use id=140365161128960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:824\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2158,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:834",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:833:12 (_prepare_move_use):\n  never seen function:\n    <lambda> id=140364879968416 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:834\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2166,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:859",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:858:12 (_prepare_move_use):\n  never seen function:\n    <lambda> id=140364879498400 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:859\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2182,
+        "site": "fail /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:948",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:969:11 (_prepare_sleep_talk):\n  never seen function:\n    fail id=140364879498752 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:948\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2187,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:977",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:976:34 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140364879962256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:977\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2201,
+        "site": "selected /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:918",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:921:24 (dispatch_selected_move):\n  never seen function:\n    selected id=140364879509840 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:918\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2209,
+        "site": "prepare /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:912",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:920:15 (dispatch_selected_move.<locals>.selected):\n  never seen function:\n    prepare id=140364879509664 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:912\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2220,
+        "site": "detonate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:887",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:900:15 (dispatch_selected_move.<locals>.prepare_explosion):\n  never seen function:\n    detonate id=140364874697360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:887\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2225,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:915",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:914:15 (dispatch_selected_move.<locals>.prepare):\n  never seen function:\n    <lambda> id=140364879510544 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:915\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2236,
+        "site": "charge /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1010",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1019:17 (_prepare_electro_shot):\n  never seen function:\n    charge id=140364874702992 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1010\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2241,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:916",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:915:31 (dispatch_selected_move.<locals>.prepare.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364874697360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:916\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2255,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1062",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1060:24 (_apply_move_effects):\n  never seen function:\n    <lambda> id=140364874697360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1062\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2263,
+        "site": "attempt /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1098",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1103:11 (_prepare_accuracy):\n  never seen function:\n    attempt id=140364874707920 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1098\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2271,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1101",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1100:15 (_prepare_accuracy.<locals>.attempt):\n  never seen function:\n    <lambda> id=140364871532608 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1101\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2282,
+        "site": "_prepare_normal_hit /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1189",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1167:45 (_move_hits):\n  never seen function:\n    _prepare_normal_hit id=140365161133008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1189\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2321,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1251",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1251:12 (_prepare_normal_hit):\n  never seen function:\n    <lambda> id=140364871540704 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1251\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2332,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:79:23 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140364867537376 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2346,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:101:23 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140364867540192 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2362,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:276:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364863452640 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2380,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:294:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773648 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2388,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:299:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364863454400 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2396,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:304:17 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2425,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65:17 (after_every_hit):\n  never seen function:\n    <lambda> id=140364859779632 defined at /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2433,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:306:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2441,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:252:12 (after_hit):\n  never seen function:\n    <lambda> id=140364859779984 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2449,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:257:11 (after_hit):\n  never seen function:\n    <lambda> id=140364857364672 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2460,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142:12 (remove_item):\n  never seen function:\n    <lambda> id=140364857365024 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2465,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:310:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2473,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:313:17 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2484,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:171",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:170:21 (secondary_effects.<locals>.apply):\n  never seen function:\n    <lambda> id=140364857366960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:171\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2495,
+        "site": "apply /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:80:11 (apply_confusion):\n  never seen function:\n    apply id=140364857367840 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2500,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:174",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:173:21 (secondary_effects.<locals>.apply):\n  never seen function:\n    <lambda> id=140364857366960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:174\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2517,
+        "site": "_add_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:77:11 (_ordinary_stage):\n  never seen function:\n    _add_stage id=140364896768016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2522,
+        "site": "_accuracy_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:93:11 (_valid_stage):\n  never seen function:\n    _accuracy_stage id=140364896768368 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2527,
+        "site": "_unchanged_stages /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:99:11 (stages):\n  never seen function:\n    _unchanged_stages id=140364896767136 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2532,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:179",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:179:17 (secondary_effects):\n  never seen function:\n    <lambda> id=140364857365904 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:179\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2540,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41:11 (kings_rock_flinch):\n  never seen function:\n    <lambda> id=140364857367312 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2551,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:188",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:188:12 (after_damage):\n  never seen function:\n    <lambda> id=140364857365904 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:188\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2559,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:193",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:192:12 (after_damage):\n  never seen function:\n    <lambda> id=140364857373472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:193\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2570,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:199",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:198:15 (after_damage.<locals>.spin):\n  never seen function:\n    <lambda> id=140364857375056 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:199\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2575,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:200",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:200:11 (after_damage):\n  never seen function:\n    <lambda> id=140364857373472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:200\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2580,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2585,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113:38 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140364867540368 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2593,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114:20 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140364867545296 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2601,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115:20 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140364863454400 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2606,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117:15 (resolve_multi_hit.<locals>.body):\n  never seen function:\n    <lambda> id=140364867539488 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2614,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:125:12 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140364867537904 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2622,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:134:23 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140364867537904 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2630,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:338:12 (finish_damaging_move):\n  never seen function:\n    <lambda> id=140364867540016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2638,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268:11 (after_move):\n  never seen function:\n    <lambda> id=140364867537904 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2646,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:342:12 (finish_damaging_move):\n  never seen function:\n    <lambda> id=140364867540016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2651,
+        "site": "do_status_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1169:17 (_move_hits):\n  never seen function:\n    do_status_move id=140365161124208 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2665,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426:12 (force_switch_target.<locals>.fail):\n  never seen function:\n    <lambda> id=140364849350432 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2670,
+        "site": "switch /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:442:11 (force_switch_target):\n  never seen function:\n    switch id=140364849349552 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2680,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674:12 (swap_out):\n  never seen function:\n    <lambda> id=140364849356768 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2690,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:409:11 (do_status_move):\n  never seen function:\n    <lambda> id=140364867538608 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2709,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33:17 (direct_status_move.<locals>.rest):\n  never seen function:\n    <lambda> id=140364849362400 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2717,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:37:17 (direct_status_move.<locals>.rest):\n  never seen function:\n    <lambda> id=140364849362224 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2722,
+        "site": "split /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:57:11 (direct_status_move):\n  never seen function:\n    split id=140364849363808 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2733,
+        "site": "other /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411:21 (do_status_move.<locals>.<lambda>):\n  never seen function:\n    other id=140364859773472 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2744,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399:22 (do_status_move.<locals>.other.<locals>.memento):\n  never seen function:\n    <lambda> id=140364849362400 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2749,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:400:15 (do_status_move.<locals>.other):\n  never seen function:\n    <lambda> id=140364849363632 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2760,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174:11 (swap_items):\n  never seen function:\n    <lambda> id=140364845355024 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2768,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:386:16 (do_status_move.<locals>.other.<locals>.swap):\n  never seen function:\n    <lambda> id=140364845355024 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2773,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401:25 (do_status_move.<locals>.other.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364849364336 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2784,
+        "site": "activate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:454:11 (use_destiny_bond):\n  never seen function:\n    activate id=140364845357136 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2789,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364845355024 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2800,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373:11 (create_substitute):\n  never seen function:\n    <lambda> id=140364845361360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2805,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364845357664 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2816,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59:11 (worry_seed):\n  never seen function:\n    <lambda> id=140364845361184 defined at /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2821,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364845361360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2829,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:487:17 (_generic_status_move):\n  never seen function:\n    <lambda> id=140364845366112 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2837,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:214",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:214:12 (field_status):\n  never seen function:\n    <lambda> id=140364838932144 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:214\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2845,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:228",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:228:12 (field_status):\n  never seen function:\n    <lambda> id=140364838932144 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:228\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2853,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:231",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:229:11 (field_status):\n  never seen function:\n    <lambda> id=140364838933552 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:231\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2861,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512:12 (_generic_status_move):\n  never seen function:\n    <lambda> id=140364838933552 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2866,
+        "site": "do_stat_boost_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1169:17 (_move_hits):\n  never seen function:\n    do_stat_boost_from_move id=140365161125440 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2871,
+        "site": "do_flash_fire_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1169:17 (_move_hits):\n  never seen function:\n    do_flash_fire_from_move id=140365161125792 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2876,
+        "site": "do_healing_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1169:17 (_move_hits):\n  never seen function:\n    do_healing_from_move id=140365161125088 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2881,
+        "site": "is_immune /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1149",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1169:17 (_move_hits):\n  never seen function:\n    is_immune id=140365161131952 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1149\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2886,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1063",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1063:11 (_apply_move_effects):\n  never seen function:\n    <lambda> id=140364874696832 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1063\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2891,
+        "site": "move_misses /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1276",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:927:15 (dispatch_selected_move.<locals>.apply):\n  never seen function:\n    move_misses id=140365161133360 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1276\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2896,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:929",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:929:17 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140364879510192 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:929\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2904,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:935",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:935:12 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140364879510544 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:935\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2912,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:937",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:936:16 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140364838935488 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:937\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2920,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1003",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1002:11 (finish_attempt):\n  never seen function:\n    <lambda> id=140364838938832 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1003\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2925,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:981",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:979:17 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140364879498752 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:981\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2933,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:989",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:989:16 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140364879498752 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:989\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2946,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795:16 (move_used):\n  never seen function:\n    <lambda> id=140364879508960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2960,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756:12 (resolve_faints.<locals>.resolve):\n  never seen function:\n    <lambda> id=140364838942528 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2968,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774:15 (resolve_faints.<locals>.resolve):\n  never seen function:\n    <lambda> id=140364838942528 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2973,
+        "site": "other /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:669",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:675:11 (_ordinary_action):\n  never seen function:\n    other id=140364884994960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:669\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2981,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674:12 (swap_out):\n  never seen function:\n    <lambda> id=140364838942352 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2986,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:671:15 (_ordinary_action.<locals>.other):\n  never seen function:\n    <lambda> id=140364882134816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2994,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:674",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673:25 (_ordinary_action.<locals>.other.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364838941296 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:674\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2999,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:660",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:658:17 (step_action):\n  never seen function:\n    <lambda> id=140364884994608 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:660\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3004,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:351",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:349:30 (Battle._advance.<locals>.resolve.<locals>.execute):\n  never seen function:\n    <lambda> id=140364884994080 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:351\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3009,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:368",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:367:19 (Battle._advance.<locals>.resolve):\n  never seen function:\n    <lambda> id=140364884990560 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:368\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3045,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:720:16 (step_field):\n  never seen function:\n    <lambda> id=140364835544704 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3050,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:720:16 (step_field):\n  never seen function:\n    <lambda> id=140364835547344 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3055,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:720:16 (step_field):\n  never seen function:\n    <lambda> id=140364835544704 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3060,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:377",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:376:16 (Battle._advance):\n  never seen function:\n    <lambda> id=140364884994960 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:377\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3065,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:268",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:267:16 (Battle.step):\n  never seen function:\n    <lambda> id=140364896770128 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:268\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3073,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:284",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:282:19 (Battle.step):\n  never seen function:\n    <lambda> id=140364896770128 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:284\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3081,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:286",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:284:20 (Battle.step.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140364896776288 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:286\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      }
+    ]
+  },
+  "after": {
+    "phases": {
+      "start": {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0.0,
+        "peak_rss_mib": 502.1,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": true,
+        "log_compiles": true,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      "traced": {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 6.334,
+        "peak_rss_mib": 582.3,
+        "equations": 49490,
+        "subgraphs": 435,
+        "primitives": {
+          "jit": 10765,
+          "add": 5696,
+          "lt": 4535,
+          "select_n": 4446,
+          "broadcast_in_dim": 2950,
+          "squeeze": 2918,
+          "reshape": 2199,
+          "convert_element_type": 2051,
+          "eq": 1966,
+          "and": 1687,
+          "mul": 1337,
+          "dynamic_slice": 1257
+        }
+      },
+      "lowered": {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 10.485,
+        "peak_rss_mib": 852.8
+      },
+      "compiled": {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 71.502,
+        "peak_rss_mib": 2838.8
+      },
+      "executed": {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 71.507,
+        "peak_rss_mib": 2838.8
+      },
+      "validated": {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 117.458,
+        "peak_rss_mib": 2838.8,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    },
+    "backend_seconds": 61.017,
+    "redefinition_warnings": 112,
+    "sites": {
+      "replace_active /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:150": 1,
+      "_unchanged_damage_state /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622": 1,
+      "status_helper /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568": 1,
+      "_unchanged_switch_state /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:590": 1,
+      "_skip_replacement /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:133": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:568": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:570": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:512": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:546": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:548": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:551": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:577": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795": 1,
+      "_prepare_move_use /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:829": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:839": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:864": 1,
+      "fail /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:953": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:982": 1,
+      "selected /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:923": 1,
+      "prepare /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:917": 1,
+      "detonate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:892": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:920": 1,
+      "charge /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1015": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:921": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1067": 1,
+      "attempt /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1103": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1106": 1,
+      "_prepare_normal_hit /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1194": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1256": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314": 1,
+      "_unchanged_secondary /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:161": 1,
+      "apply /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72": 1,
+      "_add_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70": 1,
+      "_accuracy_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81": 1,
+      "_unchanged_stages /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:207": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:212": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:218": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:219": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344": 1,
+      "do_status_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426": 1,
+      "switch /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38": 1,
+      "split /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40": 1,
+      "other /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402": 1,
+      "activate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:233": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:247": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:250": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512": 1,
+      "do_stat_boost_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521": 1,
+      "do_flash_fire_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527": 1,
+      "do_healing_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516": 1,
+      "is_immune /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1154": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1068": 1,
+      "move_misses /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1281": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:934": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:940": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:942": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1008": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:986": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:994": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:800": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774": 1,
+      "other /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:682": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:686": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:687": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:364": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:381": 1,
+      "_unchanged_player_state /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:715": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:390": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:295": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:311": 1,
+      "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:313": 1
+    },
+    "warnings": [
+      {
+        "line": 1931,
+        "site": "replace_active /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:150",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:338:16 (Battle._advance):\n  never seen function:\n    replace_active id=140697777971168 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:150\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 1979,
+        "site": "_unchanged_damage_state /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:684:16 (_take_damage_value):\n  never seen function:\n    _unchanged_damage_state id=140697779595648 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:622\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2007,
+        "site": "status_helper /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:596:18 (set_status):\n  never seen function:\n    status_helper id=140697779594240 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:568\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2020,
+        "site": "_unchanged_switch_state /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:590",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:679:12 (swap_out):\n  never seen function:\n    _unchanged_switch_state id=140697777871808 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:590\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2030,
+        "site": "_skip_replacement /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:133",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:141:18 (replace_player):\n  never seen function:\n    _skip_replacement id=140697777970816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:133\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2056,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:568",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:566:45 (step_move):\n  never seen function:\n    <lambda> id=140697367967728 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:568\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2064,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:570",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:568:27 (step_move.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697367968256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:570\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2087,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:512",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:511:33 (before_move):\n  never seen function:\n    <lambda> id=140697367968256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:512\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2116,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:546",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:546:24 (before_move.<locals>.confusion_check.<locals>.roll_hit):\n  never seen function:\n    <lambda> id=140697363006560 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:546\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2121,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:548",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:547:15 (before_move.<locals>.confusion_check):\n  never seen function:\n    <lambda> id=140697363477280 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:548\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2126,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:551",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:550:27 (before_move):\n  never seen function:\n    <lambda> id=140697363468656 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:551\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2134,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:577",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:575:17 (step_move):\n  never seen function:\n    <lambda> id=140697367968256 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:577\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2142,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:794:17 (move_used):\n  never seen function:\n    <lambda> id=140697363016416 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2150,
+        "site": "_prepare_move_use /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:829",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:795:27 (move_used.<locals>.<lambda>):\n  never seen function:\n    _prepare_move_use id=140697777874624 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:829\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2158,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:839",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:838:12 (_prepare_move_use):\n  never seen function:\n    <lambda> id=140697360335792 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:839\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2166,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:864",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:863:12 (_prepare_move_use):\n  never seen function:\n    <lambda> id=140697360340720 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:864\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2182,
+        "site": "fail /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:953",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:974:11 (_prepare_sleep_talk):\n  never seen function:\n    fail id=140697360341072 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:953\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2187,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:982",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:981:34 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140697363016416 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:982\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2201,
+        "site": "selected /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:923",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:926:24 (dispatch_selected_move):\n  never seen function:\n    selected id=140697088214112 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:923\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2209,
+        "site": "prepare /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:917",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:925:15 (dispatch_selected_move.<locals>.selected):\n  never seen function:\n    prepare id=140697088213936 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:917\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2220,
+        "site": "detonate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:892",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:905:15 (dispatch_selected_move.<locals>.prepare_explosion):\n  never seen function:\n    detonate id=140697088218336 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:892\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2225,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:920",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:919:15 (dispatch_selected_move.<locals>.prepare):\n  never seen function:\n    <lambda> id=140697088214816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:920\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2236,
+        "site": "charge /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1015",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1024:17 (_prepare_electro_shot):\n  never seen function:\n    charge id=140697088223968 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1015\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2241,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:921",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:920:31 (dispatch_selected_move.<locals>.prepare.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697088218336 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:921\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2255,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1067",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1065:24 (_apply_move_effects):\n  never seen function:\n    <lambda> id=140697088218336 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1067\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2263,
+        "site": "attempt /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1103",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1108:11 (_prepare_accuracy):\n  never seen function:\n    attempt id=140697088228896 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1103\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2271,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1106",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1105:15 (_prepare_accuracy.<locals>.attempt):\n  never seen function:\n    <lambda> id=140697085643408 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1106\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2282,
+        "site": "_prepare_normal_hit /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1194",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1172:45 (_move_hits):\n  never seen function:\n    _prepare_normal_hit id=140697777878672 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1194\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2321,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1256",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1256:12 (_prepare_normal_hit):\n  never seen function:\n    <lambda> id=140697085651152 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1256\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2332,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:79:23 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140697081369296 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:81\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2346,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:101:23 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140697081372112 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:102\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2362,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:276:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697075302096 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:277\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2380,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:294:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589184 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:296\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2388,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:299:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073583728 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:301\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2396,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:304:17 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:305\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2425,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65:17 (after_every_hit):\n  never seen function:\n    <lambda> id=140697073595168 defined at /home/mathy/PycharmProjects/ninjax/ninjax/move_effects.py:65\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2433,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:306:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:307\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2441,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:252:12 (after_hit):\n  never seen function:\n    <lambda> id=140697073595520 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:253\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2449,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:257:11 (after_hit):\n  never seen function:\n    <lambda> id=140697069164976 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:258\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2460,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142:12 (remove_item):\n  never seen function:\n    <lambda> id=140697069165328 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:142\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2465,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:310:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:311\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2473,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:313:17 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:314\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2484,
+        "site": "_unchanged_secondary /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:161",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:180:17 (_apply_secondary):\n  never seen function:\n    _unchanged_secondary id=140697380592752 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:161\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2495,
+        "site": "apply /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:80:11 (apply_confusion):\n  never seen function:\n    apply id=140697069166912 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:72\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2512,
+        "site": "_add_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:77:11 (_ordinary_stage):\n  never seen function:\n    _add_stage id=140697380591344 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:70\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2517,
+        "site": "_accuracy_stage /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:93:11 (_valid_stage):\n  never seen function:\n    _accuracy_stage id=140697380591696 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:81\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2522,
+        "site": "_unchanged_stages /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:99:11 (stages):\n  never seen function:\n    _unchanged_stages id=140697380590464 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:60\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2535,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41:11 (kings_rock_flinch):\n  never seen function:\n    <lambda> id=140697069166912 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:41\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2546,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:207",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:207:12 (after_damage):\n  never seen function:\n    <lambda> id=140697069166912 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:207\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2554,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:212",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:211:12 (after_damage):\n  never seen function:\n    <lambda> id=140697069173776 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:212\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2565,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:218",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:217:15 (after_damage.<locals>.spin):\n  never seen function:\n    <lambda> id=140697064538880 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:218\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2570,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:219",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:219:11 (after_damage):\n  never seen function:\n    <lambda> id=140697069173776 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:219\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2575,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317:12 (resolve_damaging_hit):\n  never seen function:\n    <lambda> id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:317\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2580,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113:38 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140697081372288 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:113\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2588,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114:20 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140697081377216 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:114\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2596,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115:20 (resolve_multi_hit.<locals>.body.<locals>.attempt):\n  never seen function:\n    <lambda> id=140697073583728 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:115\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2601,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117:15 (resolve_multi_hit.<locals>.body):\n  never seen function:\n    <lambda> id=140697081371408 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:117\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2609,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:125:12 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140697081369824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:127\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2617,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:134:23 (resolve_multi_hit):\n  never seen function:\n    <lambda> id=140697081369824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:135\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2625,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:338:12 (finish_damaging_move):\n  never seen function:\n    <lambda> id=140697081371936 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2633,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268:11 (after_move):\n  never seen function:\n    <lambda> id=140697081369824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:268\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2641,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:342:12 (finish_damaging_move):\n  never seen function:\n    <lambda> id=140697081371936 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:344\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2646,
+        "site": "do_status_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1174:17 (_move_hits):\n  never seen function:\n    do_status_move id=140697777869696 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:376\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2660,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426:12 (force_switch_target.<locals>.fail):\n  never seen function:\n    <lambda> id=140697064542224 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:426\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2665,
+        "site": "switch /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:442:11 (force_switch_target):\n  never seen function:\n    switch id=140697064541344 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:437\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2685,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:409:11 (do_status_move):\n  never seen function:\n    <lambda> id=140697081370528 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2704,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33:17 (direct_status_move.<locals>.rest):\n  never seen function:\n    <lambda> id=140697060328544 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:33\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2712,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:37:17 (direct_status_move.<locals>.rest):\n  never seen function:\n    <lambda> id=140697060328368 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:38\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2717,
+        "site": "split /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:57:11 (direct_status_move):\n  never seen function:\n    split id=140697064554192 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:40\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2728,
+        "site": "other /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:411:21 (do_status_move.<locals>.<lambda>):\n  never seen function:\n    other id=140697073589008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:380\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2739,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399:22 (do_status_move.<locals>.other.<locals>.memento):\n  never seen function:\n    <lambda> id=140697060328544 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:399\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2744,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:400:15 (do_status_move.<locals>.other):\n  never seen function:\n    <lambda> id=140697064554016 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2755,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174:11 (swap_items):\n  never seen function:\n    <lambda> id=140697060333824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/held_effects.py:174\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2763,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:386:16 (do_status_move.<locals>.other.<locals>.swap):\n  never seen function:\n    <lambda> id=140697060333824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:387\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2768,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:401:25 (do_status_move.<locals>.other.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697060331008 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2779,
+        "site": "activate /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:454:11 (use_destiny_bond):\n  never seen function:\n    activate id=140697060335936 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:449\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2784,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:402:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697060333824 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2795,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373:11 (create_substitute):\n  never seen function:\n    <lambda> id=140697060340160 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:373\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2800,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:404:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697060336464 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2811,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59:11 (worry_seed):\n  never seen function:\n    <lambda> id=140697060339984 defined at /home/mathy/PycharmProjects/ninjax/ninjax/ability_effects.py:59\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2816,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:406:25 (do_status_move.<locals>.other.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697060340160 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:408\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2824,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:487:17 (_generic_status_move):\n  never seen function:\n    <lambda> id=140697052861664 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:489\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2832,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:233",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:233:12 (field_status):\n  never seen function:\n    <lambda> id=140697052862368 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:233\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2840,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:247",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:247:12 (field_status):\n  never seen function:\n    <lambda> id=140697052862368 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:247\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2848,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:250",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:248:11 (field_status):\n  never seen function:\n    <lambda> id=140697052863776 defined at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:250\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2856,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512:12 (_generic_status_move):\n  never seen function:\n    <lambda> id=140697052863776 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:512\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2861,
+        "site": "do_stat_boost_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1174:17 (_move_hits):\n  never seen function:\n    do_stat_boost_from_move id=140697777870928 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:521\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2866,
+        "site": "do_flash_fire_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1174:17 (_move_hits):\n  never seen function:\n    do_flash_fire_from_move id=140697777871280 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:527\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2871,
+        "site": "do_healing_from_move /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1174:17 (_move_hits):\n  never seen function:\n    do_healing_from_move id=140697777870576 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:516\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2876,
+        "site": "is_immune /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1154",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1174:17 (_move_hits):\n  never seen function:\n    is_immune id=140697777877616 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1154\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2881,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1068",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1068:11 (_apply_move_effects):\n  never seen function:\n    <lambda> id=140697088217808 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1068\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2886,
+        "site": "move_misses /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1281",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:932:15 (dispatch_selected_move.<locals>.apply):\n  never seen function:\n    move_misses id=140697777879024 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1281\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2891,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:934",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:934:17 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140697088214464 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:934\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2899,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:940",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:940:12 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140697088214816 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:940\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2907,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:942",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:941:16 (dispatch_selected_move):\n  never seen function:\n    <lambda> id=140697052865712 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:942\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2915,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1008",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1007:11 (finish_attempt):\n  never seen function:\n    <lambda> id=140697052869056 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:1008\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2920,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:986",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:984:17 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140697360341072 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:986\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2928,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:994",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:994:16 (_execute_selected_or_called_move):\n  never seen function:\n    <lambda> id=140697360341072 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:994\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2941,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:800",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:800:16 (move_used):\n  never seen function:\n    <lambda> id=140697360343888 defined at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:800\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2955,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756:12 (resolve_faints.<locals>.resolve):\n  never seen function:\n    <lambda> id=140697052871696 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:756\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2963,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774:15 (resolve_faints.<locals>.resolve):\n  never seen function:\n    <lambda> id=140697052871696 defined at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:774\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2968,
+        "site": "other /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:682",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:688:11 (_ordinary_action):\n  never seen function:\n    other id=140697367967200 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:682\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2976,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:686",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:684:15 (_ordinary_action.<locals>.other):\n  never seen function:\n    <lambda> id=140697363468656 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:686\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2984,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:687",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:686:25 (_ordinary_action.<locals>.other.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697052870464 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:687\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2989,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:671:17 (step_action):\n  never seen function:\n    <lambda> id=140697367966848 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:673\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2994,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:364",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:362:30 (Battle._advance.<locals>.resolve.<locals>.execute):\n  never seen function:\n    <lambda> id=140697367966320 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:364\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 2999,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:381",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:380:19 (Battle._advance.<locals>.resolve):\n  never seen function:\n    <lambda> id=140697367962976 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:381\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3035,
+        "site": "_unchanged_player_state /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:715",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:743:16 (step_field):\n  never seen function:\n    _unchanged_player_state id=140697777978736 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:715\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3040,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:390",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:389:16 (Battle._advance):\n  never seen function:\n    <lambda> id=140697367967200 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:390\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3045,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:295",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:294:16 (Battle.step):\n  never seen function:\n    <lambda> id=140697380594160 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:295\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3053,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:311",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:309:19 (Battle.step):\n  never seen function:\n    <lambda> id=140697380594160 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:311\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      },
+      {
+        "line": 3061,
+        "site": "<lambda> /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:313",
+        "explanation": "TRACING CACHE MISS at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:311:20 (Battle.step.<locals>.<lambda>):\n  never seen function:\n    <lambda> id=140697367962096 defined at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:313\n  but seen another function defined on the same line; maybe the function is\n  being re-defined repeatedly, preventing caching?"
+      }
+    ],
+    "raw_log": ".profiling/cache-diagnostics/callback-refactor-next.log"
+  },
+  "validation": {
+    "mechanics_cases_before_replacement_fix": 44,
+    "replacement_and_residual_cases_after_fix": 2,
+    "full_step_compiled_eager_leaves": 243
+  },
+  "notes": [
+    "Initial replacement-phase test failed because an already-hoisted callback had an incomplete signature; the caller and loop carry were fixed and both affected tests passed on rerun.",
+    "Same-line warnings are tracing diagnostics; one pair of measurements does not establish a runtime, compilation speed or memory improvement.",
+    "Both profiles used two CPU cores, cache disabled, logging enabled, 8 GiB virtual limit and 4 GiB RSS guard."
+  ]
+}

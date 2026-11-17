@@ -1,0 +1,194 @@
+{
+  "before": {
+    "phases": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0.0,
+        "peak_rss_mib": 506.0,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": true,
+        "log_compiles": true,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 6.534,
+        "peak_rss_mib": 594.9,
+        "equations": 56906,
+        "subgraphs": 537,
+        "primitives": {
+          "jit": 12361,
+          "add": 6656,
+          "lt": 5244,
+          "select_n": 5097,
+          "squeeze": 3281,
+          "broadcast_in_dim": 3180,
+          "reshape": 2924,
+          "convert_element_type": 2417,
+          "eq": 2095,
+          "and": 1921,
+          "mul": 1559,
+          "dynamic_slice": 1510
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 10.899,
+        "peak_rss_mib": 884.4
+      },
+      {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 69.999,
+        "peak_rss_mib": 2623.5
+      },
+      {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 70.005,
+        "peak_rss_mib": 2623.5
+      },
+      {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 114.078,
+        "peak_rss_mib": 2623.5,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    ],
+    "backend_seconds": 59.1,
+    "trace_redefinition_warnings": 225,
+    "warning_sites": {
+      "record at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:427": 22,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:484": 18,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:76": 7,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:490": 6,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:662": 5,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:663": 5,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:471": 5,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:467": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:584": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:65": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:66": 4,
+      "accuracy at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:67": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674": 3,
+      "ordinary at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:62": 3,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721": 3
+    },
+    "raw_log": ".profiling/cache-diagnostics/full-step.log"
+  },
+  "after": {
+    "phases": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0.0,
+        "peak_rss_mib": 502.8,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": true,
+        "log_compiles": true,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 6.383,
+        "peak_rss_mib": 586.9,
+        "equations": 54470,
+        "subgraphs": 473,
+        "primitives": {
+          "jit": 11785,
+          "add": 6400,
+          "lt": 5020,
+          "select_n": 4905,
+          "squeeze": 3185,
+          "broadcast_in_dim": 3116,
+          "reshape": 2476,
+          "convert_element_type": 2285,
+          "eq": 2095,
+          "and": 1825,
+          "mul": 1559,
+          "dynamic_slice": 1414
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 10.152,
+        "peak_rss_mib": 868.6
+      },
+      {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 71.058,
+        "peak_rss_mib": 2762.9
+      },
+      {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 71.065,
+        "peak_rss_mib": 2762.9
+      },
+      {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 116.566,
+        "peak_rss_mib": 2762.9,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    ],
+    "backend_seconds": 60.906,
+    "trace_redefinition_warnings": 156,
+    "warning_sites": {
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:76": 7,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:672": 5,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:671": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:65": 4,
+      "accuracy at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:67": 4,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/side.py:593": 3,
+      "ordinary at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:62": 3,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:66": 3,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:721": 3,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/curated_move_effects.py:144": 2,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:339": 2,
+      "<lambda> at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:674": 2,
+      "record at /home/mathy/PycharmProjects/ninjax/ninjax/events.py:180": 2,
+      "replace_active at /home/mathy/PycharmProjects/ninjax/ninjax/battle.py:309": 1,
+      "swap_is_alive at /home/mathy/PycharmProjects/ninjax/ninjax/game_logic.py:680": 1
+    },
+    "raw_log": ".profiling/cache-diagnostics/boost-refactor.log"
+  },
+  "validation": {
+    "mechanics_cases": 38,
+    "boost_event_case": 1,
+    "full_step_compiled_eager_leaves": 243
+  },
+  "notes": [
+    "Both full-step runs used CPU, two pinned cores, disabled persistent cache, cache-miss logging, an 8 GiB virtual limit and a 4 GiB RSS watchdog.",
+    "Single observations on a shared machine do not establish a statistical change in compilation time or memory.",
+    "Logging warnings count tracing cache misses, not repeated backend step compilations."
+  ]
+}

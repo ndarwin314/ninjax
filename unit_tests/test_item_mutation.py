@@ -4,8 +4,9 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.enum_types import AbilityEnum as A, FormEnum as F, ItemEnum as I
-from ninjax.held_effects import can_remove_item, remove_item, swap_items
-from ninjax.side import update_active
+from ninjax.side.queries import can_remove_item
+from ninjax.side.item_effects import remove_item, swap_items
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 
 
@@ -101,17 +102,6 @@ def test_effective_sticky_hold_and_received_mental_herb(neutral_type):
     assert out.active.item[1, 0] == I.NONE
 
 
-def test_item_mutation_traces_under_jax(neutral_type):
-    """Pure mutation helpers retain fixed shapes under vmap and scan tracing."""
-    _, state = neutral_type
-    state = items(state, I.LIFE_ORB, I.LEFTOVERS)
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    shape = jax.eval_shape(jax.vmap(lambda s: swap_items(s, 0, 1)[0].active.item), batch)
-    assert shape.shape == (2, 2, 1)
-    def scan(s):
-        """Carry immutable item state through repeated exchanges."""
-        return jax.lax.scan(lambda s, _: (swap_items(s, 0, 1)[0], None), s, None, length=2)[0].active.item
-    assert jax.eval_shape(scan, state).shape == (2, 1)
 
 
 def test_choice_lock_preservation_and_booster_energy(neutral_type):

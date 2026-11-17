@@ -5,7 +5,8 @@ from dataclasses import field
 
 import jax.numpy as jnp
 
-from ninjax.utils import calculate_stats
+from ninjax.enum_types import OffensiveStatOwner
+from ninjax.utils import calculate_stats, STAT_MULTIPLIER_LOOKUP
 
 Array = jax.Array
 int32 = jnp.int32
@@ -81,3 +82,41 @@ class StatTable(ArrayTree):
 
 
 
+
+
+def boosted_stats_helper(stats, boosts, ignore_drops, ignore_boosts):
+    """Apply stages after optionally ignoring negative or positive stages."""
+    boosts = boosts.normal_boosts
+    boosts = jnp.minimum(boosts, jnp.where(ignore_boosts, 0, 6))
+    boosts = jnp.maximum(boosts, jnp.where(ignore_drops, 0, -6))
+    return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + boosts])
+
+
+def select_offensive_stats(raw_stats, boosts, attacker_idx, owner, defender_unaware, is_crit):
+    """Select an active owner's raw stats and apply offensive-stage rules.
+
+    ``raw_stats`` and ``boosts`` have leading player axes of length two.
+    ``owner`` selects the user or target. The returned stat vector excludes
+    item and ability modifiers; callers apply those using the move user.
+    """
+    owner_idx = jnp.where(owner == OffensiveStatOwner.TARGET, 1 - attacker_idx, attacker_idx)
+    return boosted_stats_helper(raw_stats[owner_idx], boosts[owner_idx], is_crit | defender_unaware, defender_unaware)
+
+
+def raw_boosted_stats(raw_stats, boosts, attacker_idx, attacker_unaware, defender_unaware, is_crit,
+                      offensive_owner=OffensiveStatOwner.USER):
+    """Return offensive-owner and defender stats with represented stage rules.
+
+    Critical hits and Unaware alter which stages are applied. The offensive
+    owner defaults to the user; callers apply ability and item modifiers later.
+    """
+    defender_stats = raw_stats[1 - attacker_idx]
+    defender_boosts = boosts[1 - attacker_idx]
+    attacker_stats = select_offensive_stats(raw_stats, boosts, attacker_idx, offensive_owner, defender_unaware, is_crit)
+    defender_stats = boosted_stats_helper(
+        defender_stats,
+        defender_boosts,
+        attacker_unaware,
+        jnp.logical_or(is_crit, attacker_unaware)
+    )
+    return attacker_stats, defender_stats

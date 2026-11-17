@@ -98,25 +98,31 @@ The curated acceptance cases run complete seeded battles for seeds 0, 17 and
 
 ## Routine tests and compiled validation
 
-Routine mechanics checks run with JIT disabled, retaining their assertions
-without recompiling a battle engine for each case:
+Routine mechanics checks run with JIT enabled, so calls wrapped in `jax.jit`
+compile and use the persistent compilation cache:
 
 ```bash
 .venv/bin/python -m pytest -q
 ```
 
-Compiled episode, integration, and explicit `jit`/`vmap`/`scan` checks carry the
-`jit` marker and are opt-in. Run this gate after engine/control-flow changes or
-in a less frequent CI job:
+More expensive compiled episode and integration checks carry the `jit` marker
+and are opt-in:
 
 ```bash
 .venv/bin/python -m pytest --run-jit -m jit -q
 ```
 
-Use `--run-jit` without a marker filter to run both groups. Ordinary tests still
-run eagerly in that mode; the marked checks actually compile. Eager JAX may
-still compile individual array primitives, but avoids whole-engine compilation
-for routine mechanics cases. Existing test assertions have been retained.
+Use `--run-jit` without a marker filter to include these checks alongside the
+ordinary tests. Tests of `vmap` and `scan` live in `unit_tests/batched` and are
+excluded from both routine runs and `--run-jit`. Run them at major checkpoints:
+
+```bash
+.venv/bin/python -m pytest --run-batched unit_tests/batched
+```
+
+JIT-enabled tests still execute ordinary Python calls normally; only functions
+wrapped in `jax.jit` are compiled as a whole. Some explicit parity tests also
+temporarily disable JIT to compare against an eager result.
 
 Measure engine compilation independently from test-suite scheduling in a fresh
 process:

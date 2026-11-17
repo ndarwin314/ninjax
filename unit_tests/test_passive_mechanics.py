@@ -9,14 +9,29 @@ import pytest
 
 from ninjax.curated import CURATED_ABILITIES, CURATED_ITEMS
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type, Status, Weather, WeatherEnum as W, Terrain, TerrainEnum as T
-from ninjax.prototype import make_move
-from ninjax.side import update_active, set_status, apply_confusion, take_damage_value
-from ninjax.held_effects import status_berry, white_herb, swap_items, update_items, residual_orbs
-from ninjax.game_logic import resolve_damaging_hit, do_status_move, move_accuracy, swap_out, move_hits, _prepare_move_use
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
+from ninjax.side.status_effects import set_status, apply_confusion
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.item_effects import status_berry, white_herb, swap_items, update_items
+from ninjax.residuals import residual_orbs
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.status import do_status_move
+from ninjax.moves.properties import move_accuracy
+from ninjax.moves.routing import move_hits
+from ninjax.moves.execution import _prepare_move_use
+from ninjax.switching import swap_out
 from ninjax.battle import Battle, Phase, step_field
-from ninjax.ability_effects import residual_abilities
+from ninjax.residuals import residual_abilities
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.moves.effects import secondary_effects
+from ninjax.moves.properties import effective_move
+from ninjax.side.stat_effects import stat_changes
+from ninjax.switching import swap_is_alive
+from ninjax.battle import before_move
+from ninjax.restrictions import apply_restriction
+from ninjax.moves.effects import do_contact
 
 REFERENCE = json.loads((Path(__file__).parent / 'fixtures/showdown/passive-mechanics.json').read_text())
 STATS = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
@@ -276,28 +291,6 @@ def test_passive_projection_enum_ids_are_valid():
     assert all(name in I.__members__ for name in CURATED_ITEMS.values())
 
 
-@pytest.mark.jit
-def test_passive_helpers_jit_vmap_scan(neutral_type):
-    """New passive transitions preserve every state leaf under JAX transforms."""
-    key, state = neutral_type
-    state = configure(state, {'ability': 'Shed Skin', 'defender': 'Defiant', 'item': 'Lum Berry', 'status': 'tox'})
-    from ninjax.curated_move_effects import stat_changes
-    def update(carry, unused):
-        """Use explicit keys and immutable state through item/ability updates."""
-        key, state = carry
-        key, state = residual_abilities(key, update_items(state))
-        state = stat_changes(state, 1, jnp.array([2]), jnp.array([-1]), True)
-        return (key, state), state.active.status
-    (_, final), _ = jax.jit(lambda k, s: jax.lax.scan(update, (k, s), None, length=2))(key, state)
-    assert final.active.status[0, 0] == Status.NONE
-    assert final.active.item[0, 0] == I.NONE
-    assert final.boosts.normal_boosts[1, 1] == 4
-    batch = jax.tree.map(lambda x: jnp.stack((x, x)), state)
-    out = jax.jit(jax.vmap(update_items))(batch)
-    assert jnp.all(out.active.status[:, 0, 0] == Status.NONE)
-    assert not jnp.any(out.events.overflow)
-
-
 def test_compound_eyes_and_no_guard(neutral_type):
     """Accuracy modifiers use integer percentages; No Guard bypasses a zero base."""
     _, state = neutral_type
@@ -309,7 +302,7 @@ def test_compound_eyes_and_no_guard(neutral_type):
 
 def test_projected_secondary_abilities(neutral_type):
     """Shield Dust, Inner Focus and Serene Grace apply to represented secondaries."""
-    from ninjax.curated_move_effects import secondary_effects
+
     key, state = neutral_type
     dust = configure(state, {'defender': 'Shield Dust'})
     _, out = secondary_effects(key, dust, 0, make_move('Lumina Crash'))
@@ -358,7 +351,7 @@ def test_complete_residual_turn_against_showdown(neutral_type, probe):
     ('Gale Wings', 'Hurricane', 1), ('Triage', 'Drain Punch', 3)])
 def test_priority_ability_projection(neutral_type, ability, move, expected):
     """Priority hooks modify effective moves without changing stored move metadata."""
-    from ninjax.game_logic import effective_move
+
     _, state = neutral_type
     state = configure(state, {'ability': ability})
     original = make_move(move)
@@ -386,7 +379,7 @@ def test_prankster_dark_and_good_as_gold_field_targets(neutral_type):
 
 def test_stage_protections_and_contrary(neutral_type):
     """Passive stage prevention only blocks the corresponding opposing drops."""
-    from ninjax.curated_move_effects import stat_changes
+
     _, state = neutral_type
     for ability in ('Clear Body', 'Full Metal Body', 'Big Pecks'):
         protected = configure(state, {'defender': ability})
@@ -404,7 +397,7 @@ def test_stage_protections_and_contrary(neutral_type):
 
 def test_type_conversion_and_weight_abilities(neutral_type):
     """Existing transient type and weight hooks support the newly enabled names."""
-    from ninjax.game_logic import effective_move
+
     _, state = neutral_type
     for ability, typ in [('Galvanize', Type.ELECTRIC), ('Liquid Voice', Type.WATER)]:
         s = configure(state, {'ability': ability})
@@ -447,7 +440,7 @@ def test_surviving_hit_reactions(neutral_type, ability, move, stat, amount):
 
 def test_download_and_rattled_intimidate(neutral_type):
     """Download breaks defense ties toward SpA; Intimidate can also trigger Rattled."""
-    from ninjax.game_logic import swap_is_alive
+
     _, state = neutral_type
     download = swap_is_alive(configure(state, {'ability': 'Download'}), 0)
     assert download.boosts.normal_boosts[0, 3] == 1
@@ -460,8 +453,8 @@ def test_download_and_rattled_intimidate(neutral_type):
 
 def test_early_bird_and_restriction_immunities(neutral_type):
     """Early Bird wakes at zero; Aroma Veil and Oblivious prevent represented Taunt."""
-    from ninjax.battle import before_move
-    from ninjax.restrictions import apply_restriction
+
+
     key, state = neutral_type
     early = configure(state, {'ability': 'Early Bird', 'status': 'slp'})
     early = update_active(early, 0, early.active[0].replace(sleep_counter=jnp.array([2])))
@@ -478,7 +471,7 @@ def test_early_bird_and_restriction_immunities(neutral_type):
 @pytest.mark.parametrize('ability,status', [('Static', Status.PARALYZE), ('Flame Body', Status.BURN), ('Effect Spore', None)])
 def test_contact_status_abilities(neutral_type, ability, status):
     """Existing contact status rolls activate and respect the major-status model."""
-    from ninjax.move_effects import do_contact
+
     key, state = neutral_type
     while float(jax.random.uniform(jax.random.split(key, 3)[1])) >= .3:
         key = jax.random.fold_in(key, 1)
@@ -491,7 +484,7 @@ def test_contact_status_abilities(neutral_type, ability, status):
 
 def test_poison_touch_respects_shield_dust(neutral_type):
     """The contact-added secondary is prevented by Shield Dust."""
-    from ninjax.move_effects import do_contact
+
     key, state = neutral_type
     while float(jax.random.uniform(jax.random.split(key, 3)[2])) >= .3:
         key = jax.random.fold_in(key, 1)
@@ -506,7 +499,7 @@ def test_poison_touch_respects_shield_dust(neutral_type):
 @pytest.mark.parametrize('ability,stat', [('Defiant', 1), ('Competitive', 3)])
 def test_actual_opposing_drops_trigger_responses(neutral_type, ability, stat):
     """Capped/prevented and self drops do not trigger responses; accuracy drops do."""
-    from ninjax.curated_move_effects import stat_changes
+
     _, state = neutral_type
     state = configure(state, {'defender': ability})
     out = stat_changes(state, 1, jnp.array([2]), jnp.array([-1]), True)

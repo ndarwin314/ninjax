@@ -3,11 +3,14 @@ import jax
 import jax.numpy as jnp
 import pytest
 from ninjax.enum_types import AbilityEnum as A, ProtectionKind
-from ninjax.game_logic import do_status_move, move_hits, step_side_conditions
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.moves.status import do_status_move
+from ninjax.moves.routing import move_hits
+from ninjax.residuals import step_side_conditions
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.battle import step_move
 
 
 def test_shared_counter_and_end_turn(neutral_type):
@@ -44,7 +47,7 @@ def test_block_contact_and_bypass(neutral_type, ability, move, retaliates, bypas
 
 def test_shield_blocks_before_accuracy(neutral_type):
     """A zero-accuracy contact move still hits the shield before accuracy."""
-    from ninjax.battle import step_move
+
     key, state = neutral_type
     state = equip_move(state, 'U-turn')
     mon = state.active[0]

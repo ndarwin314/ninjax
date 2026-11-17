@@ -1,0 +1,32 @@
+"""Opt-in batched and scanned compatibility checks."""
+from unit_tests.test_curated_moves import (
+    field_status,
+    jax,
+    jnp,
+    make_move,
+    move_overrides,
+    neutral_type,
+    pytest,
+)
+from ninjax.side.stat_effects import stat_changes
+
+
+@pytest.mark.jit
+def test_new_callbacks_jit_vmap_scan(neutral_type):
+    """Shared callbacks preserve their PyTree structure under transformations."""
+    _, state = neutral_type
+    move = make_move('Light Screen')
+
+    changes = make_move('Dragon Pulse').replace(self_stat=jnp.arange(1, 6), self_stages=jnp.ones(5, jnp.int32))
+    def transition(s):
+        """Apply one field effect and one conditional power override."""
+        s = field_status(s, 0, move)
+        s = stat_changes(s, 0, changes.self_stat, changes.self_stages)
+        return s, move_overrides(s, 0, make_move('Stored Power')).base_power
+    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
+    out, powers = jax.jit(jax.vmap(transition))(batch)
+    assert jnp.all(out.light_screen[:, 0, 0] == 5)
+    assert jnp.all(out.boosts.normal_boosts[:, 0, 1:] == 1)
+    final, _ = jax.jit(lambda s: jax.lax.scan(lambda s, _: transition(s), s, None, length=2))(state)
+    assert final.light_screen[0, 0] == 5
+    assert jnp.all(final.boosts.normal_boosts[0, 1:] == 2)

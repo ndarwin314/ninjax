@@ -5,10 +5,14 @@ import pytest
 from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, MoveResult, Status
 from ninjax.hit import HitOutcome
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.battle import ActionType, Battle, BattleAction
+from ninjax.enum_types import Type
+from ninjax.moves.execution import execute_sleep_talk
+from ninjax.moves.execution import move_used
 
 
 def equip_second(state, name, pp=None, disabled=False):
@@ -81,7 +85,7 @@ def test_sleep_talk_beat_up_remains_asleep_between_hits(neutral_type):
 
 def test_sleep_talk_reveals_called_move_in_environment(neutral_type):
     """Called moves become publicly known even though their PP is unchanged."""
-    from ninjax.battle import ActionType, Battle, BattleAction
+
     key, state = neutral_type
     state = asleep(equip_second(equip_move(state, 'Sleep Talk'), 'Dragon Pulse'))
     env = Battle(state.team)
@@ -95,7 +99,7 @@ def test_sleep_talk_reveals_called_move_in_environment(neutral_type):
 
 def test_sleep_talk_libero_uses_called_move_type(neutral_type):
     """Libero ignores the calling move and changes to the called move's type."""
-    from ninjax.enum_types import Type
+
     key, state = neutral_type
     state = asleep(equip_second(equip_move(state, 'Sleep Talk'), 'Dragon Pulse'))
     state = update_active(state, 0, state.active[0].replace(ability=jnp.array([A.LIBERO]), type_list=jnp.array([Type.ROCK, Type.NONE])))
@@ -107,7 +111,7 @@ def test_sleep_talk_libero_uses_called_move_type(neutral_type):
 @pytest.mark.parametrize('old_override', [False, True])
 def test_called_crash_restores_context(neutral_type, old_override):
     """A called miss applies crash once, then restores Sleep Talk's context."""
-    from ninjax.game_logic import execute_sleep_talk
+
     key, state = neutral_type
     state = asleep(equip_second(equip_move(state, 'Sleep Talk'), 'High Jump Kick', 0))
     mon = state.active[0]
@@ -145,7 +149,7 @@ def test_called_explosion_prepares_and_cleans_up(neutral_type, damp):
 
 def test_failed_call_does_not_enter_hit_pipeline(neutral_type):
     """An awake Sleep Talk failure consumes no selection or accuracy key."""
-    from ninjax.game_logic import execute_sleep_talk
+
     key, state = neutral_type
     state = equip_second(equip_move(state, 'Sleep Talk'), 'Dragon Pulse')
     out_key, out = execute_sleep_talk(key, state, 0, 0)
@@ -157,7 +161,7 @@ def test_failed_call_does_not_enter_hit_pipeline(neutral_type):
 @pytest.mark.jit
 def test_compiled_called_move_branches_match_eager(neutral_type):
     """One executable handles called damage, self-faint, status and failed calls."""
-    from ninjax.game_logic import move_used
+
     key, initial = neutral_type
     def use(k, state):
         """Keep team metadata dynamic while executing the Sleep Talk slot."""

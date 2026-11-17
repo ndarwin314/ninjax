@@ -24,14 +24,20 @@ COMPONENT_TARGETS = ('ability', 'active', 'update', 'stats', 'power', 'hp',
 def component_result(target, env, state, action):
     """Execute one component with dynamic state, player and move-slot inputs."""
     import jax.numpy as jnp
-    from ninjax import game_logic as logic
+    from ninjax.switching import swap_out
+    from ninjax.moves.hit_resolution import resolve_damaging_hit
+    from ninjax.moves.multi_hit import resolve_multi_hit
+    from ninjax.moves.status import do_status_move
+    from ninjax.moves.execution import move_used, dispatch_selected_move
     from ninjax.battle import before_move, step_field
-    from ninjax.curated_move_effects import secondary_effects
+    from ninjax.moves.effects import secondary_effects
     from ninjax.damage import compute_base_power
     from ninjax.enum_types import Status
-    from ninjax.held_effects import modify_stats, effective_weather
-    from ninjax.move_effects import after_every_hit
-    from ninjax.side import update_active_fields, take_damage_value, set_status
+    from ninjax.side.queries import modify_stats, effective_weather
+    from ninjax.moves.effects import after_every_hit
+    from ninjax.side.updates import update_active_fields
+    from ninjax.side.hp_effects import take_damage_value
+    from ninjax.side.status_effects import set_status
     battle, key = state.battle, state.key
     player, index = action[0], action[1]
     if target == 'step':
@@ -51,15 +57,15 @@ def component_result(target, env, state, action):
     if target == 'before_move':
         return before_move(key, battle, player)
     if target == 'switch':
-        return logic.swap_out(key, battle, player, (index+1) % 6)
+        return swap_out(key, battle, player, (index+1) % 6)
     if target == 'field':
         return step_field(key, battle)
     if target == 'observe':
         return env.observe(state)
     if target == 'move':
-        return logic.move_used(key, battle, player, index)
+        return move_used(key, battle, player, index)
     if target == 'dispatch':
-        return logic.dispatch_selected_move(key, battle, player, index)
+        return dispatch_selected_move(key, battle, player, index)
     move = battle.active[player].moves[index]
     if target == 'power':
         active = battle.effective_active
@@ -70,11 +76,11 @@ def component_result(target, env, state, action):
     if target == 'contact':
         return after_every_hit(key, battle, player, move, False)
     if target == 'hit':
-        return logic.resolve_damaging_hit(key, battle, player, move)
+        return resolve_damaging_hit(key, battle, player, move)
     if target == 'multi_hit':
-        return logic.resolve_multi_hit(key, battle, player, move)
+        return resolve_multi_hit(key, battle, player, move)
     if target == 'status_move':
-        return logic.do_status_move(key, battle, player, move, 0, 0)
+        return do_status_move(key, battle, player, move, 0, 0)
     raise ValueError(f'Unknown component: {target}')
 
 
@@ -138,7 +144,7 @@ def profile(stage='trace', target='step', rss_limit_mib=0, check=False, profile_
     import jax.numpy as jnp
     from ninjax.battle import Battle
     from ninjax.curated import load_sets, make_item_pool, sample_teams
-    from ninjax.prototype import make_move
+    from ninjax.team_builder import make_move
     from ninjax.enum_types import AbilityEnum, ItemEnum, Status
     pool, _ = make_item_pool(load_sets(), abilities=True)
     teams, _ = sample_teams(jax.random.fold_in(jax.random.key(0), 0), pool)

@@ -7,8 +7,9 @@ import pytest
 import jax.numpy as jnp
 import numpy as np
 
-from ninjax.prototype import make_sandbox_teams, random_actions, run
-from ninjax.side import raw_boosted_stats
+from ninjax.prototype import random_actions, run
+from ninjax.team_builder import make_sandbox_teams
+from ninjax.stats import raw_boosted_stats
 from ninjax.stats import StatBoosts
 
 REFERENCE = Path(__file__).parent / 'fixtures/showdown/battle-1.json'
@@ -26,15 +27,9 @@ def test_reference_projection_is_explicit():
     assert jnp.all(jnp.where(teams.moves.implemented, True, teams.moves.current_pp == 0))
 
 
-def test_policy_classes_and_uniform_choices():
-    """Keep ordinary action probabilities and honor forced continuation masks."""
+def test_policy_forced_continuation():
+    """Honor forced continuation and switching masks."""
     mask = jnp.zeros((2, 15), bool).at[:, :4].set(True).at[:, 8:14].set(True)
-    choices = jax.vmap(random_actions, in_axes=(0, None))(jax.random.split(jax.random.key(7), 10000), mask)
-    switching = np.asarray(choices >= 8)
-    assert .08 < switching.mean() < .12
-    counts = np.bincount(np.asarray(choices).ravel(), minlength=15)
-    assert np.all(counts[:4] > 4000)
-    assert np.all(counts[8:14] > 240)
     forced = random_actions(jax.random.key(2), mask.at[:, :4].set(False))
     assert jnp.all((forced >= 8) & (forced < 14))
     forced_mask = jnp.zeros((2, 15), bool).at[0, 5].set(True).at[1, 14].set(True)

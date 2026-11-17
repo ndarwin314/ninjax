@@ -11,6 +11,8 @@ import jax
 import jax.numpy as jnp
 from jumanji import specs
 from ninjax.events import TransitionEvents
+from ninjax.restrictions import allowed_moves
+from ninjax.events import CAPACITY
 
 class _Block:
     def __getitem__(self, name):
@@ -129,7 +131,7 @@ def observe(env, state):
                   b.volatile_status.ability_override[:, 0], b.active.ability[:, 0]))
     abilities = jnp.where(own, relative(current), jnp.where(relative(b.known_abilities >= 0),
         jnp.maximum(relative(b.known_abilities), 0), jnp.where(sheet, relative(t.ability[..., 0]), 0)))
-    from ninjax.restrictions import allowed_moves
+
     disabled = t.moves.disabled[..., 0]
     disabled = disabled.at[jnp.arange(2), b.active_index[:, 0]].set(
         disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b.active.moves.identifier[..., 0], b.active.moves.move_type[..., 0],
@@ -204,7 +206,7 @@ def observation_spec():
     active.update(boosts=(2, 2, 6), accuracy_evasion=(2, 2, 2))
     sides = {f.name: (2, 2) for f in fields(SideObservation)}
     field = {f.name: (2,) for f in fields(FieldObservation)}
-    from ninjax.events import CAPACITY
+
     events = {f.name: (2, CAPACITY) for f in fields(TransitionEvents)}
     events.update(count=(2,), overflow=(2,))
     return specs.Spec(Observation, 'observation',

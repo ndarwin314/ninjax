@@ -73,3 +73,9 @@ class HitResults:
 def hit_result(side, outcome=HitOutcome.HIT, recipient=HitRecipient.NONE, damage=0):
     """Construct a singles attempt targeting side's only active position."""
     return HitResult(side, 0, side, 0, outcome, recipient, damage)
+
+
+def record_hit(state, index, target, outcome, recipient=HitRecipient.NONE, damage=0):
+    """Record one singles attempt using active-position coordinates."""
+    result = hit_result(target, outcome, recipient, damage)
+    return state.replace(hit_results=state.hit_results.set(index, result))

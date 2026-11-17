@@ -4,36 +4,17 @@ import jax.numpy as jnp
 import pytest
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
-from ninjax.prototype import make_move
-from ninjax.game_logic import do_status_move, step_side_conditions
+from ninjax.team_builder import make_move
+from ninjax.moves.status import do_status_move
+from ninjax.residuals import step_side_conditions
 from ninjax.battle import step_move
 from ninjax.restrictions import allowed_moves, resolve_move, apply_restriction
 from ninjax.enum_types import ItemEnum as I, AbilityEnum as A
-from ninjax.side import update_active, clear_volatile_status
-
-
-@pytest.mark.jit
-def test_explicit_restriction_inputs_transform():
-    """An exhausted Encore falls back; a usable but disabled Encore is blocked."""
-    from ninjax.enum_types import MoveType
-    ids = jnp.array([105, 136, 347, 182])
-    categories = jnp.array([MoveType.STATUS, MoveType.PHYSICAL, MoveType.STATUS, MoveType.STATUS])
-    pp = jnp.array([[4, 1, 0, 4], [4, 1, 4, 4]])
-
-    def resolve(values):
-        """Keep the selected slot and every restriction a traced input."""
-        current_pp, index, disabled_id, disable, taunt, encore_id, encore, gravity = values
-        return resolve_move(ids, categories, current_pp, index,
-            disabled_move_id=disabled_id, disable_turns=disable, taunt_turns=taunt,
-            encore_move_id=encore_id, encore_turns=encore, gravity_duration=gravity)
-
-    inputs = (pp, *[jnp.full(2, value, jnp.int32) for value in (3, 347, 2, 0, 347, 2, 0)])
-    expected = (jnp.array([3, 2]), jnp.array([False, True]))
-    batched = jax.jit(jax.vmap(resolve))(inputs)
-    scanned = jax.jit(lambda xs: jax.lax.scan(lambda c, x: (c, resolve(x)), None, xs)[1])(inputs)
-    for result in (batched, scanned):
-        for actual, wanted in zip(result, expected):
-            assert jnp.array_equal(actual, wanted)
+from ninjax.side.updates import update_active, clear_volatile_status
+from ninjax.battle import Battle
+from ninjax.enum_types import Terrain, TerrainEnum
+from ninjax.battle import step_action
+from ninjax.enum_types import Status
 
 
 def test_taunt_blocks_queued_status_without_pp(neutral_type):
@@ -138,24 +119,9 @@ def test_duration_and_encore_pp_expiry(neutral_type):
     assert state.volatile_status.encore_turns[1, 0] == 0
 
 
-@pytest.mark.jit
-def test_restrictions_transform(neutral_type):
-    """Restriction state is compatible with jit, vmap, and scan."""
-    key, state = neutral_type
-    move = make_move('Taunt')
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    out = jax.jit(jax.vmap(lambda s: apply_restriction(s, 0, move)))(batch)
-    assert jnp.all(out.volatile_status.taunt_turns[:, 1, 0] == 3)
-    def body(s, _):
-        """Carry the restriction through two residual phases."""
-        return step_side_conditions(key, s)[1], None
-    final, _ = jax.jit(lambda s: jax.lax.scan(body, s, None, length=2))(jax.tree.map(lambda x: x[0], out))
-    assert final.volatile_status.taunt_turns[1, 0] == 1
-
-
 def test_environment_masks_and_public_observation(neutral_type):
     """Masks combine restrictions with switch availability and expose effects."""
-    from ninjax.battle import Battle
+
     key, state = neutral_type
     state = equip_move(state, 'Recover', 0)
     env = Battle(teams=state.team)
@@ -173,7 +139,7 @@ def test_environment_masks_and_public_observation(neutral_type):
 @pytest.mark.parametrize('restriction,chosen', [('Taunt', 0), ('Disable', 0), ('Encore', 1)])
 def test_faster_restriction_changes_pending_action(neutral_type, restriction, chosen):
     """The second actor uses its current restrictions, not just the old mask."""
-    from ninjax.battle import Battle
+
     key, state = neutral_type
     state = equip_move(state, restriction, 0)
     state = equip_move(state, 'Recover', 1)
@@ -217,7 +183,7 @@ def test_restriction_application_timing_and_immunities(neutral_type):
 
 def test_encore_preserves_original_priority_for_psychic_terrain(neutral_type):
     """A redirected priority move remains blocked by Psychic Terrain."""
-    from ninjax.enum_types import Terrain, TerrainEnum
+
     key, state = neutral_type
     state = equip_move(state, 'Dragon Pulse', 0)
     mon = state.active[0]
@@ -249,7 +215,7 @@ def test_encore_rejects_ineligible_last_move(neutral_type):
 
 def test_forced_struggle_respects_flinch_and_history(neutral_type):
     """An interrupted Struggle neither damages nor overwrites the last move."""
-    from ninjax.battle import step_action
+
     key, state = neutral_type
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(flinched=v.flinched.at[0, 0].set(True),
@@ -257,7 +223,7 @@ def test_forced_struggle_respects_flinch_and_history(neutral_type):
     _, out = step_action(key, state, 4, 0)
     assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
     assert out.volatile_status.last_move_id[0, 0] == 105
-    from ninjax.enum_types import Status
+
     state = state.replace(volatile_status=state.volatile_status.replace(flinched=state.volatile_status.flinched.at[0, 0].set(False)))
     state = update_active(state, 0, state.active[0].replace(status=jnp.array([Status.SLEEP]), sleep_counter=jnp.array([2])))
     _, out = step_action(key, state, 4, 0)

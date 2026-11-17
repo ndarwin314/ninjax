@@ -1,8 +1,10 @@
 """Protect and Unseen Fist singles interactions."""
 from unit_tests.test_battle import neutral_type
 from ninjax.enum_types import AbilityEnum, MoveFlags
-from ninjax.game_logic import do_status_move, move_hits, step_side_conditions
-from ninjax.prototype import make_move
+from ninjax.moves.status import do_status_move
+from ninjax.moves.routing import move_hits
+from ninjax.residuals import step_side_conditions
+from ninjax.team_builder import make_move
 
 
 def test_protect_blocks_and_unseen_fist_bypasses(neutral_type):

@@ -2,7 +2,7 @@
 import jax.numpy as jnp
 from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, Type
-from ninjax.side import update_active
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

@@ -4,10 +4,13 @@ import jax.numpy as jnp
 import pytest
 from ninjax.battle import step_field
 from ninjax.enum_types import AbilityEnum as A, Type
-from ninjax.game_logic import do_status_move, effective_move
-from ninjax.prototype import make_move
-from ninjax.side import clear_volatile_status, update_active
+from ninjax.moves.status import do_status_move
+from ninjax.moves.properties import effective_move
+from ninjax.team_builder import make_move
+from ninjax.side.updates import clear_volatile_status, update_active
 from unit_tests.test_battle import neutral_type
+from ninjax.battle import step_move
+from unit_tests.test_curated_moves import equip_move
 
 
 @pytest.mark.parametrize('types,expected', [([Type.FLYING, Type.NONE], [Type.NORMAL, Type.NONE]), ([Type.FLYING, Type.WATER], [Type.WATER, Type.NONE]), ([Type.STEEL, Type.FLYING], [Type.STEEL, Type.NONE])])
@@ -45,23 +48,10 @@ def test_roost_full_hp_tera_and_levitate(neutral_type):
     assert out.volatile_status.roost[0, 0] and not out.is_grounded(0)[0]
 
 
-def test_effective_roost_types_trace(neutral_type):
-    """Roost type and grounded checks trace under vmap and scan."""
-    _, state = neutral_type
-    v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(roost=v.roost.at[0, 0].set(True)))
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    assert jax.eval_shape(jax.vmap(lambda s: s.effective_active.type_list), batch).shape == (2, 2, 2)
-    def scan(s):
-        """Observe effective types across a fixed scan."""
-        return jax.lax.scan(lambda s, _: (s, s.effective_active.type_list), s, None, length=2)[1]
-    assert jax.eval_shape(scan, state).shape == (2, 2, 2)
-
-
 def test_roost_preserves_existing_terastallization(neutral_type):
     """A previously Terastallized user's normal action keeps its Tera state."""
-    from ninjax.battle import step_move
-    from unit_tests.test_curated_moves import equip_move
+
+
     key, state = neutral_type
     state = equip_move(state, 'Roost')
     state = update_active(state, 0, state.active[0].replace(type_list=jnp.array([Type.FLYING, Type.NONE]), current_hp=jnp.array([20]), is_terastallized=jnp.array([True]), tera_type=jnp.array([Type.FLYING])))

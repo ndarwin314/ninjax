@@ -1,8 +1,8 @@
 """Beat Up builds its hits from eligible party members' base Attack."""
 import jax.numpy as jnp
 from ninjax.enum_types import Status
-from ninjax.game_logic import do_damaging_move
-from ninjax.prototype import make_move
+from ninjax.moves.multi_hit import do_damaging_move
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 
 

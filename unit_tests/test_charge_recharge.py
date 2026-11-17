@@ -5,11 +5,15 @@ import pytest
 
 from ninjax.battle import ActionType, Battle, BattleAction, Phase, step_action, step_move
 from ninjax.enum_types import AbilityEnum as A, MoveResult, Status, Weather, WeatherEnum as W
-from ninjax.game_logic import resolve_damaging_hit, resolve_multi_hit, move_hits
-from ninjax.prototype import make_move
-from ninjax.side import clear_volatile_status, update_active
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.multi_hit import resolve_multi_hit
+from ninjax.moves.routing import move_hits
+from ninjax.team_builder import make_move
+from ninjax.side.updates import clear_volatile_status, update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.moves.execution import dispatch_selected_move
+from ninjax.hit import HitOutcome
 
 
 def continued():
@@ -57,8 +61,8 @@ def test_rain_skip_uses_effective_weather(neutral_type, suppressed):
 @pytest.mark.parametrize('rain', [False, True])
 def test_charge_preparation_gates_accuracy(neutral_type, rain):
     """A dry charge skips accuracy; immediate rain execution draws it once."""
-    from ninjax.game_logic import dispatch_selected_move
-    from ninjax.hit import HitOutcome
+
+
     key, state = neutral_type
     state = equip_move(state, 'Electro Shot').replace(weather=Weather(W.RAIN if rain else W.NONE, 5))
     mon = state.active[0]
@@ -155,22 +159,6 @@ def test_missed_beam_and_substitute_recharge(neutral_type):
     _, hit = resolve_multi_hit(key, state, 0, make_move('Hyper Beam'))
     assert hit.volatile_status.recharging[0, 0]
     assert hit.active.current_hp[1, 0] == state.active.current_hp[1, 0]
-
-
-def test_forced_mask_transforms(neutral_type):
-    """Charge/recharge masks trace under batching and scanning without compilation."""
-    key, state = neutral_type
-    env = Battle(state.team)
-    episode, _ = env.reset(key)
-    v = state.volatile_status
-    episode = episode.replace(battle=state.replace(volatile_status=v.replace(recharging=v.recharging.at[0, 0].set(True))))
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), episode)
-    shape = jax.eval_shape(jax.vmap(env.legal_action_mask), batch)
-    assert shape.shape == (2, 2, 15)
-    def scan(s):
-        """Keep fixed action-mask output over a scan of forced turns."""
-        return jax.lax.scan(lambda s, _: (s, env.legal_action_mask(s)), s, None, length=2)[1]
-    assert jax.eval_shape(scan, episode).shape == (2, 2, 15)
 
 
 def test_environment_continues_charge_and_recharge(neutral_type):

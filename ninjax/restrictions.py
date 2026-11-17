@@ -1,8 +1,8 @@
 """Switch-cleared restrictions on move selection and execution."""
-import jax
+
 import jax.numpy as jnp
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, MoveType
-from ninjax.held_effects import consume
+from ninjax.side.item_effects import consume
 
 # Scarlet/Violet move durations, separated from residual timing adjustments so
 # a future ruleset can supply different values at a single boundary.

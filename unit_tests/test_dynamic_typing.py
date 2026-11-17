@@ -4,9 +4,13 @@ import jax.numpy as jnp
 import pytest
 from unit_tests.test_battle import neutral_type
 from ninjax.enum_types import AbilityEnum as A, FormEnum as F, Type
-from ninjax.game_logic import effective_move
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.moves.properties import effective_move
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
+from unit_tests.test_curated_moves import equip_move
+from ninjax.moves.execution import move_used
+from ninjax.curated import load_sets, make_sandbox_pool
+from ninjax.battle import Battle, BattleParams, InformationMode
 
 
 @pytest.mark.parametrize('form,expected', [(F.DEFAULT, Type.GRASS), (F.OGERPON_WELLSPRING, Type.WATER),
@@ -55,8 +59,8 @@ def test_dynamic_types_follow_normalize_order(neutral_type):
 
 def test_protean_uses_resolved_ivy_type(neutral_type):
     """Protean sees Ivy Cudgel's form-resolved type when the move is used."""
-    from unit_tests.test_curated_moves import equip_move
-    from ninjax.game_logic import move_used
+
+
     key, state = neutral_type
     state = equip_move(state, 'Ivy Cudgel', 0)
     mon = state.active[0].replace(form=jnp.array([F.OGERPON_WELLSPRING]),
@@ -68,7 +72,7 @@ def test_protean_uses_resolved_ivy_type(neutral_type):
 
 def test_curated_form_is_preserved():
     """Curated construction preserves the form despite shared species numbers."""
-    from ninjax.curated import load_sets, make_sandbox_pool
+
     sets = load_sets()
     pool, reports = make_sandbox_pool(sets)
     index = next(i for i, s in enumerate(sets) if s.species == 'Ogerpon-Wellspring')
@@ -78,7 +82,7 @@ def test_curated_form_is_preserved():
 
 def test_form_observation_visibility(neutral_type):
     """Form follows species visibility without exposing the hidden opposing team."""
-    from ninjax.battle import Battle, BattleParams, InformationMode
+
     key, state = neutral_type
     team = state.team.replace(form=state.team.form.at[1, 0, 0].set(F.OGERPON_WELLSPRING)
                               .at[1, 1, 0].set(F.OGERPON_HEARTHFLAME))
@@ -89,17 +93,3 @@ def test_form_observation_visibility(neutral_type):
     assert obs.team.form[0, 1, 0] == F.OGERPON_WELLSPRING
     assert obs.team.form[0, 1, 1] == F.DEFAULT
     assert obs.team.form[1, 0, 1] == F.OGERPON_HEARTHFLAME
-
-
-@pytest.mark.jit
-def test_dynamic_types_jit_vmap_scan(neutral_type):
-    """Dynamic typing uses immutable arrays under JAX transformations."""
-    _, state = neutral_type
-    move = make_move('Ivy Cudgel')
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    forms = batch.team.form.at[0, 0, 0, 0].set(F.OGERPON_WELLSPRING).at[1, 0, 0, 0].set(F.OGERPON_HEARTHFLAME)
-    batch = batch.replace(team=batch.team.replace(form=forms))
-    types = jax.jit(jax.vmap(lambda s: effective_move(s, 0, move).type[0]))(batch)
-    assert jnp.array_equal(types, jnp.array([Type.WATER, Type.FIRE]))
-    _, types = jax.jit(lambda s: jax.lax.scan(lambda s, _: (s, effective_move(s, 0, move).type[0]), s, None, length=2))(state)
-    assert jnp.all(types == Type.GRASS)

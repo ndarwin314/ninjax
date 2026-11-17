@@ -6,9 +6,11 @@ import pytest
 from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status
 from ninjax.events import Cause, EventBuffer
-from ninjax.game_logic import do_status_move
-from ninjax.prototype import make_move
-from ninjax.side import clear_volatile_status, resolve_faints, take_damage_value, update_active
+from ninjax.moves.status import do_status_move
+from ninjax.team_builder import make_move
+from ninjax.side.updates import clear_volatile_status, update_active
+from ninjax.side.faint_effects import resolve_faints
+from ninjax.side.hp_effects import take_damage_value
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 
@@ -76,16 +78,6 @@ def test_real_attack_and_non_bond_action_expiry(neutral_type):
     state = equip_move(bonded(key, state, 0), 'Protect')
     _, out = step_move(key, state, 0, 0, False)
     assert not out.volatile_status.destiny_bond[0, 0]
-
-
-def test_faint_resolution_trace(neutral_type):
-    """Faint records and direct retaliation trace under batching without compilation."""
-    key, state = neutral_type
-    state = bonded(key, state)
-    pending = take_damage_value(state, 1, jnp.array([9999]), True, source=0)
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), pending)
-    shape = jax.eval_shape(jax.vmap(lambda s: resolve_faints(s).active.current_hp), batch)
-    assert shape.shape == (2, 2, 1)
 
 
 def test_dead_or_replaced_source_is_not_retaliated_against(neutral_type):

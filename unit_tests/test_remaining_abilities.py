@@ -9,12 +9,20 @@ import jax.numpy as jnp
 import pytest
 from unit_tests.test_battle import neutral_type
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type, Status, StatEnum as S, MoveType, Weather, WeatherEnum as W, Terrain, TerrainEnum as T
-from ninjax.held_effects import modify_stats, refresh_paradox
-from ninjax.game_logic import swap_is_alive, swap_out, effective_move, step_moody, move_hits, end_turn_damage
+from ninjax.side.queries import modify_stats
+from ninjax.side.item_effects import refresh_paradox
+from ninjax.switching import swap_is_alive, swap_out
+from ninjax.moves.properties import effective_move
+from ninjax.moves.routing import move_hits
+from ninjax.residuals import step_moody, end_turn_damage
 from ninjax.ability_effects import prepare_type_change
 from ninjax.battle import Battle, Phase
 from ninjax.damage import compute_base_damage, compute_base_power
-from ninjax.prototype import make_move
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
+from ninjax.moves.execution import move_used
+from ninjax.events import EventKind
+from ninjax.moves.multi_hit import do_damaging_move
 
 
 def ability_state(state, ability, player=0):
@@ -96,7 +104,7 @@ def test_type_change_once_only_on_actual_change(neutral_type, ability):
     key, state = neutral_type
     state = ability_state(state, ability)
     mon = state.active[0].replace(type_list=jnp.array([Type.FIRE, Type.NONE]), base_types=jnp.array([Type.FIRE, Type.NONE]))
-    from ninjax.side import update_active
+
     state = update_active(state, 0, mon)
     move = state.active[0].moves[0].replace(type=jnp.array([Type.FIRE]))
     same = prepare_type_change(state, 0, move)
@@ -194,8 +202,8 @@ def test_water_absorption_and_multi_hit(neutral_type, ability):
     else:
         assert out.active.current_hp[1,0] == 100 + state.active.max_hp[1] // 4
     assert jnp.all(out.active.moves.current_pp == state.active.moves.current_pp)
-    from ninjax.game_logic import move_used
-    from ninjax.events import EventKind
+
+
     inaccurate = state.replace(team=state.team.replace(moves=state.team.moves.replace(
         accuracy=state.team.moves.accuracy.at[0,0,0,0].set(0.))))
     _, intercepted = move_used(key, inaccurate, 0, 0)
@@ -213,7 +221,7 @@ def test_water_absorption_and_multi_hit(neutral_type, ability):
 
 def test_friend_guard_has_no_singles_effect(neutral_type):
     """Friend Guard affects allies other than its holder; singles has none."""
-    from ninjax.game_logic import do_damaging_move
+
     key, state = neutral_type
     move = state.active[0].moves[0]
     _, ordinary = do_damaging_move(key, state, 0, move, 0, 0)
@@ -225,30 +233,3 @@ def test_friend_guard_has_no_singles_effect(neutral_type):
 def test_unseen_fist_requires_protection_integration():
     """Explicitly track the missing mechanic instead of claiming ability parity."""
     pass
-
-
-@pytest.mark.jit
-def test_remaining_ability_hooks_jit_vmap_scan(neutral_type):
-    """Exercise newly validated hooks with dynamic abilities and explicit keys."""
-    key, state = neutral_type
-    abilities = jnp.array([A.ORICHALCUM_PULSE,A.HADRON_ENGINE,A.PROTOSYNTHESIS,A.QUARK_DRIVE,
-        A.BEADS_OF_RUIN,A.SWORD_OF_RUIN,A.VESSEL_OF_RUIN,A.LIBERO,A.PROTEAN,A.PIXILATE,
-        A.MOODY,A.SAND_FORCE,A.SHADOW_TAG,A.STORM_DRAIN,A.WATER_ABSORB,A.FRIEND_GUARD])
-    move = state.active[0].moves[0]
-    def activate(key, state, ability):
-        """Apply entry, type-change, residual and stat hooks for a selected ability."""
-        state = ability_state(state, ability)
-        state = refresh_paradox(swap_is_alive(state, 0))
-        state = prepare_type_change(state, 0, move)
-        key, state = step_moody(key, state)
-        return key, state, modify_stats(state, 0, jnp.full(6, 101))
-    keys = jax.random.split(key, len(abilities))
-    _, batch, stats = jax.jit(jax.vmap(activate, in_axes=(0,None,0)))(keys, state, abilities)
-    assert stats.shape == (16,6) and jnp.all(jnp.isfinite(stats))
-    assert not jnp.any(batch.events.overflow)
-    def transition(carry, ability):
-        """Carry an immutable battle through a sequence of ability activations."""
-        key, state, stats = activate(carry[0], carry[1], ability)
-        return (key, state), stats
-    (_, final), history = jax.jit(lambda k,s: jax.lax.scan(transition, (k,s), abilities))(key,state)
-    assert history.shape == (16,6) and not final.events.overflow

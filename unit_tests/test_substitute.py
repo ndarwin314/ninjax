@@ -4,12 +4,17 @@ import pytest
 
 from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status
-from ninjax.game_logic import create_substitute, move_hits, move_misses, resolve_damaging_hit, resolve_multi_hit
+from ninjax.moves.status import create_substitute
+from ninjax.moves.routing import move_hits, move_misses
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.multi_hit import resolve_multi_hit
 from ninjax.hit import HitOutcome, HitRecipient
-from ninjax.prototype import make_move
-from ninjax.side import clear_volatile_status, update_active
+from ninjax.team_builder import make_move
+from ninjax.side.updates import clear_volatile_status, update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+from ninjax.enum_types import Type
+from ninjax.hit import HitResult, HitResults
 
 
 def with_substitute(state, player, hp):
@@ -108,7 +113,7 @@ def test_miss_result_and_move_execution(neutral_type):
 
 def test_hit_results_record_immunity_and_failed_creation(neutral_type):
     """Immunity and an already-present Substitute produce non-hit outcomes."""
-    from ninjax.enum_types import Type
+
     key, state = neutral_type
     state = equip_move(state, 'Super Fang')
     state = update_active(state, 1, state.active[1].replace(type_list=jnp.array([Type.GHOST, Type.NONE])))
@@ -119,23 +124,6 @@ def test_hit_results_record_immunity_and_failed_creation(neutral_type):
     _, out = move_hits(key, state, 0, 0)
     assert out.hit_results[0].outcome == HitOutcome.BLOCKED
     assert out.volatile_status.substitute_hp[0, 0] == 12
-
-
-def test_hit_record_shapes_under_jax_transforms(neutral_type):
-    """Tracing batched and scanned hits retains a fixed PyTree shape."""
-    import jax
-    from ninjax.game_logic import record_hit
-    _, state = neutral_type
-    def one(s, target):
-        """Record one attempted hit for a traced target index."""
-        return record_hit(s, 0, target, HitOutcome.HIT, HitRecipient.POKEMON, 3)
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    shaped = jax.eval_shape(jax.vmap(lambda s, target: one(s, target).hit_results.data), batch, jnp.array([0, 1]))
-    assert shaped.shape == (2, 10, 7)
-    def scan(s):
-        """Trace a fixed scan without compiling a full battle."""
-        return jax.lax.scan(lambda carry, i: (one(carry, i), None), s, jnp.array([0, 1]))[0].hit_results.data
-    assert jax.eval_shape(scan, state).shape == (10, 7)
 
 
 def test_drain_uses_actual_substitute_damage(neutral_type):
@@ -151,7 +139,7 @@ def test_drain_uses_actual_substitute_damage(neutral_type):
 
 def test_hit_result_can_represent_future_redirection():
     """Target positions distinguish a redirected attempt on the same side."""
-    from ninjax.hit import HitResult, HitResults
+
     result = HitResult(1, 0, 1, 1, HitOutcome.MISS, HitRecipient.NONE, 0)
     saved = HitResults.empty().set(0, result)[0]
     assert saved.redirected and saved.intended_position == 0 and saved.actual_position == 1

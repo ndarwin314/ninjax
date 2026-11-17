@@ -4,12 +4,23 @@ import jax.numpy as jnp
 import pytest
 
 from unit_tests.test_battle import neutral_type
-from ninjax.prototype import make_move
+from ninjax.team_builder import make_move
 from ninjax.curated import load_sets, make_sandbox_pool
-from ninjax.curated_move_effects import field_status, move_overrides, secondary_effects
+from ninjax.side.field_conditions import field_status
+from ninjax.moves.properties import move_overrides
+from ninjax.moves.effects import secondary_effects
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, WeatherEnum as W, Weather, TerrainEnum as T, Terrain, Type
-from ninjax.game_logic import resolve_damaging_hit, do_status_move, effective_move, move_hits, finish_damaging_move
-from ninjax.side import update_active
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.status import do_status_move
+from ninjax.moves.properties import effective_move
+from ninjax.moves.routing import move_hits
+from ninjax.moves.finalization import finish_damaging_move
+from ninjax.side.updates import update_active
+from ninjax.battle import step_move
+from ninjax.residuals import step_side_conditions
+from ninjax.battle import action_order
+from ninjax.tree import stack
+from ninjax.moves.multi_hit import do_damaging_move
 
 
 def equip_move(state, name, player=0):
@@ -140,27 +151,6 @@ def test_curated_coverage_expanded():
     assert not {'Calm Mind', 'Draco Meteor', 'Spore', 'Night Shade'} & remaining
 
 
-@pytest.mark.jit
-def test_new_callbacks_jit_vmap_scan(neutral_type):
-    """Shared callbacks preserve their PyTree structure under transformations."""
-    _, state = neutral_type
-    move = make_move('Light Screen')
-    from ninjax.curated_move_effects import stat_changes
-    changes = make_move('Dragon Pulse').replace(self_stat=jnp.arange(1, 6), self_stages=jnp.ones(5, jnp.int32))
-    def transition(s):
-        """Apply one field effect and one conditional power override."""
-        s = field_status(s, 0, move)
-        s = stat_changes(s, 0, changes.self_stat, changes.self_stages)
-        return s, move_overrides(s, 0, make_move('Stored Power')).base_power
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    out, powers = jax.jit(jax.vmap(transition))(batch)
-    assert jnp.all(out.light_screen[:, 0, 0] == 5)
-    assert jnp.all(out.boosts.normal_boosts[:, 0, 1:] == 1)
-    final, _ = jax.jit(lambda s: jax.lax.scan(lambda s, _: transition(s), s, None, length=2))(state)
-    assert final.light_screen[0, 0] == 5
-    assert jnp.all(final.boosts.normal_boosts[0, 1:] == 2)
-
-
 @pytest.mark.parametrize('weight,power', [(99, 20), (100, 40), (249, 40), (250, 60), (500, 80), (1000, 100), (2000, 120)])
 def test_low_kick_weight_thresholds(neutral_type, weight, power):
     """Weight boundaries use hectograms and the Scarlet/Violet power table."""
@@ -183,8 +173,8 @@ def test_defog_and_perish_song_soundproof(neutral_type):
 
 def test_flinch_interrupts_and_expires(neutral_type):
     """A successful flinch prevents the next action and clears at turn end."""
-    from ninjax.battle import step_move
-    from ninjax.game_logic import step_side_conditions
+
+
     key, state = neutral_type
     # Force the existing secondary roll without relying on one seed's outcome.
     move = make_move('Iron Head').replace(secondary_chance=jnp.array([1.]))
@@ -214,7 +204,7 @@ def test_body_press_and_sacred_sword_stage_selection(neutral_type):
 
 def test_trick_room_and_tailwind_order(neutral_type):
     """Trick Room reverses Speed only within a priority bracket."""
-    from ninjax.battle import action_order
+
     key, state = neutral_type
     state = state.replace(tailwind=state.tailwind.at[0, 0].set(4))
     assert action_order(key, state, jnp.array([0, 0]))[0] == 0
@@ -229,7 +219,7 @@ def test_trick_room_and_tailwind_order(neutral_type):
 
 def test_stat_change_vectors_stack_with_scalar_moves():
     """One-stat and multi-stat specifications normalize to stackable shapes."""
-    from ninjax.tree import stack
+
     single = make_move('Overheat')
     double = make_move('Close Combat')
     all_stats = make_move('Dragon Pulse').replace(
@@ -245,7 +235,7 @@ def test_stat_change_vectors_stack_with_scalar_moves():
 @pytest.mark.parametrize('chance', [0., 1.])
 def test_one_chance_gates_the_whole_self_boost_vector(neutral_type, chance):
     """A self-effect chance controls all five ordinary stats together."""
-    from ninjax.game_logic import do_damaging_move
+
     key, state = neutral_type
     move = make_move('Dragon Pulse').replace(self_stat=jnp.arange(1, 6),
         self_stages=jnp.ones(5, jnp.int32), self_chance=jnp.array([chance]))

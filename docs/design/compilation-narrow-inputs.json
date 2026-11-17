@@ -1,0 +1,199 @@
+{
+  "cpu_count": 2,
+  "virtual_limit_mib": 8192,
+  "rss_limit_mib": 4096,
+  "scope": "Remaining four pure helper signatures; baseline already includes first three helper migrations",
+  "runs": {
+    "before": {
+      "returncode": 0,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 509.5,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 5.684,
+          "peak_rss_mib": 597.8,
+          "equations": 56895,
+          "subgraphs": 537,
+          "primitives": {
+            "jit": 12389,
+            "add": 6645,
+            "lt": 5233,
+            "select_n": 5086,
+            "squeeze": 3281,
+            "broadcast_in_dim": 3180,
+            "reshape": 2924,
+            "convert_element_type": 2417,
+            "eq": 2095,
+            "and": 1921,
+            "mul": 1559,
+            "dynamic_slice": 1505
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 9.513,
+          "peak_rss_mib": 887.7
+        },
+        {
+          "phase": "compiled",
+          "target": "step",
+          "elapsed_seconds": 65.972,
+          "peak_rss_mib": 2771.4
+        },
+        {
+          "phase": "executed",
+          "target": "step",
+          "elapsed_seconds": 65.978,
+          "peak_rss_mib": 2771.4
+        },
+        {
+          "phase": "validated",
+          "target": "step",
+          "elapsed_seconds": 109.306,
+          "peak_rss_mib": 2771.4,
+          "comparison": "compiled_vs_eager",
+          "leaves": 243
+        }
+      ],
+      "durations_seconds": {
+        "trace": 5.684,
+        "lower": 3.829,
+        "backend": 56.459
+      }
+    },
+    "after": {
+      "returncode": 0,
+      "phases": [
+        {
+          "phase": "start",
+          "target": "step",
+          "elapsed_seconds": 0.0,
+          "peak_rss_mib": 508.7,
+          "jax_version": "0.12.0.1",
+          "backend": "cpu",
+          "rss_limit_mib": 4096,
+          "python_version": "3.14.9",
+          "cpu_affinity": [
+            0,
+            1
+          ],
+          "xla_flags": ""
+        },
+        {
+          "phase": "traced",
+          "target": "step",
+          "elapsed_seconds": 6.326,
+          "peak_rss_mib": 596.9,
+          "equations": 56906,
+          "subgraphs": 537,
+          "primitives": {
+            "jit": 12361,
+            "add": 6656,
+            "lt": 5244,
+            "select_n": 5097,
+            "squeeze": 3281,
+            "broadcast_in_dim": 3180,
+            "reshape": 2924,
+            "convert_element_type": 2417,
+            "eq": 2095,
+            "and": 1921,
+            "mul": 1559,
+            "dynamic_slice": 1510
+          }
+        },
+        {
+          "phase": "lowered",
+          "target": "step",
+          "elapsed_seconds": 10.501,
+          "peak_rss_mib": 886.9
+        },
+        {
+          "phase": "compiled",
+          "target": "step",
+          "elapsed_seconds": 70.505,
+          "peak_rss_mib": 2798.6
+        },
+        {
+          "phase": "executed",
+          "target": "step",
+          "elapsed_seconds": 70.511,
+          "peak_rss_mib": 2798.6
+        },
+        {
+          "phase": "validated",
+          "target": "step",
+          "elapsed_seconds": 114.861,
+          "peak_rss_mib": 2798.6,
+          "comparison": "compiled_vs_eager",
+          "leaves": 243
+        }
+      ],
+      "durations_seconds": {
+        "trace": 6.326,
+        "lower": 4.175,
+        "backend": 60.004
+      }
+    }
+  },
+  "validation": {
+    "eager_mechanics_cases": 34,
+    "compiled_vmap_scan_check": "passed",
+    "full_step_comparison": "243 compiled/eager leaves in each run",
+    "compiled_battles": [
+      {
+        "seed": 0,
+        "turns": 40,
+        "reward": [
+          1.0,
+          -1.0
+        ],
+        "decisions": 51,
+        "status": "passed"
+      },
+      {
+        "seed": 17,
+        "turns": 25,
+        "reward": [
+          -1.0,
+          1.0
+        ],
+        "decisions": 32,
+        "status": "passed"
+      },
+      {
+        "seed": 42,
+        "turns": 26,
+        "reward": [
+          -1.0,
+          1.0
+        ],
+        "decisions": 35,
+        "status": "passed"
+      }
+    ],
+    "battle_process_peak_rss_mib": 2814.2109375
+  },
+  "notes": [
+    "Before and after profiles ran sequentially in fresh processes with the same fixtures and default XLA flags.",
+    "Other mechanics checks used CPU cores 2 and 3; profile processes used cores 0 and 1.",
+    "RSS includes fixture construction and is a process high-water mark.",
+    "One pair on a shared host does not establish a statistical performance regression.",
+    "No compilation improvement demonstrated by this batch."
+  ]
+}

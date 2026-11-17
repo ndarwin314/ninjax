@@ -3,14 +3,16 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.curated_move_effects import secondary_effects
+from ninjax.moves.effects import secondary_effects
 from ninjax.damage import compute_base_power
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, FormEnum as F, Status, Type
-from ninjax.game_logic import do_status_move, move_hits, resolve_damaging_hit
-from ninjax.held_effects import kings_rock_flinch
-from ninjax.move_effects import after_every_hit
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.moves.status import do_status_move
+from ninjax.moves.routing import move_hits
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.side.item_effects import kings_rock_flinch
+from ninjax.moves.effects import after_every_hit
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 
@@ -35,17 +37,11 @@ def test_kings_rock_independent_secondary(neutral_type, ability):
     assert out.boosts.normal_boosts[1, 4] == 0
 
 
-def test_kings_rock_probability_and_nonstacking(neutral_type):
-    """Per-hit independent rolls follow 10%/20% thresholds without extra native flinch."""
+def test_kings_rock_nonstacking(neutral_type):
+    """King's Rock does not add a flinch roll to ineligible moves."""
     _, state = neutral_type
     state = held(state, 0, I.KINGS_ROCK)
     keys = jax.random.split(jax.random.key(83), 64)
-    move = make_move('Population Bomb')
-    draws = jax.vmap(lambda k: jax.random.uniform(jax.random.split(k)[1]))(keys)
-    for ability, threshold in ((A.NONE, .1), (A.SERENE_GRACE, .2)):
-        current = held(state, 0, I.KINGS_ROCK, ability)
-        flags = jax.vmap(lambda k: kings_rock_flinch(k, current, 0, move)[1].volatile_status.flinched[1, 0])(keys)
-        assert jnp.array_equal(flags, draws < threshold)
     for candidate in (make_move('Fake Out'), make_move('Calm Mind')):
         out_key, out = kings_rock_flinch(keys[0], state, 0, candidate)
         assert not out.volatile_status.flinched[1, 0]

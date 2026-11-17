@@ -1,0 +1,282 @@
+{
+  "description": "Paired cold compilation checks for a local forced-switch request committed after hit dispatch.",
+  "method": "Fresh sequential processes; default profiler fixtures; two pinned CPU cores; 8192 MiB virtual limit; 4096 MiB RSS guard; persistent compilation cache disabled. Before full step loads a saved pre-refactor game_logic module with the same dependencies. Single observations, not statistical speedup evidence.",
+  "records": {
+    "dispatch-before": [
+      {
+        "phase": "start",
+        "target": "dispatch",
+        "elapsed_seconds": 0,
+        "peak_rss_mib": 579.6,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": false,
+        "log_compiles": false,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "dispatch",
+        "elapsed_seconds": 4.383,
+        "peak_rss_mib": 625.1,
+        "equations": 35461,
+        "subgraphs": 308,
+        "primitives": {
+          "jit": 8413,
+          "add": 4197,
+          "lt": 3199,
+          "select_n": 3108,
+          "squeeze": 1976,
+          "reshape": 1636,
+          "eq": 1574,
+          "broadcast_in_dim": 1508,
+          "convert_element_type": 1325,
+          "and": 1241,
+          "mul": 1100,
+          "dynamic_slice": 993
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "dispatch",
+        "elapsed_seconds": 7.864,
+        "peak_rss_mib": 832.6
+      },
+      {
+        "phase": "compiled",
+        "target": "dispatch",
+        "elapsed_seconds": 55.346,
+        "peak_rss_mib": 2359.9
+      },
+      {
+        "phase": "executed",
+        "target": "dispatch",
+        "elapsed_seconds": 55.35,
+        "peak_rss_mib": 2359.9
+      },
+      {
+        "phase": "validated",
+        "target": "dispatch",
+        "elapsed_seconds": 78.149,
+        "peak_rss_mib": 2359.9,
+        "comparison": "compiled_vs_eager",
+        "leaves": 149
+      }
+    ],
+    "dispatch-after": [
+      {
+        "phase": "start",
+        "target": "dispatch",
+        "elapsed_seconds": 0,
+        "peak_rss_mib": 602.7,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": false,
+        "log_compiles": false,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "dispatch",
+        "elapsed_seconds": 4.087,
+        "peak_rss_mib": 648.8,
+        "equations": 35507,
+        "subgraphs": 311,
+        "primitives": {
+          "jit": 8452,
+          "add": 4197,
+          "lt": 3199,
+          "select_n": 3108,
+          "squeeze": 1976,
+          "reshape": 1636,
+          "eq": 1575,
+          "broadcast_in_dim": 1508,
+          "convert_element_type": 1327,
+          "and": 1242,
+          "mul": 1100,
+          "dynamic_slice": 993
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "dispatch",
+        "elapsed_seconds": 6.928,
+        "peak_rss_mib": 834.3
+      },
+      {
+        "phase": "compiled",
+        "target": "dispatch",
+        "elapsed_seconds": 53.855,
+        "peak_rss_mib": 2344.3
+      },
+      {
+        "phase": "executed",
+        "target": "dispatch",
+        "elapsed_seconds": 53.86,
+        "peak_rss_mib": 2344.3
+      },
+      {
+        "phase": "validated",
+        "target": "dispatch",
+        "elapsed_seconds": 76.3,
+        "peak_rss_mib": 2344.3,
+        "comparison": "compiled_vs_eager",
+        "leaves": 149
+      }
+    ],
+    "step-before": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0,
+        "peak_rss_mib": 586.6,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": false,
+        "log_compiles": false,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 7.675,
+        "peak_rss_mib": 663.6,
+        "equations": 60388,
+        "subgraphs": 509,
+        "primitives": {
+          "jit": 13667,
+          "add": 6947,
+          "lt": 5313,
+          "select_n": 5188,
+          "squeeze": 3496,
+          "broadcast_in_dim": 3313,
+          "reshape": 2682,
+          "eq": 2558,
+          "convert_element_type": 2502,
+          "and": 2083,
+          "mul": 1757,
+          "dynamic_slice": 1485
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 13.033,
+        "peak_rss_mib": 982.4
+      },
+      {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 116.687,
+        "peak_rss_mib": 3367.6
+      },
+      {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 116.696,
+        "peak_rss_mib": 3367.6
+      },
+      {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 178.141,
+        "peak_rss_mib": 3367.6,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    ],
+    "step-after": [
+      {
+        "phase": "start",
+        "target": "step",
+        "elapsed_seconds": 0,
+        "peak_rss_mib": 602.4,
+        "jax_version": "0.12.0.1",
+        "backend": "cpu",
+        "persistent_cache_enabled": false,
+        "persistent_cache_dir": null,
+        "explain_cache_misses": false,
+        "log_compiles": false,
+        "rss_limit_mib": 4096,
+        "python_version": "3.14.9",
+        "cpu_affinity": [
+          0,
+          1
+        ],
+        "xla_flags": ""
+      },
+      {
+        "phase": "traced",
+        "target": "step",
+        "elapsed_seconds": 7.267,
+        "peak_rss_mib": 679.2,
+        "equations": 60434,
+        "subgraphs": 512,
+        "primitives": {
+          "jit": 13706,
+          "add": 6947,
+          "lt": 5313,
+          "select_n": 5188,
+          "squeeze": 3496,
+          "broadcast_in_dim": 3313,
+          "reshape": 2682,
+          "eq": 2559,
+          "convert_element_type": 2504,
+          "and": 2084,
+          "mul": 1757,
+          "dynamic_slice": 1485
+        }
+      },
+      {
+        "phase": "lowered",
+        "target": "step",
+        "elapsed_seconds": 12.274,
+        "peak_rss_mib": 980.4
+      },
+      {
+        "phase": "compiled",
+        "target": "step",
+        "elapsed_seconds": 109.916,
+        "peak_rss_mib": 3273.9
+      },
+      {
+        "phase": "executed",
+        "target": "step",
+        "elapsed_seconds": 109.924,
+        "peak_rss_mib": 3273.9
+      },
+      {
+        "phase": "validated",
+        "target": "step",
+        "elapsed_seconds": 166.559,
+        "peak_rss_mib": 3273.9,
+        "comparison": "compiled_vs_eager",
+        "leaves": 243
+      }
+    ]
+  }
+}

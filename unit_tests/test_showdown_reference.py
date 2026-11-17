@@ -10,9 +10,10 @@ import pytest
 from ninjax.enum_types import Type
 from ninjax.stats import Nature, StatTable
 from ninjax.utils import calculate_effectiveness_multiplier
-from ninjax.move import Move
+from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from ninjax.side import BattleState, take_damage_percent
+from ninjax.side.state import BattleState
+from ninjax.side.hp_effects import take_damage_percent
 from ninjax.tree import stack
 from ninjax.damage import compute_base_damage
 
@@ -60,11 +61,12 @@ def test_generated_team_stats(game):
 
 @pytest.mark.parametrize('game', GAMES, ids=lambda g: str(g['seed']))
 def test_types_of_moves_seen_in_trace(game):
+    """Compare each type matchup in the reference trace."""
     probes = game['typeProbes']
     attacking = jnp.array([int(Type[p['attackType'].upper()]) for p in probes])
     defending = jnp.array([[int(Type[t.upper()]) for t in p['defenderTypes']] +
                            [0] * (2-len(p['defenderTypes'])) for p in probes])
-    actual = jax.jit(jax.vmap(calculate_effectiveness_multiplier))(attacking, defending)
+    actual = [calculate_effectiveness_multiplier(a, d) for a, d in zip(attacking, defending, strict=True)]
     np.testing.assert_array_equal(actual, [p['multiplier'] for p in probes])
 
 

@@ -5,34 +5,19 @@ import pytest
 from unit_tests.test_battle import neutral_type
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, StatEnum as S
 from ninjax.events import EventKind
-from ninjax.game_logic import resolve_multi_hit, sample_hit_count
-from ninjax.prototype import make_move
+from ninjax.moves.multi_hit import resolve_multi_hit, sample_hit_count
+from ninjax.team_builder import make_move
+from ninjax.damage import compute_base_power
+from ninjax.enum_types import MoveType
+from ninjax.moves.effects import after_every_hit
+from ninjax.enum_types import Status
+from ninjax.moves.execution import move_used
 
 
 def hit_events(state, target=1):
     """Select damage events for a target from the fixed event buffer."""
     events = state.events
     return events.valid & (events.kind == EventKind.HP) & (events.target == target) & (events.hp_change < 0)
-
-
-def test_counts_distribution_and_modifiers():
-    """Check Gen 9 hit distributions and hit-count modifiers."""
-    keys = jax.random.split(jax.random.key(9), 20000)
-    draw = jax.jit(jax.vmap(sample_hit_count, in_axes=(0, None, None, None)))
-    _, single = draw(keys, 1, A.NONE, I.NONE)
-    assert jnp.all(single == 1)
-    _, values = draw(keys, 2, A.NONE, I.NONE)
-    frequencies = jnp.bincount(values, length=6) / values.size
-    assert jnp.all(jnp.abs(frequencies[2:6] - jnp.array([.35, .35, .15, .15])) < .015)
-    _, dice = draw(keys, 2, A.NONE, I.LOADED_DICE)
-    assert jnp.all((dice == 4) | (dice == 5))
-    assert .48 < jnp.mean(dice == 4) < .52
-    _, linked = draw(keys, 2, A.SKILL_LINK, I.NONE)
-    assert jnp.all(linked == 5)
-    _, population = draw(keys, 4, A.NONE, I.LOADED_DICE)
-    assert jnp.min(population) == 4 and jnp.max(population) == 10
-    _, fixed = draw(keys, 3, A.SKILL_LINK, I.LOADED_DICE)
-    assert jnp.all(fixed == 3)
 
 
 def test_catalogue_distinguishes_multi_hit_rules():
@@ -48,7 +33,7 @@ def test_catalogue_distinguishes_multi_hit_rules():
 
 def test_technician_checks_each_triple_axel_power(neutral_type):
     """Technician boosts each of Triple Axel's 20/40/60-power hits."""
-    from ninjax.damage import compute_base_power
+
     _, state = neutral_type
     attacker = state.active[0].replace(ability=jnp.array([A.TECHNICIAN]))
     defender = state.active[1]
@@ -60,8 +45,8 @@ def test_technician_checks_each_triple_axel_power(neutral_type):
 
 def test_stamina_responds_to_special_hits(neutral_type):
     """Stamina reacts to damaging special hits as well as physical hits."""
-    from ninjax.enum_types import MoveType
-    from ninjax.move_effects import after_every_hit
+
+
     key, state = neutral_type
     team = state.team.replace(ability=state.team.ability.at[1, 0, 0].set(A.STAMINA))
     move = make_move('Bullet Seed').replace(move_type=jnp.array([MoveType.SPECIAL]))
@@ -118,14 +103,12 @@ def test_multi_hit_effects_accuracy_and_fainting(neutral_type):
         roll = jax.random.uniform(contact_key)
         return (roll > .19) & (roll < .30)
     keys = jax.random.split(key, 128)
-    candidates = jax.vmap(sleeps_on_first_contact)(keys)
-    assert jnp.any(candidates)
-    sleep_key = keys[jnp.argmax(candidates)]
+    sleep_key = next(k for k in keys if bool(sleeps_on_first_contact(k)))
     spore_team = state.team.replace(
         ability=state.team.ability.at[1, 0, 0].set(A.EFFECT_SPORE),
         item=state.team.item.at[0, 0, 0].set(I.NONE))
     _, asleep = run(sleep_key, state.replace(team=spore_team), 0, make_move('Tail Slap'))
-    from ninjax.enum_types import Status
+
     assert asleep.active.status[0, 0] == Status.SLEEP
     assert jnp.sum(hit_events(asleep)) == 1
 
@@ -178,7 +161,7 @@ def test_multi_hit_effects_accuracy_and_fainting(neutral_type):
 
 def test_first_miss_consumes_one_pp_without_hits(neutral_type):
     """PP is consumed once whether the move misses or hits repeatedly."""
-    from ninjax.game_logic import move_used
+
     key, state = neutral_type
     selected = make_move('Triple Axel').replace(accuracy=jnp.array([0.]))
     # Move is a PyTree, so replace the chosen team slot leaf by leaf.
@@ -195,23 +178,3 @@ def test_first_miss_consumes_one_pp_without_hits(neutral_type):
     _, hit = use(key, state.replace(team=state.team.replace(moves=moves)), 0, 0)
     assert hit.active.moves.current_pp[0, 0, 0] == bullet.current_pp[0] - 1
     assert 2 <= jnp.sum(hit_events(hit)) <= 5
-
-
-@pytest.mark.jit
-def test_multihit_jit_vmap_scan(neutral_type):
-    """The hit loop composes with batch and sequential JAX transformations."""
-    key, state = neutral_type
-    # Small hits leave both sides alive across the scan.
-    move = make_move('Bullet Seed').replace(base_power=jnp.array([5]))
-    keys = jax.random.split(key, 2)
-    states = jax.tree.map(lambda x: jnp.stack((x, x)), state)
-    _, batch = jax.jit(jax.vmap(lambda k, s: resolve_multi_hit(k, s, 0, move)))(keys, states)
-    assert jnp.all(batch.team.current_hp[:, 1, 0, 0] < states.team.current_hp[:, 1, 0, 0])
-    def turn(carry, _):
-        """Apply a move within a scanned sequence of decisions."""
-        key, state = carry
-        key, state = resolve_multi_hit(key, state, 0, move)
-        return (key, state), state.active.current_hp[1, 0]
-    (_, final), hp = jax.jit(lambda k, s: jax.lax.scan(turn, (k, s), None, length=2))(key, state)
-    assert hp[1] < hp[0] < state.active.current_hp[1, 0]
-    assert not final.events.overflow

@@ -750,3 +750,90 @@ callbacks and some attributed to module-level functions. Treat each warning as
 a tracing-cache diagnostic and investigate it before changing control flow.
 The phase records and block-level inventory are in
 [compilation-callback-next.json](compilation-callback-next.json).
+
+## Dispatch branch ablations
+
+Fresh-process diagnostic runs compiled `dispatch_selected_move` using the
+`tools/profile_compile.py` dynamic U-turn fixture. Each ablation replaces one
+function with a no-op while tracing; these intentionally change mechanics and
+are not proposed implementations. The unchanged and ablated executables ran,
+but these experiments did not compare outputs with eager mechanics.
+
+All runs used CPU, JAX 0.12.0.1, Python 3.14.9, two pinned cores, default XLA
+flags, an 8 GiB virtual limit, a 4 GiB RSS guard and **persistent compilation
+cache disabled**. Backend duration is the difference between the compiled and
+lowered phase timestamps; RSS is the process peak including fixture setup.
+
+| Diagnostic variant | Unique equations | Backend seconds | Peak RSS MiB |
+| --- | ---: | ---: | ---: |
+| Unchanged | 35,461 | 45.871 | 2,316.1 |
+| No status-move branch | 24,485 | 24.317 | 1,742.6 |
+| No damaging-move branch | 26,381 | 24.006 | 1,993.7 |
+| No forced-switch branch | 32,739 | 36.654 | 2,113.0 |
+| No `swap_out` in forced switching | 33,085 | 37.422 | 2,186.8 |
+| No generic status effects | 33,383 | 40.290 | 2,144.4 |
+| No `after_every_hit` | 33,812 | 37.436 | 2,239.2 |
+| No damaging-move secondary effects | 34,588 | 41.910 | 2,248.6 |
+| No attempt finalization | 35,303 | 42.727 | 2,292.3 |
+| No accuracy preparation | 34,277 | 44.118 | 2,342.3 |
+
+Removing either major move branch substantially changes the compiled graph.
+The narrower forced-switch and `swap_out` results suggest switch and entry
+processing deserves investigation; `after_every_hit` is another candidate.
+The equation counter deduplicates shared Jaxprs and compiler passes can expand
+or optimize the surrounding graph differently after an ablation. Therefore the
+differences are not exclusive function costs, cannot be added, and single runs
+on a shared host do not establish a speedup. In particular, none demonstrates
+that a semantics-preserving refactor will achieve the observed reduction.
+
+The diagnostic harness and raw JSON phase logs are retained locally under
+`.profiling/move-investigation/ablate_dispatch.py` and
+`.profiling/move-investigation/ablation-*.log`. Each variant must be launched
+in a fresh process; the harness forces the cache off and applies the limits.
+
+## Local forced-switch requests
+
+Forced switching now separates immunity/eligibility checks and replacement
+selection from switch execution. A local `ForcedSwitchRequest` carries enabled,
+player, slot and entry-key leaves. The main hit switch routes Whirlwind status
+hits to a no-op branch, then prepares and commits the request after dispatch,
+before pivot bookkeeping and attempt finalization. Other hit branches bypass
+preparation. Direct `do_status_move` and `force_switch_target` callers retain
+immediate execution. No request is stored in persistent battle state.
+
+Successful preparation retains the original three-way PRNG split; blocked
+requests do not advance the key. Failure classification, ability reveals and
+switch-out/hazard/entry ordering retain the existing mechanics. Whirlwind's
+pinned metadata bypasses Protect; Good as Gold provides an immunity gate.
+
+Paired profiles used sequential fresh processes, the same dependencies and
+default profiler fixtures, two pinned cores, default XLA flags, an 8 GiB virtual
+limit, a 4 GiB RSS guard and persistent compilation caching disabled. The saved
+pre-change module supplied the full-step baseline. Backend values are phase
+durations; RSS includes fixture construction.
+
+| Target | Equations before / after | Backend seconds before / after | Peak RSS MiB before / after |
+| --- | ---: | ---: | ---: |
+| Dispatch | 35,461 / 35,507 | 47.482 / 46.927 | 2,359.9 / 2,344.3 |
+| Full step | 60,388 / 60,434 | 103.654 / 97.642 | 3,367.6 / 3,273.9 |
+
+Both dispatch profiles matched all 149 eager output leaves; both full-step
+profiles matched all 243 leaves. These single observations show little change
+in dispatch compilation and do not establish a compilation speedup. The graph
+gained 46 equations rather than shrinking. The benefit demonstrated here is
+the separation of switching from status dispatch, with semantics checked
+separately from performance.
+
+Raw phase records and cache settings are preserved in
+[compilation-forced-switch-request.json](compilation-forced-switch-request.json).
+Local snapshots, logs and the comparison harness are retained under
+`.profiling/forced-switch-refactor/`.
+
+The compiled move pipeline also matched the saved pre-change implementation
+across 15 fixtures, comparing all 149 output leaves each time: success, Protect
+bypass, no bench, Guard Dog, Wind Rider and hazard-fainted Drought entrants for
+both players, Sleep Talk calling Whirlwind, ordinary damage and ordinary status.
+Integer leaves and PRNG keys matched exactly; floating leaves used
+`rtol=atol=1e-5`. A separate opt-in compiled `vmap`/`scan` checkpoint passed for
+mixed blocked/successful requests and repeated switching. These mechanics
+checks used persistent caching.

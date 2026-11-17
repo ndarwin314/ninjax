@@ -17,11 +17,17 @@
 - Add docstrings to functions you modify or create
 - Add comments to code in difficult to understand locations
 - Add comments to explain what mechanic different parts of the code are implementing
+- Avoid using nested functions or lambda functions when possible. Prefer adding helpers with static arguments
+- Make all imports at top level
+- Try to have functions pass minimal values needed for their own execution or of parallel branches
+- 
 
 ## Workflow
 - Inspect existing code before making changes.
 - Prefer minimal, focused changes.
 - Run relevant tests after modifying code.
+- Run ordinary tests with JIT enabled and the persistent compilation cache.
+- Place `vmap` and `scan` tests in `unit_tests/batched` and run them only at major checkpoints or when explicitly requested: `pytest --run-batched unit_tests/batched`. Ordinary runs and `--run-jit` exclude them.
 - Do not add dependencies without approval.
 - Do not modify unrelated files.
 - Enable JAX's persistent compilation cache for ordinary test runs.
@@ -33,6 +39,7 @@
 - Use --jax-explain-cache-misses on pytest or tools/profile_compile.py when
   diagnosing cache misses; retain the log with benchmark results.
 - Use persistent cache for mechanic tests
+- Limit memory usage to 8GB during tests
 
 ## Initial environment contract
 - Battle format: Singles and doubles 6 pokemon per team.
@@ -47,8 +54,7 @@
 - Keep battle state as immutable JAX PyTrees, with documented array shapes.
 - A single battle contains the player axis; use vmap for independent battles.
 - Validate reset and step under jit, vmap, and scan.
-- Treat Jumanji as the environment API and remove Gymnax after migration.
-- 
+ 
 ## Self-play architecture
 - Battle receives caller-provided teams.
 - One step accepts one action for each player.

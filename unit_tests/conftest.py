@@ -1,4 +1,4 @@
-"""Run mechanics eagerly by default; opt into compiled integration checks."""
+"""Enable JIT for ordinary mechanics and opt into expensive integration checks."""
 import os
 from pathlib import Path
 
@@ -10,6 +10,8 @@ def pytest_addoption(parser):
     """Expose compiled validation, persistent-cache policy and diagnostics."""
     parser.addoption('--run-jit', action='store_true', default=False,
                      help='Include expensive JIT/transformation and compiled battle tests')
+    parser.addoption('--run-batched', action='store_true', default=False,
+                     help='Include batched and scanned tests for major checkpoints')
     parser.addoption('--no-jax-compilation-cache', action='store_true',
                      help='Disable the persistent JAX cache for this test process')
     parser.addoption('--jax-explain-cache-misses', action='store_true',
@@ -43,20 +45,31 @@ def pytest_report_header(config):
             f'cache-miss explanations: {jax.config.jax_explain_cache_misses}')
 
 
+def pytest_ignore_collect(collection_path, config):
+    """Keep checkpoint tests out of ordinary collection and module imports."""
+    return (collection_path == Path(__file__).parent / 'batched'
+            and not config.getoption('--run-batched'))
+
+
 def pytest_collection_modifyitems(config, items):
     """Deselect compiled checks unless requested, preserving normal -k/-m filters."""
-    if config.getoption('--run-jit'):
-        return
     selected, deferred = [], []
     for item in items:
-        (deferred if item.get_closest_marker('jit') else selected).append(item)
+        batched = Path(__file__).parent / 'batched' in item.path.parents
+        if batched:
+            item.add_marker(pytest.mark.batched)
+        jit = item.get_closest_marker('jit') is not None
+        run = (config.getoption('--run-batched') if batched
+               else config.getoption('--run-jit') or not jit)
+        (selected if run else deferred).append(item)
     items[:] = selected
     config.hook.pytest_deselected(items=deferred)
 
 
 @pytest.fixture(autouse=True)
 def execution_mode(request):
-    """Avoid repeatedly compiling mechanics cases; marked tests really compile."""
-    compiled = request.node.get_closest_marker('jit') is not None
+    """Enable JIT for ordinary tests and preserve checkpoint test modes."""
+    batched = request.node.get_closest_marker('batched') is not None
+    compiled = not batched or request.node.get_closest_marker('jit') is not None
     with jax.disable_jit(not compiled):
         yield

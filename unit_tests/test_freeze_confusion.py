@@ -4,11 +4,13 @@ import jax.numpy as jnp
 import pytest
 
 from ninjax.battle import before_move, step_move
-from ninjax.curated_move_effects import secondary_effects
+from ninjax.moves.effects import secondary_effects
 from ninjax.enum_types import AbilityEnum as A, Status, Terrain, TerrainEnum as T, Type, Weather, WeatherEnum as W
-from ninjax.game_logic import move_accuracy, resolve_damaging_hit
-from ninjax.prototype import make_move
-from ninjax.side import apply_confusion, update_active
+from ninjax.moves.properties import move_accuracy
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.team_builder import make_move
+from ninjax.side.status_effects import apply_confusion
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

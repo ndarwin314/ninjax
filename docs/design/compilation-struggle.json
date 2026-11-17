@@ -1,0 +1,107 @@
+{
+  "phases": [
+    {
+      "phase": "start",
+      "target": "step",
+      "elapsed_seconds": 0.0,
+      "peak_rss_mib": 507.4,
+      "jax_version": "0.12.0.1",
+      "backend": "cpu",
+      "rss_limit_mib": 4096,
+      "python_version": "3.14.9",
+      "cpu_affinity": [
+        0,
+        1
+      ],
+      "xla_flags": ""
+    },
+    {
+      "phase": "traced",
+      "target": "step",
+      "elapsed_seconds": 5.998,
+      "peak_rss_mib": 596.2,
+      "equations": 57258,
+      "subgraphs": 537,
+      "primitives": {
+        "jit": 12491,
+        "add": 6673,
+        "lt": 5261,
+        "select_n": 5114,
+        "squeeze": 3309,
+        "broadcast_in_dim": 3236,
+        "reshape": 2924,
+        "convert_element_type": 2417,
+        "eq": 2095,
+        "and": 1921,
+        "mul": 1559,
+        "dynamic_slice": 1487
+      }
+    },
+    {
+      "phase": "lowered",
+      "target": "step",
+      "elapsed_seconds": 9.998,
+      "peak_rss_mib": 887.4
+    },
+    {
+      "phase": "compiled",
+      "target": "step",
+      "elapsed_seconds": 94.308,
+      "peak_rss_mib": 2594.7
+    },
+    {
+      "phase": "executed",
+      "target": "step",
+      "elapsed_seconds": 94.32,
+      "peak_rss_mib": 2594.7
+    },
+    {
+      "phase": "validated",
+      "target": "step",
+      "elapsed_seconds": 166.899,
+      "peak_rss_mib": 2594.7,
+      "comparison": "compiled_vs_eager",
+      "leaves": 243
+    }
+  ],
+  "backend_seconds": 84.31,
+  "cpu_count": 2,
+  "rss_limit_mib": 4096,
+  "virtual_limit_mib": 8192,
+  "eager_cases": 15,
+  "compiled_struggle_cases": 1,
+  "compiled_battles": [
+    {
+      "seed": 0,
+      "turns": 40,
+      "reward": [
+        1.0,
+        -1.0
+      ],
+      "decisions": 51
+    },
+    {
+      "seed": 17,
+      "turns": 25,
+      "reward": [
+        -1.0,
+        1.0
+      ],
+      "decisions": 32
+    },
+    {
+      "seed": 42,
+      "turns": 26,
+      "reward": [
+        -1.0,
+        1.0
+      ],
+      "decisions": 35
+    }
+  ],
+  "battle_process_peak_rss_mib": 2851.83203125,
+  "notes": [
+    "Compilation overlapped another compiled check on the same cores; timing is not an isolated benchmark.",
+    "Struggle uses the existing event_move=-1 action context to select forced routing."
+  ]
+}

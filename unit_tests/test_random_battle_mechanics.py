@@ -13,11 +13,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ninjax.prototype import CATALOGUE, make_move
+from ninjax.team_builder import CATALOGUE, make_move
 from ninjax.enum_types import AbilityEnum, Type, Status
-from ninjax.curated_move_effects import secondary_effects
-from ninjax.side import update_active
-from ninjax.game_logic import resolve_damaging_hit, do_status_move
+from ninjax.moves.effects import secondary_effects
+from ninjax.side.updates import update_active
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.status import do_status_move
 from unit_tests.test_battle import neutral_type
 
 REFERENCE = json.loads((Path(__file__).parent / 'fixtures/showdown/gen9-random-mechanics.json').read_text())

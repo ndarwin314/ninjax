@@ -2,8 +2,19 @@ import jax
 import jax.numpy as jnp
 from unit_tests.test_battle import neutral_type
 from ninjax.enum_types import ItemEnum as I, AbilityEnum as A, WeatherEnum as W, Weather, StatEnum as S
-from ninjax.side import take_damage_value, clear_volatile_status
-from ninjax.held_effects import refresh_paradox, modify_stats, effective_weather, after_move, leftovers
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.updates import clear_volatile_status
+from ninjax.side.item_effects import refresh_paradox
+from ninjax.side.queries import modify_stats, effective_weather
+from ninjax.moves.finalization import after_move
+from ninjax.residuals import leftovers
+from ninjax.moves.properties import effective_move
+from ninjax.enum_types import Type
+from ninjax.residuals import step_moody
+from ninjax.moves.multi_hit import do_damaging_move
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.finalization import finish_damaging_move
+from ninjax.events import EventKind
 
 
 def test_sash_consumed_once_and_berry_heals(neutral_type):
@@ -51,8 +62,8 @@ def test_cloud_nine_suppresses_without_erasing_weather(neutral_type):
 
 
 def test_pixilate_changes_effective_move_without_changing_slot(neutral_type):
-    from ninjax.game_logic import effective_move
-    from ninjax.enum_types import Type
+
+
     _, state = neutral_type
     state = state.replace(team=state.team.replace(ability=state.team.ability.at[0, 0, 0].set(A.PIXILATE)))
     original = state.active[0].moves[0]
@@ -63,7 +74,7 @@ def test_pixilate_changes_effective_move_without_changing_slot(neutral_type):
 
 
 def test_moody_avoids_capped_stages(neutral_type):
-    from ninjax.game_logic import step_moody
+
     key, state = neutral_type
     state = state.replace(team=state.team.replace(ability=state.team.ability.at[0, 0, 0].set(A.MOODY)),
                           boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 1:].set(6)))
@@ -74,8 +85,8 @@ def test_moody_avoids_capped_stages(neutral_type):
 
 
 def test_single_hit_and_move_finalization_are_separate(neutral_type):
-    from ninjax.game_logic import do_damaging_move, resolve_damaging_hit, finish_damaging_move
-    from ninjax.events import EventKind
+
+
     key, state = neutral_type
     state = state.replace(team=state.team.replace(item=state.team.item.at[0, 0, 0].set(I.LIFE_ORB)))
     move = state.active[0].moves[0]

@@ -2,9 +2,10 @@
 import jax.numpy as jnp
 import pytest
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I
-from ninjax.game_logic import effective_move, move_hits
-from ninjax.prototype import make_move
-from ninjax.side import update_active
+from ninjax.moves.properties import effective_move
+from ninjax.moves.routing import move_hits
+from ninjax.team_builder import make_move
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

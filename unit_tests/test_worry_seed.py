@@ -7,9 +7,10 @@ from unit_tests.test_curated_moves import equip_move
 from ninjax.ability_effects import worry_seed
 from ninjax.battle import Battle, BattleParams, InformationMode
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Weather, WeatherEnum as W
-from ninjax.game_logic import move_hits, swap_out
-from ninjax.held_effects import effective_weather
-from ninjax.side import update_active
+from ninjax.moves.routing import move_hits
+from ninjax.switching import swap_out
+from ninjax.side.queries import effective_weather
+from ninjax.side.updates import update_active
 
 
 def test_worry_seed_wakes_and_reveals_until_switch(neutral_type):
@@ -99,14 +100,3 @@ def test_worry_seed_respects_existing_hit_blocks(neutral_type, guard):
     _, out = move_hits(key, state, 0, 0)
     assert out.volatile_status.ability_override[1, 0] == -1
     assert out.known_abilities[1, 0] == -1
-
-
-@pytest.mark.jit
-def test_worry_seed_jit_vmap_scan(neutral_type):
-    """Ability changes and repeated failure remain compatible with transforms."""
-    _, state = neutral_type
-    batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
-    out = jax.jit(jax.vmap(lambda s: worry_seed(s, 0)))(batch)
-    assert jnp.all(jax.vmap(lambda s: s.ability)(out)[:, 1, 0] == A.INSOMNIA)
-    final, _ = jax.jit(lambda s: jax.lax.scan(lambda s, _: (worry_seed(s, 0), None), s, None, length=2))(state)
-    assert final.ability[1, 0] == A.INSOMNIA

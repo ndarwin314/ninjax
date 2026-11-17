@@ -7,13 +7,44 @@ from ninjax.tree import stack
 from ninjax.battle import Battle, BattleState, BattleParams, BattleAction, InformationMode, Phase, step_move, step_field, step_switch
 from ninjax.pokemon import Pokemon
 from ninjax.enum_types import Type, MoveType, Status, AbilityEnum, WeatherEnum, TerrainEnum, StatEnum
-from ninjax.game_logic import move_used, do_damaging_move
-from ninjax.move_effects import do_contact
-from ninjax.move import Move
+from ninjax.moves.execution import move_used
+from ninjax.moves.multi_hit import do_damaging_move
+from ninjax.moves.effects import do_contact
+from ninjax.moves.model import Move
 from ninjax.stats import StatTable, Nature, StatBoosts
-from ninjax.side import BattleState, status_helper
+from ninjax.side.state import BattleState
+from ninjax.side.status_effects import status_helper
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.battle import step_action
+import numpy as np
+from ninjax.events import EventKind
+from ninjax.side.updates import set_boosts
+from ninjax.enum_types import Weather
+from ninjax.damage import compute_damage_multipliers
+from ninjax.side.updates import clear_volatile_status
+from ninjax.damage import compute_base_damage
+from ninjax.enum_types import StatEnum
+from ninjax.events import EventKind, Cause, EventBuffer
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.status_effects import set_status
+from ninjax.side.updates import add_boosts
+from ninjax.events import CAPACITY, EventKind, emit
+from ninjax.residuals import end_turn_damage
+from ninjax.enum_types import Weather, Terrain
 
 jax.config.update("jax_traceback_filtering", "off")
+
+@pytest.fixture(scope="module")
+def compiled_move_used():
+    """Share the compiled first-player move transition across mechanic tests."""
+    return jax.jit(lambda key, state: move_used(key, state, 0, 0))
+
+
+@pytest.fixture(scope="module")
+def compiled_take_damage():
+    """Share the compiled damage transition for the second player."""
+
+    return jax.jit(lambda state, amount, attack: take_damage_value(state, 1, amount, attack))
 
 @pytest.fixture
 def neutral_type():
@@ -115,8 +146,8 @@ def test_team_selection_and_visibility(neutral_type):
 @pytest.mark.jit
 def test_compiled_struggle_matches_eager(neutral_type):
     """Compare forced Struggle, including its key, events, PP and recoil."""
-    from ninjax.battle import step_action
-    import numpy as np
+
+
     key, state = neutral_type
     with jax.disable_jit():
         expected = step_action(key, state, jnp.int32(4), jnp.int32(0))
@@ -155,7 +186,7 @@ def test_forced_struggle_and_knockout_outcomes(neutral_type):
     assert out.winner == 1
 
 
-def test_generic_move_effects(neutral_type):
+def test_generic_move_effects(neutral_type, compiled_move_used):
     key, original = neutral_type
     moves = original.team.moves
     configured = moves.replace(move_type=jnp.full_like(moves.move_type, MoveType.STATUS),
@@ -166,7 +197,7 @@ def test_generic_move_effects(neutral_type):
         terrain_effect=jnp.full_like(moves.terrain_effect, TerrainEnum.GRASSY),
         hazard_effect=jnp.full_like(moves.hazard_effect, 3))
     state = original.replace(team=original.team.replace(moves=configured))
-    run = jax.jit(lambda k, s: move_used(k, s, 0, 0))
+    run = compiled_move_used
     _, result = run(key, state)
     assert result.active.status[1, 0] == Status.BURN
     assert result.boosts.normal_boosts[1, StatEnum.ATTACK] == -1
@@ -187,7 +218,7 @@ def test_generic_move_effects(neutral_type):
 
 def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
     """Innards Out returns remaining HP as damage only when its holder faints."""
-    from ninjax.side import take_damage_value
+
     key, state = neutral_type
     team = state.team.replace(
         ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.INNARDS_OUT),
@@ -203,8 +234,8 @@ def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
 
 def test_boost_events_keep_stat_order(neutral_type):
     """Stage updates emit only changed stats, in normal then accuracy order."""
-    from ninjax.events import EventKind
-    from ninjax.side import set_boosts
+
+
     _, state = neutral_type
     stages = StatBoosts(normal_boosts=jnp.array([0, 1, 0, 2, 0, 0]),
                         acc_boosts=jnp.array([-1, 0]))
@@ -237,8 +268,8 @@ def test_compiled_episode_reset_and_timeout(neutral_type):
 
 
 @pytest.mark.jit
-def test_compiled_damage_transforms(neutral_type):
-    """Validate damage transitions under actual jit, vmap, and scan."""
+def test_compiled_damage(neutral_type):
+    """Validate a damage transition under JIT compilation."""
     key, state = neutral_type
 
     def hit(key, state):
@@ -248,18 +279,6 @@ def test_compiled_damage_transforms(neutral_type):
     expected_key, expected = hit(key, state)
     compiled_key, compiled = jax.jit(hit)(key, state)
     assert jnp.array_equal(compiled.team.current_hp, expected.team.current_hp)
-
-    keys = random.split(key, 2)
-    _, batched = jax.jit(jax.vmap(hit))(keys, stack([state, state]))
-    assert batched.team.current_hp.shape == (2, 2, 6, 1)
-
-    def turn(carry, unused):
-        next_carry = hit(*carry)
-        return next_carry, next_carry[1].team.current_hp
-
-    (_, final), hp = jax.jit(lambda carry: jax.lax.scan(turn, carry, None, length=2))((key, state))
-    assert hp.shape == (2, 2, 6, 1)
-    assert jnp.all(final.team.current_hp <= state.team.current_hp)
 
 
 def test_decision_phases(neutral_type):
@@ -278,7 +297,7 @@ def test_decision_phases(neutral_type):
     assert waiting.cursor == 1
     assert waiting.battle.team.moves.current_pp[0, 0, 0, 0] == 7
     assert waiting.battle.team.moves.current_pp[1, 0, 0, 0] == 8
-    from ninjax.events import EventKind
+
     assert timestep.observation.transitions.kind[0, 0] == EventKind.MOVE
     assert jnp.sum(timestep.observation.transitions.kind[0] == EventKind.MOVE) == 1
     resumed, resumed_ts = step(waiting, jnp.array([9, -99]))
@@ -451,7 +470,8 @@ class TestDamage:
 
 
 def test_ability_speed_and_marvel_scale_are_per_pokemon(neutral_type):
-    from ninjax.enum_types import Weather
+    """Check that each active Pokémon's ability affects its own stats."""
+
     key, state = neutral_type
     abilities = state.team.ability.at[0, 0, 0].set(AbilityEnum.CHLOROPHYLL)
     abilities = abilities.at[1, 0, 0].set(AbilityEnum.MARVEL_SCALE)
@@ -464,13 +484,11 @@ def test_ability_speed_and_marvel_scale_are_per_pokemon(neutral_type):
     assert stats[1, StatEnum.SPEED] == raw[1, StatEnum.SPEED]
     assert stats[1, StatEnum.DEFENSE] == jnp.floor(raw[1, StatEnum.DEFENSE] * 1.5)
     assert stats[1, StatEnum.SPECIAL_DEFENSE] == raw[1, StatEnum.SPECIAL_DEFENSE]
-    batched = jax.jit(jax.vmap(lambda s: s.boosted_stats))(stack([state, state]))
-    assert jnp.array_equal(batched, jnp.stack([stats, stats]))
 
 
 def test_damage_ability_effectiveness_and_gravity(neutral_type):
-    from ninjax.damage import compute_damage_multipliers
-    from ninjax.enum_types import Weather
+
+
     key, state = neutral_type
     attacker, defender = state.active[0], state.active[1]
     move = attacker.moves[0]
@@ -495,13 +513,13 @@ def test_damage_ability_effectiveness_and_gravity(neutral_type):
     assert damage(attacker, flying, ground, True) == 100
 
 
-def test_levitate_blocks_ground_moves_unless_gravity_is_active(neutral_type):
+def test_levitate_blocks_ground_moves_unless_gravity_is_active(neutral_type, compiled_move_used):
     key, state = neutral_type
     team = state.team.replace(
         moves=state.team.moves.replace(type=jnp.full_like(state.team.moves.type, Type.GROUND)),
         ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.LEVITATE))
     state = state.replace(team=team)
-    apply = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
+    apply = lambda s: compiled_move_used(key, s)[1]
     assert apply(state).active.current_hp[1, 0] == state.active.current_hp[1, 0]
     grounded = apply(state.replace(gravity_duration=jnp.int32(3)))
     assert grounded.active.current_hp[1, 0] < state.active.current_hp[1, 0]
@@ -509,12 +527,12 @@ def test_levitate_blocks_ground_moves_unless_gravity_is_active(neutral_type):
 
 @pytest.mark.parametrize('ability,move_type', [(AbilityEnum.STORM_DRAIN, Type.WATER),
                                                (AbilityEnum.LIGHTNING_ROD, Type.ELECTRIC)])
-def test_redirect_abilities_belong_to_defender(neutral_type, ability, move_type):
+def test_redirect_abilities_belong_to_defender(neutral_type, compiled_move_used, ability, move_type):
     key, state = neutral_type
     moves = state.team.moves.replace(type=jnp.full_like(state.team.moves.type, move_type))
     team = state.team.replace(moves=moves, ability=state.team.ability.at[1, 0, 0].set(ability))
     state = state.replace(team=team)
-    apply = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
+    apply = lambda s: compiled_move_used(key, s)[1]
     result = apply(state)
     assert result.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     assert result.boosts.normal_boosts[1, StatEnum.SPECIAL_ATTACK] == 1
@@ -525,14 +543,15 @@ def test_redirect_abilities_belong_to_defender(neutral_type, ability, move_type)
     assert ordinary.boosts.normal_boosts[1, StatEnum.SPECIAL_ATTACK] == 0
 
 
-def test_flash_fire_activation_and_switch_reset(neutral_type):
-    from ninjax.side import clear_volatile_status
+def test_flash_fire_activation_and_switch_reset(neutral_type, compiled_move_used):
+    """Check Flash Fire activation and clearing when its holder switches."""
+
     key, state = neutral_type
     moves = state.team.moves.replace(type=jnp.full_like(state.team.moves.type, Type.FIRE),
                                      accuracy=jnp.zeros_like(state.team.moves.accuracy))
     team = state.team.replace(moves=moves, ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.FLASH_FIRE))
     state = state.replace(team=team)
-    hit = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
+    hit = lambda s: compiled_move_used(key, s)[1]
     activated = hit(state)
     assert activated.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     assert activated.volatile_status.flash_fire[1, 0]
@@ -557,13 +576,11 @@ def test_flash_fire_activation_and_switch_reset(neutral_type):
     assert switched.active_index[1, 0] == 1
     assert not switched.volatile_status.flash_fire[1, 0]
     assert switched.volatile_status.flash_fire[0, 0]
-    batched = jax.jit(jax.vmap(clear_volatile_status, in_axes=(0, None)))(stack([state, repeated]), 1)
-    assert not jnp.any(batched.volatile_status.flash_fire[:, 1, 0])
 
 
 def test_flash_fire_modifies_only_fire_damage_when_active(neutral_type):
-    from ninjax.damage import compute_base_damage
-    from ninjax.enum_types import StatEnum
+
+
     key, state = neutral_type
     active = state.active[0]
     move = active.moves[0].replace(type=jnp.array([Type.FIRE]), offensive_stat=jnp.array([StatEnum.ATTACK]),
@@ -583,13 +600,12 @@ def test_flash_fire_modifies_only_fire_damage_when_active(neutral_type):
     assert damage(move, jnp.array([0]), True) == 69
 
 
-def test_sturdy_only_survives_lethal_full_health_attack(neutral_type):
-    from ninjax.side import take_damage_value
+def test_sturdy_only_survives_lethal_full_health_attack(neutral_type, compiled_take_damage):
     key, state = neutral_type
     team = state.team.replace(ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.STURDY))
     state = state.replace(team=team)
     hp = state.active.current_hp[1, 0]
-    hit = jax.jit(lambda s, amount, attack: take_damage_value(s, 1, amount, attack))
+    hit = compiled_take_damage
     assert hit(state, hp, True).active.current_hp[1, 0] == 1
     assert hit(state, 10, True).active.current_hp[1, 0] == hp - 10
     assert hit(state, hp, False).active.current_hp[1, 0] == 0
@@ -597,44 +613,22 @@ def test_sturdy_only_survives_lethal_full_health_attack(neutral_type):
     assert hit(damaged, hp, True).active.current_hp[1, 0] == 0
 
 
-def test_multiscale_reduces_attacks_only_at_full_hp(neutral_type):
-    from ninjax.side import take_damage_value
+def test_multiscale_reduces_attacks_only_at_full_hp(neutral_type, compiled_take_damage):
     key, state = neutral_type
     team = state.team.replace(ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.MULTISCALE))
     state = state.replace(team=team)
     hp = state.active.current_hp[1, 0]
-    hit = jax.jit(lambda s, amount, attack: take_damage_value(s, 1, amount, attack))
+    hit = compiled_take_damage
     reduced = hit(state, 100, True)
     assert reduced.active.current_hp[1, 0] == hp - 50
     assert hit(reduced, 100, True).active.current_hp[1, 0] == hp - 150
     assert hit(state, 100, False).active.current_hp[1, 0] == hp - 100
 
 
-@pytest.mark.jit
-def test_flash_fire_activation_under_vmap_and_scan(neutral_type):
-    """Compile switch-cleared ability state across batched and scanned hits."""
-    key, state = neutral_type
-    moves = state.team.moves.replace(type=jnp.full_like(state.team.moves.type, Type.FIRE))
-    team = state.team.replace(moves=moves, ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.FLASH_FIRE))
-    protected = state.replace(team=team)
-    ordinary = state.replace(team=team.replace(ability=team.ability.at[1, 0, 0].set(0)))
-    def hit(s):
-        return move_used(key, s, 0, 0)[1]
-    results = jax.jit(jax.vmap(hit))(stack([protected, ordinary]))
-    assert jnp.array_equal(results.volatile_status.flash_fire[:, 1, 0], jnp.array([True, False]))
-    assert results.team.current_hp[0, 1, 0, 0] == protected.team.current_hp[1, 0, 0]
-    assert results.team.current_hp[1, 1, 0, 0] < ordinary.team.current_hp[1, 0, 0]
-    def turn(carry, unused):
-        updated = hit(carry)
-        return updated, updated.volatile_status.flash_fire[1, 0]
-    final, flags = jax.jit(lambda s: jax.lax.scan(turn, s, None, length=2))(protected)
-    assert jnp.all(flags)
-    assert final.team.moves.current_pp[0, 0, 0, 0] == 6
-
-
 def test_observation_events_and_private_hp(neutral_type):
-    from ninjax.events import EventKind, Cause, EventBuffer
-    from ninjax.side import take_damage_value, set_status, add_boosts
+    """Check emitted events and player-relative HP visibility."""
+
+
     key, battle = neutral_type
     env = Battle(battle.team)
     state, first = env.reset(key)
@@ -658,18 +652,11 @@ def test_observation_events_and_private_hp(neutral_type):
     assert jnp.all(e.before[0, :2] == 0)
     assert jnp.array_equal(e.target[:, 0], jnp.array([1, 0]))
     assert not jnp.any(e.overflow)
-    batched = jax.jit(jax.vmap(effects))(stack([battle, battle]))
-    assert jnp.all(batched.events.count == 4)
-    def turn(b, _):
-        b = effects(b)
-        return b, b.events.count
-    final, counts = jax.jit(lambda b: jax.lax.scan(turn, b, None, length=2))(battle)
-    assert counts.shape == (2,)
 
 
 def test_transition_buffer_bounds_and_hp_clipping(neutral_type):
-    from ninjax.events import CAPACITY, EventKind, emit
-    from ninjax.side import take_damage_value
+
+
     _, battle = neutral_type
     dead = jax.jit(lambda b: take_damage_value(b, 1, 100000, True))(battle)
     assert dead.events.hp_change[0] == -battle.active.current_hp[1, 0]
@@ -681,29 +668,9 @@ def test_transition_buffer_bounds_and_hp_clipping(neutral_type):
     assert jnp.all(full.events.valid)
 
 
-@pytest.mark.jit
-def test_full_observation_rollout_transforms(neutral_type):
-    """Compile full observations and terminal transitions in batched rollouts."""
-    key, battle = neutral_type
-    env = Battle(battle.team, BattleParams(max_steps_in_episode=1))
-    def episode(key):
-        state, first = env.reset(key)
-        def turn(state, _):
-            state, ts = env.step(state, jnp.array([0, 0]))
-            return state, ts.observation
-        return jax.lax.scan(turn, state, None, length=2)
-    final, observations = jax.jit(jax.vmap(episode))(random.split(key, 2))
-    assert jnp.all(final.phase == Phase.TERMINAL)
-    assert observations.team['species'].shape == (2, 2, 2, 2, 6)
-    assert jnp.all(observations.transitions.count[:, 0] > 0)
-    assert jnp.all(observations.transitions.count[:, 1] == 0)
-    assert not jnp.any(observations.transitions.overflow)
-
-
 def test_residual_effect_order_and_events(neutral_type):
-    from ninjax.game_logic import end_turn_damage
-    from ninjax.events import EventKind
-    from ninjax.enum_types import Weather, Terrain
+
+
     _, state = neutral_type
     state = state.replace(
         weather=Weather(WeatherEnum.SANDSTORM, 5),

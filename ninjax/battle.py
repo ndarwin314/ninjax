@@ -12,18 +12,34 @@ from jumanji.types import TimeStep, restart, transition, truncation, termination
 import jax.numpy as jnp
 
 
-from ninjax.side import BattleState, update_active_fields, resolve_faints, clear_destiny_bond
+from ninjax.side.state import BattleState
+from ninjax.side.updates import update_active_fields
+from ninjax.side.faint_effects import resolve_faints, clear_destiny_bond
 from ninjax.pokemon import Pokemon
-from ninjax.side import take_damage_value
-from ninjax.utils import triple_and, triple_or
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.utils import triple_and
 from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType, MoveResult
 from ninjax.hit import HitOutcome
-from ninjax.game_logic import (step_side_conditions, swap_out, end_turn_damage, move_interrupted,
-                               move_used, step_moody)
+from ninjax.residuals import step_side_conditions, end_turn_damage, step_moody
+from ninjax.switching import swap_out
+from ninjax.moves.execution import move_interrupted, move_used
 
 
 from ninjax.events import EventBuffer, EventKind, Cause, emit, capture_conditions
 from ninjax.observations import Observation, observe, observation_spec
+from ninjax.side.item_effects import refresh_paradox
+from ninjax.restrictions import resolve_move
+from ninjax.hit import HitResults
+from ninjax.residuals import residual_abilities
+from ninjax.residuals import leftovers, residual_orbs
+from ninjax.side.item_effects import update_items
+from ninjax.restrictions import allowed_moves
+from ninjax.enum_types import ItemEnum
+from ninjax.side.queries import is_choice_item
+from ninjax.side.queries import is_floating
+from ninjax.switching import swap_is_alive
+from ninjax.moves.properties import effective_move
+from ninjax.side.item_effects import after_hp_change
 
 Binary = (0,1)
 
@@ -141,7 +157,7 @@ def replace_player(player, carry):
     key, battle = lax.cond(current.acting_player_mask[player],
                            _execute_replacement, _skip_replacement,
                            current.key, current.battle, player, actions.index[player])
-    from ninjax.held_effects import refresh_paradox
+
     battle = refresh_paradox(battle)
     battle = capture_conditions(current.battle, battle)
     return current.replace(key=key, battle=battle), actions
@@ -211,7 +227,7 @@ class Battle(Environment):
         switches = alive & (jnp.arange(6)[None, :] != battle.active_index)
         active = battle.active
         moves = (active.moves.current_pp[..., 0] > 0) & ~active.moves.disabled[..., 0]
-        from ninjax.restrictions import allowed_moves
+
         moves &= allowed_moves(active.moves.identifier[..., 0], active.moves.move_type[..., 0],
             disabled_move_id=battle.volatile_status.disabled_move_id,
             disable_turns=battle.volatile_status.disable_turns,
@@ -219,15 +235,15 @@ class Battle(Environment):
             encore_move_id=battle.volatile_status.encore_move_id,
             encore_turns=battle.volatile_status.encore_turns,
             gravity_duration=battle.gravity_duration)
-        from ninjax.enum_types import ItemEnum
+
         items = active.item[:, 0]
-        from ninjax.held_effects import is_choice_item
+
         choice = is_choice_item(items)
         lock = battle.volatile_status.choice_lock[:, 0]
         moves &= ~choice[:, None] | (lock[:, None] < 0) | (jnp.arange(4)[None, :] == lock[:, None])
         moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (active.moves.move_type[..., 0] != MoveType.STATUS)
         trapped = (battle.ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (active.current_hp[::-1, 0] > 0) & (battle.ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(active.type_list == Type.GHOST, axis=1)
-        from ninjax.side import is_floating
+
         opposing = battle.ability[::-1, 0]
         ghost = jnp.any(battle.effective_active.type_list == Type.GHOST, axis=1)
         grounded = (~is_floating(battle.effective_active) | (battle.gravity_duration > 0))[:, 0]
@@ -268,8 +284,8 @@ class Battle(Environment):
 
     def _activate_entry_abilities(self, state):
         """Resolve initial abilities in speed order, including team preview starts."""
-        from ninjax.game_logic import swap_is_alive
-        from ninjax.held_effects import refresh_paradox
+
+
         first, second = action_order(state.key, state.battle, jnp.zeros(2, jnp.int32))
         battle = swap_is_alive(state.battle, first)
         battle = swap_is_alive(battle, second)
@@ -340,7 +356,7 @@ class Battle(Environment):
             continuing = (actions.move_type == ActionType.CONTINUED) & (v.charging_move_id[:, 0] != 0)
             charge_indices = jnp.argmax(current.battle.active.moves.identifier[..., 0] == v.charging_move_id, axis=1)
             indices = jnp.where(continuing, charge_indices, jnp.clip(actions.index, 0, 3))
-            from ninjax.game_logic import effective_move
+
             priorities = jax.vmap(lambda p, i: effective_move(current.battle, p, current.battle.active[p].moves[i]).priority[0])(jnp.arange(2), indices)
             priorities = jnp.where(actions.move_type == ActionType.SWITCH, 7,
                 jnp.where(((actions.move_type == ActionType.ATTACK) & (actions.index < 4)) | continuing, priorities, 0))
@@ -381,7 +397,7 @@ class Battle(Environment):
                 key, battle = lax.cond(can_act,
                     lambda k, b: step_action(k, b, chosen, player),
                     lambda k, b: (k, b), current.key, battle_with_context)
-                from ninjax.held_effects import refresh_paradox
+
                 battle = refresh_paradox(battle)
                 battle = capture_conditions(current.battle, battle)
                 slot = current.battle.active_index[player, 0]
@@ -550,7 +566,7 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
             damage = jnp.maximum(1, ((base % 65536) * random.randint(damage_key, (), 85, 101)) // 100)
             def self_hit(s):
                 """Damage only the user; do not invoke opposing on-hit abilities."""
-                from ninjax.held_effects import after_hp_change
+
                 mon = s.active[player_idx]
                 hp = jnp.maximum(0, mon.current_hp - damage)
                 old_source, old_cause = s.event_source, s.event_cause
@@ -616,7 +632,7 @@ def _prepare_struggle_action(key, state, player, unused_index):
 
 def _prepare_selected_action(key, state, player_idx, index, is_tera):
     """Resolve Encore, priority and transformation for a newly selected move."""
-    from ninjax.restrictions import resolve_move
+
     original_index = index
     moves, v = state.active.moves, state.volatile_status
     index, restriction_blocked = resolve_move(
@@ -643,7 +659,7 @@ def _prepare_selected_action(key, state, player_idx, index, is_tera):
 
 def _prepare_charge_release(key, state, player, unused_index):
     """Clear the stored charge and ignore Encore/PP while honoring Disable."""
-    from ninjax.hit import HitResults
+
     v = state.volatile_status
     identifier = v.charging_move_id[player, 0]
     matches = (state.active[player].moves.identifier[:, 0] == identifier) & (identifier != 0)
@@ -672,8 +688,6 @@ def step_switch(
     # TODO: add an opponent switched field somewhere for stakeout + analytic
     key, switch_key = random.split(key)
     return key, swap_out(switch_key, state, player_index, index)
-
-
 
 
 def step_action(
@@ -716,7 +730,7 @@ def step_continued(key, state, player):
 
 def _spend_recharge(key, state, player):
     """Spend recharge before sleep, freeze, flinch, confusion or paralysis."""
-    from ninjax.hit import HitResults
+
     state = clear_destiny_bond(state, player)
     v = state.volatile_status
     state = state.replace(hit_results=HitResults.empty(), volatile_status=v.replace(
@@ -747,14 +761,14 @@ def step_field(
     new_terrain = jnp.where(terrain_duration > 0, state.terrain.terrain, 0)
 
     key, state = step_side_conditions(key, state)
-    from ninjax.ability_effects import residual_abilities
+
     # Hydration and Shed Skin resolve at residual order 5, before poison/burn.
     key, state = residual_abilities(key, state, speed_boost=False)
 
     # weather, terrain, status, items (leftovers etc)
     state = end_turn_damage(state)
 
-    from ninjax.held_effects import leftovers, refresh_paradox, residual_orbs, update_items
+
     state = leftovers(state)
     key, state = step_moody(key, state)
     key, state = residual_abilities(key, state, status_cures=False)

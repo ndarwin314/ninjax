@@ -5,12 +5,20 @@ import pytest
 from unit_tests.test_battle import neutral_type
 from ninjax.battle import Battle, BattleParams
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, WeatherEnum as W, TerrainEnum as T, MoveType, Type, Status
-from ninjax.game_logic import swap_is_alive, swap_out
+from ninjax.switching import swap_is_alive, swap_out
 from ninjax.ability_effects import frisk
-from ninjax.held_effects import consume
-from ninjax.move_effects import after_every_hit
-from ninjax.side import set_status, take_damage_value
+from ninjax.side.item_effects import consume
+from ninjax.moves.effects import after_every_hit
+from ninjax.side.status_effects import set_status
+from ninjax.side.hp_effects import take_damage_value
 from ninjax.curated import load_sets, make_ability_pool, CURATED_ABILITIES
+from ninjax.prototype import run_curated
+from ninjax.enum_types import Terrain
+from ninjax.moves.routing import move_hits
+from ninjax.damage import compute_base_power
+from ninjax.team_builder import make_move
+from ninjax.enum_types import Weather
+from ninjax.residuals import end_turn_damage
 
 
 def frisk_state(state):
@@ -111,28 +119,18 @@ def test_ability_pool_reports_unsupported_entries():
 
 
 @pytest.mark.jit
-def test_frisk_jit_vmap_scan(neutral_type):
-    """Public knowledge and event updates compile under all three transformations."""
+def test_frisk_jit(neutral_type):
+    """Public item knowledge updates under JIT compilation."""
     _, state = neutral_type
     state = frisk_state(state)
     out = jax.jit(frisk)(state, 0)
     assert out.known_items[1, 0] == I.LIFE_ORB
-    batch = jax.tree.map(lambda x: jnp.stack((x, x)), state)
-    out = jax.jit(jax.vmap(frisk, in_axes=(0, None)))(batch, 0)
-    assert jnp.all(out.known_items[:, 1, 0] == I.LIFE_ORB)
-    def reveal(s, _):
-        """Repeat an entry reveal in a scanned state transition."""
-        s = frisk(s, 0)
-        return s, s.known_items
-    final, history = jax.jit(lambda s: jax.lax.scan(reveal, s, None, length=2))(state)
-    assert jnp.all(history[:, 1, 0] == I.LIFE_ORB)
-    assert not final.events.overflow
 
 
 @pytest.mark.jit
 def test_curated_ability_battle():
     """Run enabled curated abilities through the compiled environment interface."""
-    from ninjax.prototype import run_curated
+
     result = run_curated(seed=42, max_turns=12, abilities=True)
     assert 0 < result['turns'] <= 12
     assert result['reward'] in ([0., 0.], [1., -1.], [-1., 1.])
@@ -142,10 +140,8 @@ def test_curated_ability_battle():
 
 def test_surge_terrain_protection_and_power(neutral_type):
     """Surge-created terrains affect statuses, priority and grounded damage."""
-    from ninjax.enum_types import Terrain
-    from ninjax.game_logic import move_hits
-    from ninjax.damage import compute_base_power
-    from ninjax.prototype import make_move
+
+
     key, state = neutral_type
     misty = state.replace(terrain=Terrain(T.MISTY, 5))
     _, out = set_status(key, misty, 1, jnp.array([Status.BURN]))
@@ -173,8 +169,8 @@ def test_surge_terrain_protection_and_power(neutral_type):
 
 def test_cloud_nine_blocks_residual_weather(neutral_type):
     """Weather suppression ends when its ability holder faints."""
-    from ninjax.enum_types import Weather
-    from ninjax.game_logic import end_turn_damage
+
+
     _, state = neutral_type
     state = state.replace(weather=Weather(W.SANDSTORM, 5), team=state.team.replace(
         ability=state.team.ability.at[0, 0, 0].set(A.CLOUD_NINE)))

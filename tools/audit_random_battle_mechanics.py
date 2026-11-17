@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from ninjax.curated import CURATED_ABILITIES, CURATED_ITEMS
-from ninjax.prototype import CATALOGUE
+from ninjax.team_builder import CATALOGUE
 
 
 def coverage_report(reference):

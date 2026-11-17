@@ -4,7 +4,7 @@ import pytest
 from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type
 from ninjax.hit import HitOutcome
-from ninjax.side import update_active
+from ninjax.side.updates import update_active
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

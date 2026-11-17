@@ -4,6 +4,7 @@ import jax.numpy as jnp
 
 from ninjax.battle import ActionType, Battle, BattleAction, BattleParams, Phase, step_action
 from unit_tests.test_battle import neutral_type
+from ninjax.battle import Transformation
 
 
 def test_indexed_switches_and_pending_actions(neutral_type):
@@ -60,7 +61,7 @@ def test_action_pytree_transforms():
     """Action adapters can be batched and traced without Python value dispatch."""
     encoded = jnp.array([0, 3, 4, 5, 8, 13, 14])
     action = BattleAction.from_legacy(encoded)
-    assert jnp.array_equal(jax.vmap(lambda a: a.encode())(action), encoded)
+    assert jnp.array_equal(action.encode(), encoded)
     assert jax.eval_shape(lambda a: a.encode(), action).shape == (7,)
 
 
@@ -75,12 +76,12 @@ def test_indexed_attack_dispatch(neutral_type):
 
 def test_transformation_metadata_and_rejection(neutral_type):
     """Transformations retain identity under batching and cannot be ignored."""
-    from ninjax.battle import Transformation
+
     key, battle = neutral_type
     for kind in Transformation:
         action = BattleAction(jnp.zeros(2, jnp.int32), jnp.full(2, ActionType.ATTACK), transformation=kind)
         assert action.transformation.shape == (2,)
-        assert jnp.all(jax.vmap(lambda a: a.transformation)(action) == kind)
+        assert jnp.all(action.transformation == kind)
         if kind != Transformation.NONE:
             assert jnp.all(action.encode() == -1)
     env = Battle(battle.team)
