@@ -1,11 +1,9 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_stat_owner import (
-    Owner,
-    StatBoosts,
-    jax,
-    jnp,
-    select_offensive_stats,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.enum_types import OffensiveStatOwner as Owner
+from ninjax.stats import StatBoosts, select_offensive_stats
 
 
 def test_stat_owner_traces_with_dynamic_owner():

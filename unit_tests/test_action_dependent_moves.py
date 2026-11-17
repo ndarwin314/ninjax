@@ -1,16 +1,15 @@
 """Action timing and previous-turn results for curated attacks."""
 import jax.numpy as jnp
 import pytest
-from ninjax.battle import step_field, step_move
+
+from ninjax.battle import ActionType, Battle, BattleAction, step_field, step_move
 from ninjax.enum_types import MoveResult, MoveType
-from ninjax.moves.properties import effective_move
 from ninjax.hit import HitOutcome
-from ninjax.team_builder import make_move
+from ninjax.moves.properties import effective_move
 from ninjax.side.updates import clear_volatile_status
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
-from ninjax.battle import ActionType, Battle, BattleAction
-from ninjax.battle import Battle
 
 
 def test_fake_out_first_action_and_reset(neutral_type):

@@ -1,11 +1,10 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_active_updates import (
-    jax,
-    jnp,
-    neutral_type,
-    pytest,
-    update_active_fields,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.side.updates import update_active_fields
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

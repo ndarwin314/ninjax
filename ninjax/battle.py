@@ -1,45 +1,51 @@
-from typing import Any
 from enum import IntEnum
+from functools import cached_property
+from typing import Any
 
 import chex
 import jax.lax
+import jax.numpy as jnp
 from flax import struct
 from jax import lax, random
-from functools import cached_property
-from jumanji.env import Environment
 from jumanji import specs
-from jumanji.types import TimeStep, restart, transition, truncation, termination
-import jax.numpy as jnp
+from jumanji.env import Environment
+from jumanji.types import TimeStep, restart, termination, transition, truncation
 
-
+from ninjax.enum_types import (
+    AbilityEnum,
+    ItemEnum,
+    MoveResult,
+    MoveType,
+    StatEnum,
+    Status,
+    Terrain,
+    Type,
+    Weather,
+)
+from ninjax.events import Cause, EventBuffer, EventKind, capture_conditions, emit
+from ninjax.hit import HitOutcome, HitResults
+from ninjax.moves.execution import move_interrupted, move_used
+from ninjax.moves.properties import effective_move
+from ninjax.observations import Observation, observation_spec, observe
+from ninjax.pokemon import Pokemon
+from ninjax.residuals import (
+    end_turn_damage,
+    leftovers,
+    residual_abilities,
+    residual_orbs,
+    step_moody,
+    step_side_conditions,
+)
+from ninjax.restrictions import allowed_moves, resolve_move
+from ninjax.side.faint_effects import clear_destiny_bond, resolve_faints
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.item_effects import after_hp_change, refresh_paradox, update_items
+from ninjax.side.queries import is_choice_item, is_floating
 from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
-from ninjax.side.faint_effects import resolve_faints, clear_destiny_bond
-from ninjax.pokemon import Pokemon
-from ninjax.side.hp_effects import take_damage_value
+from ninjax.switching import swap_is_alive, swap_out
 from ninjax.utils import triple_and
-from ninjax.enum_types import StatEnum, Type, AbilityEnum, Weather, Terrain, Status, MoveType, MoveResult
-from ninjax.hit import HitOutcome
-from ninjax.residuals import step_side_conditions, end_turn_damage, step_moody
-from ninjax.switching import swap_out
-from ninjax.moves.execution import move_interrupted, move_used
 
-
-from ninjax.events import EventBuffer, EventKind, Cause, emit, capture_conditions
-from ninjax.observations import Observation, observe, observation_spec
-from ninjax.side.item_effects import refresh_paradox
-from ninjax.restrictions import resolve_move
-from ninjax.hit import HitResults
-from ninjax.residuals import residual_abilities
-from ninjax.residuals import leftovers, residual_orbs
-from ninjax.side.item_effects import update_items
-from ninjax.restrictions import allowed_moves
-from ninjax.enum_types import ItemEnum
-from ninjax.side.queries import is_choice_item
-from ninjax.side.queries import is_floating
-from ninjax.switching import swap_is_alive
-from ninjax.moves.properties import effective_move
-from ninjax.side.item_effects import after_hp_change
 
 Binary = (0,1)
 

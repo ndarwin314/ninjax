@@ -1,12 +1,11 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_destiny_bond import (
-    bonded,
-    jax,
-    jnp,
-    neutral_type,
-    resolve_faints,
-    take_damage_value,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.side.faint_effects import resolve_faints
+from ninjax.side.hp_effects import take_damage_value
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_destiny_bond import bonded
 
 
 def test_faint_resolution_trace(neutral_type):

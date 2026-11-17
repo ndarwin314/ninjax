@@ -1,17 +1,15 @@
 """Moves that fit existing HP, status, and held-item state."""
-import jax
 import jax.numpy as jnp
 import pytest
 
+from ninjax.battle import step_move
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Terrain, TerrainEnum as T
+from ninjax.moves.routing import move_hits
+from ninjax.moves.status import do_status_move
+from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
-from ninjax.team_builder import make_move
-from ninjax.moves.status import do_status_move
-from ninjax.moves.routing import move_hits
-from ninjax.moves.status import direct_status_move
-from ninjax.side.updates import update_active
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Terrain, TerrainEnum as T
-from ninjax.battle import step_move
 
 
 def test_pain_split_sets_hp_and_bypasses_damage_abilities(neutral_type):

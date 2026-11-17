@@ -1,16 +1,16 @@
 """Runtime move types for Ivy Cudgel and Revelation Dance."""
-import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.enum_types import AbilityEnum as A, FormEnum as F, Type
-from ninjax.moves.properties import effective_move
-from ninjax.team_builder import make_move
-from ninjax.side.updates import update_active
-from unit_tests.test_curated_moves import equip_move
-from ninjax.moves.execution import move_used
-from ninjax.curated import load_sets, make_sandbox_pool
+
 from ninjax.battle import Battle, BattleParams, InformationMode
+from ninjax.curated import load_sets, make_sandbox_pool
+from ninjax.enum_types import AbilityEnum as A, FormEnum as F, Type
+from ninjax.moves.execution import move_used
+from ninjax.moves.properties import effective_move
+from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_curated_moves import equip_move
 
 
 @pytest.mark.parametrize('form,expected', [(F.DEFAULT, Type.GRASS), (F.OGERPON_WELLSPRING, Type.WATER),

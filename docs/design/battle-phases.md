@@ -34,8 +34,8 @@ from ninjax.switching import prepare_forced_switch, execute_forced_switch
 from ninjax.residuals import end_turn_damage, residual_abilities
 ```
 
-The original public names remain explicit compatibility exports from
-`game_logic`, `ability_effects` and `held_effects`. `moves.finalization.after_move`
-owns the Life Orb/Throat Spray move-completion hook. Profiling
+The obsolete `game_logic.py` and `held_effects.py` compatibility files have been
+removed, along with residual re-exports from `ability_effects`.
+`moves.finalization.after_move` owns the Life Orb/Throat Spray move-completion hook. Profiling
 components import switching from its owner after configuring benchmark cache
 policy; historical benchmark logs keep their original source locations.

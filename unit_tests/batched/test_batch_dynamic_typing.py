@@ -1,14 +1,12 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_dynamic_typing import (
-    F,
-    Type,
-    effective_move,
-    jax,
-    jnp,
-    make_move,
-    neutral_type,
-    pytest,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.enum_types import FormEnum as F, Type
+from ninjax.moves.properties import effective_move
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

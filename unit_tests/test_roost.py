@@ -1,15 +1,14 @@
 """Roost healing and temporary effective-type changes."""
-import jax
 import jax.numpy as jnp
 import pytest
-from ninjax.battle import step_field
+
+from ninjax.battle import step_field, step_move
 from ninjax.enum_types import AbilityEnum as A, Type
-from ninjax.moves.status import do_status_move
 from ninjax.moves.properties import effective_move
-from ninjax.team_builder import make_move
+from ninjax.moves.status import do_status_move
 from ninjax.side.updates import clear_volatile_status, update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
-from ninjax.battle import step_move
 from unit_tests.test_curated_moves import equip_move
 
 

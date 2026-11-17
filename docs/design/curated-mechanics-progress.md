@@ -158,7 +158,7 @@ has no effect in singles, and its doubles behavior remains unvalidated.
 
 These are engine hooks, not a claim that every interaction is complete or that
 the curated sets can be enabled without omissions. Focused tests are in
-`unit_tests/test_held_effects.py`. Numeric modifiers added in `held_effects.py`
+`unit_tests/test_held_effects.py`. Numeric modifiers now owned by `side.queries`
 use the pinned Showdown source's 4096-based rounding convention; the older
 engine still has modifier-rounding work outside these new hooks.
 

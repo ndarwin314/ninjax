@@ -1,11 +1,8 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_curated import (
-    jax,
-    jnp,
-    load_sets,
-    make_sandbox_pool,
-    sample_teams,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.curated import load_sets, make_sandbox_pool, sample_teams
 
 
 def test_sampled_teams_and_explicit_omissions():

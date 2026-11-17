@@ -1,15 +1,12 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_multi_hit import (
-    A,
-    I,
-    jax,
-    jnp,
-    make_move,
-    neutral_type,
-    pytest,
-    resolve_multi_hit,
-    sample_hit_count,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I
+from ninjax.moves.multi_hit import resolve_multi_hit, sample_hit_count
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def test_counts_distribution_and_modifiers():

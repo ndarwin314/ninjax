@@ -3,16 +3,15 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.moves.effects import secondary_effects
 from ninjax.damage import compute_base_power
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, FormEnum as F, Status, Type
-from ninjax.moves.status import do_status_move
-from ninjax.moves.routing import move_hits
+from ninjax.enum_types import AbilityEnum as A, FormEnum as F, ItemEnum as I, Status, Type
+from ninjax.moves.effects import after_every_hit, secondary_effects
 from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.routing import move_hits
+from ninjax.moves.status import do_status_move
 from ninjax.side.item_effects import kings_rock_flinch
-from ninjax.moves.effects import after_every_hit
-from ninjax.team_builder import make_move
 from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

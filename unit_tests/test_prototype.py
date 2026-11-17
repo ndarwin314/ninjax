@@ -3,14 +3,14 @@ import json
 from pathlib import Path
 
 import jax
-import pytest
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from ninjax.prototype import random_actions, run
+from ninjax.stats import StatBoosts, raw_boosted_stats
 from ninjax.team_builder import make_sandbox_teams
-from ninjax.stats import raw_boosted_stats
-from ninjax.stats import StatBoosts
+
 
 REFERENCE = Path(__file__).parent / 'fixtures/showdown/battle-1.json'
 

@@ -1,18 +1,16 @@
 """Effective ability state and switch-reset behavior."""
 import jax
 import jax.numpy as jnp
-import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.enum_types import AbilityEnum as A, Status
-from ninjax.side.updates import clear_volatile_status
-from ninjax.side.status_effects import set_status
-from ninjax.team_builder import make_move
-from ninjax.side.hp_effects import take_damage_value
-from ninjax.enum_types import Weather, WeatherEnum as W, StatEnum
-from ninjax.side.queries import effective_weather
-from ninjax.side.updates import add_boosts
+
+from ninjax.enum_types import AbilityEnum as A, StatEnum, Status, Weather, WeatherEnum as W
 from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.queries import effective_weather
+from ninjax.side.status_effects import set_status
+from ninjax.side.updates import add_boosts, clear_volatile_status
 from ninjax.switching import swap_out
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def test_ability_override_suppression_and_switch_reset(neutral_type):

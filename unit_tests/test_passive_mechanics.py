@@ -7,31 +7,36 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from ninjax.battle import Battle, Phase, before_move, step_field
 from ninjax.curated import CURATED_ABILITIES, CURATED_ITEMS
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Type, Status, Weather, WeatherEnum as W, Terrain, TerrainEnum as T
-from ninjax.team_builder import make_move
-from ninjax.side.updates import update_active
-from ninjax.side.status_effects import set_status, apply_confusion
-from ninjax.side.hp_effects import take_damage_value
-from ninjax.side.item_effects import status_berry, white_herb, swap_items, update_items
-from ninjax.residuals import residual_orbs
-from ninjax.moves.hit_resolution import resolve_damaging_hit
-from ninjax.moves.status import do_status_move
-from ninjax.moves.properties import move_accuracy
-from ninjax.moves.routing import move_hits
+from ninjax.enum_types import (
+    AbilityEnum as A,
+    ItemEnum as I,
+    Status,
+    Terrain,
+    TerrainEnum as T,
+    Type,
+    Weather,
+    WeatherEnum as W,
+)
+from ninjax.moves.effects import do_contact, secondary_effects
 from ninjax.moves.execution import _prepare_move_use
-from ninjax.switching import swap_out
-from ninjax.battle import Battle, Phase, step_field
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.properties import effective_move, move_accuracy
+from ninjax.moves.routing import move_hits
+from ninjax.moves.status import do_status_move
 from ninjax.residuals import residual_abilities
+from ninjax.restrictions import apply_restriction
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.item_effects import swap_items, update_items
+from ninjax.side.stat_effects import stat_changes
+from ninjax.side.status_effects import apply_confusion, set_status
+from ninjax.side.updates import update_active
+from ninjax.switching import swap_is_alive, swap_out
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
-from ninjax.moves.effects import secondary_effects
-from ninjax.moves.properties import effective_move
-from ninjax.side.stat_effects import stat_changes
-from ninjax.switching import swap_is_alive
-from ninjax.battle import before_move
-from ninjax.restrictions import apply_restriction
-from ninjax.moves.effects import do_contact
+
 
 REFERENCE = json.loads((Path(__file__).parent / 'fixtures/showdown/passive-mechanics.json').read_text())
 STATS = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')

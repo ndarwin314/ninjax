@@ -1,14 +1,13 @@
 """Opposing stat reductions and their represented ability reactions."""
-import jax
-import jax.numpy as jnp
-from ninjax.side.updates import add_boosts, set_boosts
-from ninjax.enum_types import AbilityEnum as A
-from ninjax.stats import StatBoosts
 from functools import partial
 
+import jax
+import jax.numpy as jnp
 
-from ninjax.enum_types import AbilityEnum, StatEnum
+from ninjax.enum_types import AbilityEnum as A, AbilityEnum, StatEnum
 from ninjax.side.state import BattleState
+from ninjax.side.updates import add_boosts, set_boosts
+from ninjax.stats import StatBoosts
 
 
 def _apply_opposing_drop_boost(s, *, player, stat, lowered_count):

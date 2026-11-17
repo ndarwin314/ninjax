@@ -1,12 +1,11 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_item_mutation import (
-    I,
-    items,
-    jax,
-    jnp,
-    neutral_type,
-    swap_items,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.enum_types import ItemEnum as I
+from ninjax.side.item_effects import swap_items
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_item_mutation import items
 
 
 def test_item_mutation_traces_under_jax(neutral_type):

@@ -2,19 +2,16 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from unit_tests.test_curated_moves import equip_move
-from ninjax.team_builder import make_move
+
+from ninjax.battle import Battle, step_action, step_move
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Terrain, TerrainEnum
 from ninjax.moves.status import do_status_move
 from ninjax.residuals import step_side_conditions
-from ninjax.battle import step_move
-from ninjax.restrictions import allowed_moves, resolve_move, apply_restriction
-from ninjax.enum_types import ItemEnum as I, AbilityEnum as A
-from ninjax.side.updates import update_active, clear_volatile_status
-from ninjax.battle import Battle
-from ninjax.enum_types import Terrain, TerrainEnum
-from ninjax.battle import step_action
-from ninjax.enum_types import Status
+from ninjax.restrictions import allowed_moves, resolve_move
+from ninjax.side.updates import clear_volatile_status, update_active
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_curated_moves import equip_move
 
 
 def test_taunt_blocks_queued_status_without_pp(neutral_type):

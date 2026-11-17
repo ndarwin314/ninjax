@@ -1,13 +1,13 @@
-import jax
-from ninjax.tree import ArrayTree, broadcast_tree
 from dataclasses import field
 
+import jax
 import jax.numpy as jnp
 
+from ninjax.enum_types import Status, Type
 from ninjax.moves.model import Move
 from ninjax.stats import StatTable
-from ninjax.enum_types import Type, Status
-from ninjax.tree import is_tree_placeholder
+from ninjax.tree import ArrayTree, broadcast_tree, is_tree_placeholder
+
 
 class Pokemon(ArrayTree):
     """Team leaves use (2 players, 6 slots, features); moves add a move axis."""

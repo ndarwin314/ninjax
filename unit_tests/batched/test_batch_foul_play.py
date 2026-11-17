@@ -1,11 +1,10 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_foul_play import (
-    jax,
-    jnp,
-    neutral_type,
-)
+import jax
+import jax.numpy as jnp
+
 from ninjax.enum_types import OffensiveStatOwner as Owner
 from ninjax.stats import select_offensive_stats
+from unit_tests.test_battle import neutral_type
 
 
 def test_foul_play_selection_traces(neutral_type):

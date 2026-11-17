@@ -1,16 +1,15 @@
 """Destiny Bond's lifetime and cause-aware faint resolution."""
-import jax
 import jax.numpy as jnp
 import pytest
 
 from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I
 from ninjax.events import Cause, EventBuffer
 from ninjax.moves.status import do_status_move
-from ninjax.team_builder import make_move
-from ninjax.side.updates import clear_volatile_status, update_active
 from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.updates import clear_volatile_status, update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 

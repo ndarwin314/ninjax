@@ -1,7 +1,6 @@
 """Array-tree indexing preserves dynamic selection and static slice semantics."""
 import jax
 import jax.numpy as jnp
-import pytest
 
 from ninjax.team_builder import make_move
 from ninjax.tree import stack

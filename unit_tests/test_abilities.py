@@ -2,23 +2,32 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.battle import Battle, BattleParams
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, WeatherEnum as W, TerrainEnum as T, MoveType, Type, Status
-from ninjax.switching import swap_is_alive, swap_out
+
 from ninjax.ability_effects import frisk
-from ninjax.side.item_effects import consume
-from ninjax.moves.effects import after_every_hit
-from ninjax.side.status_effects import set_status
-from ninjax.side.hp_effects import take_damage_value
-from ninjax.curated import load_sets, make_ability_pool, CURATED_ABILITIES
-from ninjax.prototype import run_curated
-from ninjax.enum_types import Terrain
-from ninjax.moves.routing import move_hits
+from ninjax.battle import Battle, BattleParams
+from ninjax.curated import CURATED_ABILITIES, load_sets, make_ability_pool
 from ninjax.damage import compute_base_power
-from ninjax.team_builder import make_move
-from ninjax.enum_types import Weather
+from ninjax.enum_types import (
+    AbilityEnum as A,
+    ItemEnum as I,
+    MoveType,
+    Status,
+    Terrain,
+    TerrainEnum as T,
+    Type,
+    Weather,
+    WeatherEnum as W,
+)
+from ninjax.moves.effects import after_every_hit
+from ninjax.moves.routing import move_hits
+from ninjax.prototype import run_curated
 from ninjax.residuals import end_turn_damage
+from ninjax.side.hp_effects import take_damage_value
+from ninjax.side.item_effects import consume
+from ninjax.side.status_effects import set_status
+from ninjax.switching import swap_is_alive, swap_out
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def frisk_state(state):

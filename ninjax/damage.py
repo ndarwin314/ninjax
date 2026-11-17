@@ -1,18 +1,41 @@
 
 
 
-import jax.numpy as jnp
 import chex
+import jax.numpy as jnp
 
-
-from ninjax.enum_types import AbilityEnum, Status, Type, TerrainEnum, WeatherEnum, MoveType, Weather, Terrain, StatEnum
-from ninjax.side.queries import is_floating
-from ninjax.pokemon import Pokemon
+from ninjax.enum_types import (
+    AbilityEnum,
+    FormEnum,
+    ItemEnum,
+    MoveFlags,
+    MoveType,
+    StatEnum,
+    Status,
+    Terrain,
+    TerrainEnum,
+    Type,
+    Weather,
+    WeatherEnum,
+)
 from ninjax.moves.model import Move
-from ninjax.utils import conditional_mult_round, TERRAIN_MULTIPLIER, calculate_effectiveness_multiplier, conditional_mult, triple_and, triple_or, IRON_FIST, TOUGH_CLAWS, RECKLESS, four_thirds, conditional_mult_prod_round, conditional_mult_prod, one_point_three
-from ninjax.side.queries import conditional_mult_round as fixed_modifier
-from ninjax.enum_types import MoveFlags
-from ninjax.enum_types import FormEnum, ItemEnum
+from ninjax.pokemon import Pokemon
+from ninjax.side.queries import conditional_mult_round as fixed_modifier, is_floating
+from ninjax.utils import (
+    IRON_FIST,
+    RECKLESS,
+    TERRAIN_MULTIPLIER,
+    TOUGH_CLAWS,
+    calculate_effectiveness_multiplier,
+    conditional_mult,
+    conditional_mult_prod,
+    conditional_mult_prod_round,
+    conditional_mult_round,
+    four_thirds,
+    one_point_three,
+    triple_and,
+    triple_or,
+)
 
 
 Array = chex.Array

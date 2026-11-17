@@ -11,11 +11,15 @@ import jax
 import jax.numpy as jnp
 
 from ninjax.battle import Battle, BattleParams
-from ninjax.curated import DEFAULT_SETS, load_sets, make_sandbox_pool, make_ability_pool, make_item_pool, sample_teams
+from ninjax.curated import (
+    DEFAULT_SETS,
+    load_sets,
+    make_ability_pool,
+    make_item_pool,
+    make_sandbox_pool,
+    sample_teams,
+)
 from ninjax.team_builder import make_sandbox_teams
-# Compatibility exports for callers of the original prototype module.
-from ninjax.team_builder import CATALOGUE as CATALOGUE, STAT_NAMES as STAT_NAMES
-from ninjax.team_builder import FORM_IDS as FORM_IDS, make_move as make_move
 
 
 @jax.jit

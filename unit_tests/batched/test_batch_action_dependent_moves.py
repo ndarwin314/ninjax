@@ -1,11 +1,10 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_action_dependent_moves import (
-    effective_move,
-    jnp,
-    make_move,
-    neutral_type,
-)
 import jax
+import jax.numpy as jnp
+
+from ninjax.moves.properties import effective_move
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def test_stomping_result_transform_shapes(neutral_type):

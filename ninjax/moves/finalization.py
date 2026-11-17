@@ -1,18 +1,21 @@
 """Finalization helpers for immutable JAX battle state."""
+from functools import partial
+
 import jax
 import jax.numpy as jnp
-from ninjax.side.stat_effects import stat_changes
-from ninjax.side.hp_effects import take_damage_value, take_damage_percent
-from ninjax.side.state import BattleState
-from ninjax.events import EventKind, emit, Cause
+
+from ninjax.enum_types import AbilityEnum, ItemEnum as I, StatEnum as S, StatEnum
+from ninjax.events import Cause, EventKind, emit
+from ninjax.hit import HitOutcome
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from functools import partial
-from ninjax.enum_types import AbilityEnum, StatEnum as S, ItemEnum as I, StatEnum
-from ninjax.hit import HitOutcome
-from ninjax.side.item_effects import update_items, consume as consume
-from ninjax.side.updates import update_active_fields, add_boosts, conditional_add_boosts
+from ninjax.side.hp_effects import take_damage_percent, take_damage_value
+from ninjax.side.item_effects import consume, update_items
+from ninjax.side.stat_effects import stat_changes
+from ninjax.side.state import BattleState
+from ninjax.side.updates import add_boosts, conditional_add_boosts, update_active_fields
 from ninjax.utils import quad_and
+
 
 def _apply_self_stat_changes(s, *, attacker_idx, move):
     """Apply the self-stage vector gated by the once-per-move roll."""

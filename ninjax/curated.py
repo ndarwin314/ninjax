@@ -3,17 +3,17 @@
 Parsing/construction runs on the host. Sampling uses an explicit JAX key and
 supports jit/vmap. No format legality checks are performed.
 """
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 
 import jax
 import jax.numpy as jnp
 
 from ninjax.data.load_json import dex
+from ninjax.enum_types import AbilityEnum, ItemEnum
 from ninjax.team_builder import STAT_NAMES, make_sandbox_teams
-from ninjax.enum_types import AbilityEnum
-from ninjax.enum_types import ItemEnum
+
 
 DEFAULT_SETS = Path(__file__).parent / 'data' / 'curated-sets.txt'
 STAT_LABELS = dict(zip(('HP', 'Atk', 'Def', 'SpA', 'SpD', 'Spe'), STAT_NAMES))

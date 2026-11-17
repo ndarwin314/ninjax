@@ -1,15 +1,13 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_move_restrictions import (
-    apply_restriction,
-    jax,
-    jnp,
-    make_move,
-    neutral_type,
-    pytest,
-    resolve_move,
-    step_side_conditions,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
 from ninjax.enum_types import MoveType
+from ninjax.residuals import step_side_conditions
+from ninjax.restrictions import apply_restriction, resolve_move
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

@@ -1,10 +1,9 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_prototype import (
-    jax,
-    jnp,
-    np,
-    random_actions,
-)
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from ninjax.prototype import random_actions
 
 
 def test_policy_classes_and_uniform_choices():

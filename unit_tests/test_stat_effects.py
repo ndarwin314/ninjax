@@ -3,11 +3,11 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.side.stat_effects import stat_changes
 from ninjax.enum_types import AbilityEnum as A, StatEnum as S
-from ninjax.side.stat_effects import reduce_boosts
+from ninjax.side.stat_effects import reduce_boosts, stat_changes
 from ninjax.side.updates import add_boosts, update_active_fields
 from unit_tests.test_battle import neutral_type
+
 
 compiled_reduce = jax.jit(reduce_boosts)
 

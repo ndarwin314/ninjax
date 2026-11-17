@@ -1,12 +1,12 @@
 """Foul Play borrows the target's Attack while retaining user-owned modifiers."""
-import jax
 import jax.numpy as jnp
+
+from ninjax.battle import step_move
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status
 from ninjax.moves.hit_resolution import resolve_damaging_hit
-from ninjax.team_builder import make_move
 from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
-from ninjax.battle import step_move
 from unit_tests.test_curated_moves import equip_move
 
 

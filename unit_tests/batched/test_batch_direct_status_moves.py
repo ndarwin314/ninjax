@@ -1,15 +1,13 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_direct_status_moves import (
-    Status,
-    direct_status_move,
-    do_status_move,
-    jax,
-    jnp,
-    make_move,
-    neutral_type,
-    pytest,
-    update_active,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.enum_types import Status
+from ninjax.moves.status import direct_status_move, do_status_move
+from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

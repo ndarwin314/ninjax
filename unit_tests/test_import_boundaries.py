@@ -1,8 +1,25 @@
-"""Fresh-process checks for dependency direction and compatibility exports."""
+"""Fresh-process checks for concrete owners and dependency direction."""
 import subprocess
 import sys
 
 import pytest
+
+
+def test_profiling_cli_import_stays_lightweight():
+    """Collecting benchmark targets must not load JAX before CLI limits apply."""
+    script = '''
+import sys
+from tools.profile_compile import COMPONENT_TARGETS
+
+assert 'move' in COMPONENT_TARGETS and 'dispatch' in COMPONENT_TARGETS
+assert 'jax' not in sys.modules
+assert 'ninjax.battle' not in sys.modules
+assert 'tools.compile_profile' not in sys.modules
+'''
+    result = subprocess.run(
+        [sys.executable, '-c', script], capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize('module', [
@@ -18,7 +35,7 @@ import importlib
 import sys
 
 importlib.import_module(sys.argv[1])
-unexpected = {'ninjax.prototype', 'ninjax.battle', 'ninjax.game_logic'} & sys.modules.keys()
+unexpected = {'ninjax.prototype', 'ninjax.battle'} & sys.modules.keys()
 assert not unexpected, sorted(unexpected)
 if sys.argv[1] == 'ninjax.moves':
     forbidden = {'ninjax.side', 'ninjax.moves.status', 'ninjax.moves.hit_resolution'}
@@ -26,7 +43,7 @@ if sys.argv[1] == 'ninjax.moves':
 if sys.argv[1] == 'ninjax.moves.routing':
     assert 'ninjax.moves.execution' not in sys.modules
 if sys.argv[1] == 'ninjax.residuals':
-    forbidden = {'ninjax.switching', 'ninjax.ability_effects', 'ninjax.held_effects'}
+    forbidden = {'ninjax.switching', 'ninjax.ability_effects'}
     assert not forbidden.intersection(sys.modules), sorted(forbidden.intersection(sys.modules))
 '''
     result = subprocess.run(
@@ -38,18 +55,14 @@ if sys.argv[1] == 'ninjax.residuals':
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_legacy_move_exports_retain_concrete_owners():
-    """Legacy entry points retain identity without owning execution code."""
+def test_removed_compatibility_modules_are_unavailable():
+    """Only concrete module paths remain after the migration cleanup."""
     script = '''
-from ninjax import game_logic
-from ninjax.moves import execution, routing
+import importlib.util
 
-assert game_logic.move_used is execution.move_used
-assert game_logic.dispatch_selected_move is execution.dispatch_selected_move
-assert game_logic.execute_sleep_talk is execution.execute_sleep_talk
-assert game_logic.move_hits is routing.move_hits
-assert game_logic.move_misses is routing.move_misses
-assert game_logic._prepare_normal_hit is routing._prepare_normal_hit
+for module in ('ninjax.game_logic', 'ninjax.held_effects', 'ninjax.move_effects',
+               'ninjax.move', 'ninjax.curated_move_effects'):
+    assert importlib.util.find_spec(module) is None, module
 '''
     result = subprocess.run(
         [sys.executable, '-c', script], capture_output=True, text=True, timeout=60,
@@ -68,7 +81,7 @@ import sys
 
 importlib.import_module(sys.argv[1])
 forbidden = {
-    'ninjax.held_effects', 'ninjax.ability_effects', 'ninjax.battle',
+    'ninjax.ability_effects', 'ninjax.battle',
     'ninjax.side.hp_effects', 'ninjax.side.status_effects',
     'ninjax.side.item_effects', 'ninjax.side.stat_effects',
 }
@@ -85,7 +98,7 @@ def test_side_effects_import_in_either_order(reverse):
     """HP, status and item dependencies load independently of import order."""
     modules = [
         'ninjax.switching', 'ninjax.residuals',
-        'ninjax.held_effects', 'ninjax.ability_effects',
+        'ninjax.ability_effects', 'ninjax.moves.execution', 'ninjax.moves.routing',
         'ninjax.side.hp_effects', 'ninjax.side.status_effects',
         'ninjax.side.item_effects', 'ninjax.side.stat_effects',
     ]

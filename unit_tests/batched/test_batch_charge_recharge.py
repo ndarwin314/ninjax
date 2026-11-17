@@ -1,10 +1,9 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_charge_recharge import (
-    Battle,
-    jax,
-    jnp,
-    neutral_type,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.battle import Battle
+from unit_tests.test_battle import neutral_type
 
 
 def test_forced_mask_transforms(neutral_type):

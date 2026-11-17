@@ -16,13 +16,14 @@ their owning submodules; the package initializer does not load effect handlers.
 | `side.item_effects` | Item mutation and update hooks built on basic state writes |
 
 The foundation (`state`, `queries`, `updates`) does not import reactive modules
-or the legacy item/ability facades. Item update hooks use basic writes rather
+or high-level ability handlers. Item update hooks use basic writes rather
 than calling HP/status resolution recursively. HP and status resolution can then
 invoke those hooks without an import cycle. High-level residual effects live in
 `ninjax.residuals`, while switching lives in `ninjax.switching`.
-`held_effects` retains move-completion item hooks and re-exports existing item
-and residual helpers for compatibility. Engine callers import their concrete
-owners directly. See [battle phases](battle-phases.md) for those boundaries.
+Move-completion item hooks live in `ninjax.moves.finalization`; the old
+`held_effects.py` compatibility file has been removed. Callers import item and
+residual helpers from their concrete owners. See [battle phases](battle-phases.md)
+for those boundaries.
 
 Pure stage arithmetic lives in `ninjax.stats`. Public item knowledge lives in
 `ninjax.knowledge`, independent of ability handlers. Python ability identity

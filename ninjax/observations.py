@@ -6,13 +6,15 @@ Unknown values are zeroed and have explicit known masks. Opponent HP is rounded
 up to public percentage points; private stats and exact HP are never exposed.
 """
 from dataclasses import fields
-from flax import struct
+
 import jax
 import jax.numpy as jnp
+from flax import struct
 from jumanji import specs
-from ninjax.events import TransitionEvents
+
+from ninjax.events import CAPACITY, TransitionEvents
 from ninjax.restrictions import allowed_moves
-from ninjax.events import CAPACITY
+
 
 class _Block:
     def __getitem__(self, name):

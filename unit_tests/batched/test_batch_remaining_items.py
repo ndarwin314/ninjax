@@ -1,14 +1,12 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_remaining_items import (
-    A,
-    I,
-    held,
-    jax,
-    jnp,
-    kings_rock_flinch,
-    make_move,
-    neutral_type,
-)
+import jax
+import jax.numpy as jnp
+
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I
+from ninjax.side.item_effects import kings_rock_flinch
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_remaining_items import held
 
 
 def test_kings_rock_probability_and_nonstacking(neutral_type):

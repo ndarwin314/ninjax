@@ -1,12 +1,9 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_substitute import (
-    HitOutcome,
-    HitRecipient,
-    jnp,
-    neutral_type,
-)
 import jax
-from ninjax.hit import record_hit
+import jax.numpy as jnp
+
+from ninjax.hit import HitOutcome, HitRecipient, record_hit
+from unit_tests.test_battle import neutral_type
 
 
 def test_hit_record_shapes_under_jax_transforms(neutral_type):

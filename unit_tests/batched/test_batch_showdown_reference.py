@@ -1,13 +1,12 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_showdown_reference import (
-    GAMES,
-    Type,
-    calculate_effectiveness_multiplier,
-    jax,
-    jnp,
-    np,
-    pytest,
-)
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from ninjax.enum_types import Type
+from ninjax.utils import calculate_effectiveness_multiplier
+from unit_tests.test_showdown_reference import GAMES
 
 
 @pytest.mark.parametrize('game', GAMES, ids=lambda g: str(g['seed']))

@@ -1,17 +1,16 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_remaining_abilities import (
-    A,
-    ability_state,
-    jax,
-    jnp,
-    modify_stats,
-    neutral_type,
-    prepare_type_change,
-    pytest,
-    refresh_paradox,
-    step_moody,
-    swap_is_alive,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.ability_effects import prepare_type_change
+from ninjax.enum_types import AbilityEnum as A
+from ninjax.residuals import step_moody
+from ninjax.side.item_effects import refresh_paradox
+from ninjax.side.queries import modify_stats
+from ninjax.switching import swap_is_alive
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_remaining_abilities import ability_state
 
 
 @pytest.mark.jit

@@ -1,11 +1,10 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_tree import (
-    jax,
-    jnp,
-    make_move,
-    pytest,
-    stack,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.team_builder import make_move
+from ninjax.tree import stack
 
 
 @pytest.mark.jit

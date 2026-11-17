@@ -1,17 +1,15 @@
 """Controlled checks for multi-hit rules and per-hit state transitions."""
 import jax
 import jax.numpy as jnp
-import pytest
-from unit_tests.test_battle import neutral_type
-from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, StatEnum as S
-from ninjax.events import EventKind
-from ninjax.moves.multi_hit import resolve_multi_hit, sample_hit_count
-from ninjax.team_builder import make_move
+
 from ninjax.damage import compute_base_power
-from ninjax.enum_types import MoveType
+from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, MoveType, StatEnum as S, Status
+from ninjax.events import EventKind
 from ninjax.moves.effects import after_every_hit
-from ninjax.enum_types import Status
 from ninjax.moves.execution import move_used
+from ninjax.moves.multi_hit import resolve_multi_hit
+from ninjax.team_builder import make_move
+from unit_tests.test_battle import neutral_type
 
 
 def hit_events(state, target=1):

@@ -2,17 +2,15 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from ninjax.battle import step_move
-from ninjax.enum_types import AbilityEnum as A, MoveResult, Status
+
+from ninjax.battle import ActionType, Battle, BattleAction, step_move
+from ninjax.enum_types import AbilityEnum as A, MoveResult, Status, Type
 from ninjax.hit import HitOutcome
-from ninjax.team_builder import make_move
+from ninjax.moves.execution import execute_sleep_talk, move_used
 from ninjax.side.updates import update_active
+from ninjax.team_builder import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
-from ninjax.battle import ActionType, Battle, BattleAction
-from ninjax.enum_types import Type
-from ninjax.moves.execution import execute_sleep_talk
-from ninjax.moves.execution import move_used
 
 
 def equip_second(state, name, pp=None, disabled=False):

@@ -1,13 +1,9 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_actions import (
-    ActionType,
-    Battle,
-    BattleAction,
-    jax,
-    jnp,
-    neutral_type,
-)
-from ninjax.battle import Transformation
+import jax
+import jax.numpy as jnp
+
+from ninjax.battle import ActionType, Battle, BattleAction, Transformation
+from unit_tests.test_battle import neutral_type
 
 
 def test_action_pytree_transforms():

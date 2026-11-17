@@ -2,9 +2,16 @@
 import jax
 import jax.numpy as jnp
 
-from ninjax.battle import ActionType, Battle, BattleAction, BattleParams, Phase, step_action
+from ninjax.battle import (
+    ActionType,
+    Battle,
+    BattleAction,
+    BattleParams,
+    Phase,
+    Transformation,
+    step_action,
+)
 from unit_tests.test_battle import neutral_type
-from ninjax.battle import Transformation
 
 
 def test_indexed_switches_and_pending_actions(neutral_type):

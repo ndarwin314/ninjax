@@ -1,13 +1,12 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_abilities import (
-    I,
-    frisk,
-    frisk_state,
-    jax,
-    jnp,
-    neutral_type,
-    pytest,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.ability_effects import frisk
+from ninjax.enum_types import ItemEnum as I
+from unit_tests.test_abilities import frisk_state
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

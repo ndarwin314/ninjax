@@ -28,11 +28,12 @@ can invoke switching but does not import damage routing or move selection.
 
 `moves.execution` calls `moves.routing`, which calls damage/status mechanics
 without importing selection or the battle scheduler. The scheduler in
-`battle.py` imports the execution entry points directly. `game_logic.py` now
-contains only explicit compatibility exports for the extracted mechanics.
-`move.py`, `move_effects.py` and `held_effects.py` retain legacy
-exports; repository callers import the concrete owners. Profiling setup keeps
-its imports after cache-policy configuration.
+`battle.py` imports the execution entry points directly. The compatibility files
+`game_logic.py`, `move.py`, `move_effects.py` and `held_effects.py` have been
+removed; callers must import the concrete owners. The public package exports
+remain `ninjax.moves.Move` and `ninjax.side.BattleState`/`VolatileStatus`.
+The profiling CLI applies resource and cache settings before loading
+`tools.compile_profile`, whose imports are at module scope.
 
 Existing PRNG advancement, event ordering, per-hit versus once-per-move timing,
 and JIT boundaries are preserved. Pain Split still assigns HP directly before

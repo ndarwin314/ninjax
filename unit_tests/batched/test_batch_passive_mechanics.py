@@ -1,16 +1,14 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_passive_mechanics import (
-    I,
-    Status,
-    configure,
-    jax,
-    jnp,
-    neutral_type,
-    pytest,
-    residual_abilities,
-    update_items,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.enum_types import ItemEnum as I, Status
+from ninjax.residuals import residual_abilities
+from ninjax.side.item_effects import update_items
 from ninjax.side.stat_effects import stat_changes
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_passive_mechanics import configure
 
 
 @pytest.mark.jit

@@ -1,19 +1,15 @@
 """Ability transitions using explicit lower-level state operations."""
 from functools import partial
 
-# Compatibility exports for the extracted battle phases.
-from ninjax.residuals import bad_dreams as bad_dreams, residual_abilities as residual_abilities
 import jax
 import jax.numpy as jnp
+
+from ninjax.ability_rules import UNCHANGEABLE_ABILITIES
 from ninjax.enum_types import AbilityEnum, ItemEnum, Status, Type
 from ninjax.events import EventKind, emit
-from ninjax.side.updates import update_active_fields
+from ninjax.knowledge import remember_item
 from ninjax.side.item_effects import refresh_paradox
-
-
-from ninjax.knowledge import remember_item as remember_item
-from ninjax.side.stat_effects import opposing_drop_response as opposing_drop_response
-from ninjax.ability_rules import UNCHANGEABLE_ABILITIES as UNCHANGEABLE_ABILITIES
+from ninjax.side.updates import update_active_fields
 
 
 def _identity(s):

@@ -1,21 +1,23 @@
 """Weather and terrain transitions for immutable battle state."""
 from functools import partial
+
 import jax
 import jax.numpy as jnp
+
 from ninjax.enum_types import (
     AbilityEnum as A,
     ItemEnum as I,
-    TerrainEnum as T,
     Terrain,
+    TerrainEnum as T,
+    TerrainEnum,
+    Weather,
     WeatherEnum as W,
+    WeatherEnum,
 )
-from ninjax.stats import StatBoosts
-from ninjax.side.updates import add_boosts, clear_boosts, set_boosts
 from ninjax.side.queries import effective_weather
-
 from ninjax.side.state import BattleState
-from ninjax.enum_types import TerrainEnum, Weather, WeatherEnum
-
+from ninjax.side.updates import add_boosts, clear_boosts, set_boosts
+from ninjax.stats import StatBoosts
 
 
 def _field_status_add_boosts(s, *, player):

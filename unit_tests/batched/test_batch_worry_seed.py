@@ -1,12 +1,11 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_worry_seed import (
-    A,
-    jax,
-    jnp,
-    neutral_type,
-    pytest,
-    worry_seed,
-)
+import jax
+import jax.numpy as jnp
+import pytest
+
+from ninjax.ability_effects import worry_seed
+from ninjax.enum_types import AbilityEnum as A
+from unit_tests.test_battle import neutral_type
 
 
 @pytest.mark.jit

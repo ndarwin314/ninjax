@@ -1,9 +1,8 @@
 """Opt-in batched and scanned compatibility checks."""
-from unit_tests.test_roost import (
-    jax,
-    jnp,
-    neutral_type,
-)
+import jax
+import jax.numpy as jnp
+
+from unit_tests.test_battle import neutral_type
 
 
 def test_effective_roost_types_trace(neutral_type):

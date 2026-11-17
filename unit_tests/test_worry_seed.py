@@ -1,16 +1,16 @@
 """Worry Seed behavior, ability lifecycle, and public knowledge."""
-import jax
 import jax.numpy as jnp
 import pytest
-from unit_tests.test_battle import neutral_type
-from unit_tests.test_curated_moves import equip_move
+
 from ninjax.ability_effects import worry_seed
 from ninjax.battle import Battle, BattleParams, InformationMode
 from ninjax.enum_types import AbilityEnum as A, ItemEnum as I, Status, Weather, WeatherEnum as W
 from ninjax.moves.routing import move_hits
-from ninjax.switching import swap_out
 from ninjax.side.queries import effective_weather
 from ninjax.side.updates import update_active
+from ninjax.switching import swap_out
+from unit_tests.test_battle import neutral_type
+from unit_tests.test_curated_moves import equip_move
 
 
 def test_worry_seed_wakes_and_reveals_until_switch(neutral_type):

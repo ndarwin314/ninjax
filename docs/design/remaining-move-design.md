@@ -186,7 +186,7 @@ under `jit`/`vmap`/`scan` remains outstanding.
 
 ## Item mutation helpers
 
-`held_effects.remove_item(state, holder, source, enabled=True)` and
+`side.item_effects.remove_item(state, holder, source, enabled=True)` and
 `swap_items(state, source, target, enabled=True)` return `(state, success)`.
 Failures leave all state unchanged; callers handle move failure messages and
 revealing an ability that blocked the effect. `can_remove_item` checks actual
