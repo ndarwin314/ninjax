@@ -96,7 +96,8 @@ def field_status(state, player, move):
     state = jax.lax.cond((old_tailwind == 0) & (state.tailwind[player, 0] > 0) & (state.ability[player, 0] == A.WIND_RIDER),
         partial(_field_status_add_boosts, player=player), _preserve_operand, state)
     state = state.replace(trick_room_duration=jnp.where(ident == 433, jnp.where(state.trick_room_duration > 0, 0, 5), state.trick_room_duration))
-    state = jax.lax.cond(ident == 114, _field_status_clear_boosts, _preserve_operand, state)
-    defog = partial(_field_status_defog, player=player)
-    state = jax.lax.cond(ident == 432, defog, _preserve_operand, state)
-    return jax.lax.cond(ident == 756, _field_status_update_field, _preserve_operand, state)
+    # Haze, Defog and Court Change are mutually exclusive move callbacks.
+    branch = jnp.select((ident == 114, ident == 432, ident == 756), (0, 1, 2), default=3)
+    return jax.lax.switch(branch,
+        (_field_status_clear_boosts, partial(_field_status_defog, player=player),
+         _field_status_update_field, _preserve_operand), state)

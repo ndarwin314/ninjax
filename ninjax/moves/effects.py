@@ -232,11 +232,11 @@ def after_damage(state, player, move):
     """Apply guaranteed hit callbacks for terrain, hazards, and stage clearing."""
     ident = move.identifier[0]
     target = 1-player
-    state = jax.lax.cond(ident == 499, partial(_after_damage_clear_boosts, target=target), _preserve_operand, state)
     state = state.replace(
         stealth_rocks=state.stealth_rocks.at[target].set(state.stealth_rocks[target] | (ident == 830)),
         spikes=state.spikes.at[target].set(jnp.minimum(3, state.spikes[target] + (ident == 845))))
-    state = jax.lax.cond(ident == 861,
-        _after_damage_update_field, _preserve_operand, state)
-    spin = partial(_after_damage_spin, player=player)
-    return jax.lax.cond(ident == 229, spin, _preserve_operand, state)
+    # Clear Smog, Steel Roller and Rapid Spin each have one distinct callback.
+    branch = jnp.select((ident == 499, ident == 861, ident == 229), (0, 1, 2), default=3)
+    return jax.lax.switch(branch,
+        (partial(_after_damage_clear_boosts, target=target), _after_damage_update_field,
+         partial(_after_damage_spin, player=player), _preserve_operand), state)

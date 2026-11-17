@@ -57,19 +57,6 @@ def _spend_recharge_callback(k, s, *, player_index):
     return _spend_recharge(k, s, player_index)
 
 
-def _recharge_or_skip(k, s, *, continued, v, player_index):
-    """Spend forced recharge or preserve an explicit no-op."""
-    return lax.cond(continued & v.recharging[player_index, 0],
-                    partial(_spend_recharge_callback, player_index=player_index), _keep_key_state, k, s)
-
-
-def _switch_recharge_or_skip(k, s, *, action, v, continued, player_index):
-    """Choose switching, forced recharge or a no-op before move dispatch."""
-    return lax.cond(action.move_type == ActionType.SWITCH,
-        partial(_execute_switch_callback, player_index=player_index, action=action),
-        partial(_recharge_or_skip, continued=continued, v=v, player_index=player_index), k, s)
-
-
 def _execute_move_callback(k, s, *, player_index, action, release):
     """Attempt the selected move or release using the shared move pipeline."""
     return step_move(k, s, player_index, action.index, False, release)
@@ -205,13 +192,20 @@ def step_action(
 
 
 def _ordinary_action(key, state, action, player_index):
-    """Select move preparation before one shared ordinary/charge execution."""
+    """Dispatch an attack, charge release, switch, recharge or explicit no-op."""
     v = state.volatile_status
     continued = action.move_type == ActionType.CONTINUED
     release = continued & ~v.recharging[player_index, 0] & (v.charging_move_id[player_index, 0] != 0)
-    other = partial(_switch_recharge_or_skip, action=action, v=v, continued=continued, player_index=player_index)
-    return lax.cond((action.move_type == ActionType.ATTACK) | release,
-        partial(_execute_move_callback, player_index=player_index, action=action, release=release), other, key, state)
+    # A charge release uses the move path; other continuations only recharge.
+    branch = jnp.select(
+        ((action.move_type == ActionType.ATTACK) | release,
+         action.move_type == ActionType.SWITCH,
+         continued & v.recharging[player_index, 0]),
+        (0, 1, 2), default=3)
+    return lax.switch(branch,
+        (partial(_execute_move_callback, player_index=player_index, action=action, release=release),
+         partial(_execute_switch_callback, player_index=player_index, action=action),
+         partial(_spend_recharge_callback, player_index=player_index), _keep_key_state), key, state)
 
 
 def step_continued(key, state, player):

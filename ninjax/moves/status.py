@@ -179,91 +179,6 @@ def _status_worry_seed(k, s, *, attacker_idx):
     return (k, worry_seed(s, attacker_idx))
 
 
-def _status_worry_seed_or_generic(k, s, *, move, stat_index, attacker_idx, boost_value):
-    """Route Worry Seed before applying ordinary status metadata."""
-    return jax.lax.cond(
-        move.identifier[0] == 388,
-        partial(_status_worry_seed, attacker_idx=attacker_idx),
-        partial(
-            _generic_status_move,
-            attacker_idx=attacker_idx,
-            move=move,
-            stat_index=stat_index,
-            boost_value=boost_value,
-        ),
-        k,
-        s,
-    )
-
-
-def _status_substitute_or_other(k, s, *, move, stat_index, attacker_idx, boost_value):
-    """Route Substitute before the remaining status effects."""
-    return jax.lax.cond(
-        move.identifier[0] == 164,
-        partial(_status_substitute, attacker_idx=attacker_idx),
-        partial(
-            _status_worry_seed_or_generic,
-            move=move,
-            stat_index=stat_index,
-            attacker_idx=attacker_idx,
-            boost_value=boost_value,
-        ),
-        k,
-        s,
-    )
-
-
-def _status_destiny_bond_or_other(k, s, *, move, stat_index, attacker_idx, boost_value):
-    """Route Destiny Bond before the remaining status effects."""
-    return jax.lax.cond(
-        move.identifier[0] == 194,
-        partial(_status_destiny_bond, attacker_idx=attacker_idx),
-        partial(
-            _status_substitute_or_other,
-            move=move,
-            stat_index=stat_index,
-            attacker_idx=attacker_idx,
-            boost_value=boost_value,
-        ),
-        k,
-        s,
-    )
-
-
-def _status_item_swap_or_other(k, s, *, move, stat_index, attacker_idx, boost_value):
-    """Route Trick and Switcheroo before the remaining status effects."""
-    return jax.lax.cond(
-        (move.identifier[0] == 271) | (move.identifier[0] == 415),
-        partial(_status_swap_items, attacker_idx=attacker_idx),
-        partial(
-            _status_destiny_bond_or_other,
-            move=move,
-            stat_index=stat_index,
-            attacker_idx=attacker_idx,
-            boost_value=boost_value,
-        ),
-        k,
-        s,
-    )
-
-
-def _status_other(k, s, *, move, attacker_idx, stat_index, boost_value):
-    """Handle a direct ability change or generic status effects."""
-    return jax.lax.cond(
-        move.identifier[0] == 262,
-        partial(_status_memento, attacker_idx=attacker_idx),
-        partial(
-            _status_item_swap_or_other,
-            move=move,
-            stat_index=stat_index,
-            attacker_idx=attacker_idx,
-            boost_value=boost_value,
-        ),
-        k,
-        s,
-    )
-
-
 def _status_direct(k, s, *, attacker_idx, move):
     """Resolve Rest or Pain Split through their direct status implementation."""
 
@@ -271,16 +186,31 @@ def _status_direct(k, s, *, attacker_idx, move):
 
 
 def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value):
-    """Execute status effects other than forced switching, which dispatch defers."""
-    return jax.lax.cond(
-        (move.identifier[0] == 156) | (move.identifier[0] == 220),
-        partial(_status_direct, attacker_idx=attacker_idx, move=move),
-        partial(
-            _status_other,
-            move=move,
-            attacker_idx=attacker_idx,
-            stat_index=stat_index,
-            boost_value=boost_value,
+    """Select a status handler, leaving forced switching to its dispatch path."""
+    ident = move.identifier[0]
+    # Special moves bypass generic status metadata. Unmatched identifiers
+    # explicitly select the generic handler, rather than relying on clamping.
+    branch = jnp.select(
+        ((ident == 156) | (ident == 220),  # Rest / Pain Split
+         ident == 262,                     # Memento
+         (ident == 271) | (ident == 415),   # Trick / Switcheroo
+         ident == 194,                     # Destiny Bond
+         ident == 164,                     # Substitute
+         ident == 388),                    # Worry Seed
+        (0, 1, 2, 3, 4, 5),
+        default=6,
+    )
+    return jax.lax.switch(
+        branch,
+        (
+            partial(_status_direct, attacker_idx=attacker_idx, move=move),
+            partial(_status_memento, attacker_idx=attacker_idx),
+            partial(_status_swap_items, attacker_idx=attacker_idx),
+            partial(_status_destiny_bond, attacker_idx=attacker_idx),
+            partial(_status_substitute, attacker_idx=attacker_idx),
+            partial(_status_worry_seed, attacker_idx=attacker_idx),
+            partial(_generic_status_move, attacker_idx=attacker_idx, move=move,
+                    stat_index=stat_index, boost_value=boost_value),
         ),
         key,
         state,

@@ -206,38 +206,6 @@ def _fail_selected_move(k, s, p, i, *, move):
     return k, emit(s, EventKind.MOVE_FAILED, p, detail=move.identifier[0]), jnp.bool_(False)
 
 
-def _prepare_charge_or_hit(k, s, p, i, *, electro_shot):
-    """Prepare Electro Shot or continue immediately to hit resolution."""
-    return jax.lax.cond(electro_shot, _prepare_electro_shot,
-                    _ready_selected_move, k, s, p, i)
-
-
-def _prepare_special_move(k, s, p, i, *, explosion, electro_shot):
-    """Special moves only prepare state and decide whether to attempt a hit."""
-    return jax.lax.cond(
-        explosion,
-        _prepare_explosion,
-        partial(_prepare_charge_or_hit, electro_shot=electro_shot),
-        k,
-        s,
-        p,
-        i,
-    )
-
-
-def _prepare_initial_selection(k, s, p, i, *, fake_fails, sucker_fails, move, explosion, electro_shot):
-    """Initial selections can fail or start charging before hit resolution."""
-    return jax.lax.cond(
-        fake_fails | sucker_fails,
-        partial(_fail_selected_move, move=move),
-        partial(_prepare_special_move, explosion=explosion, electro_shot=electro_shot),
-        k,
-        s,
-        p,
-        i,
-    )
-
-
 def _apply_selected_move(k, s, *, move, struggle, attacker_index, move_index):
     """Keep accuracy, immunity, status and damage resolution in one branch."""
     return jax.lax.cond(move.implemented[0] | struggle, _apply_move_effects, move_misses,
@@ -270,17 +238,15 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
         (v.pending_actor_slot[target, 0] != state.active_index[target, 0]))
 
 
-    key, state, ready = jax.lax.cond(
-        continued | struggle,
-        _ready_selected_move,
-        partial(
-            _prepare_initial_selection,
-            fake_fails=fake_fails,
-            sucker_fails=sucker_fails,
-            move=move,
-            explosion=explosion,
-            electro_shot=electro_shot,
-        ),
+    # Releases and Struggle bypass initial failure/charge checks. Preserve
+    # that priority before selecting Explosion or Electro Shot preparation.
+    branch = jnp.select(
+        (continued | struggle, fake_fails | sucker_fails, explosion, electro_shot),
+        (0, 1, 2, 3), default=0)
+    key, state, ready = jax.lax.switch(
+        branch,
+        (_ready_selected_move, partial(_fail_selected_move, move=move),
+         _prepare_explosion, _prepare_electro_shot),
         key,
         state,
         attacker_index,
