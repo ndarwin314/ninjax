@@ -14,12 +14,13 @@ enabled through the opt-in modes below. Unsupported items in custom collections
 remain omissions.
 
 Focused mechanics and environment checks have passed during implementation.
-Compiled acceptance tests exist, but the latest expanded engine still needs a
-complete `jit`/`vmap`/`scan` acceptance pass. Remaining work includes interaction
+Three compiled singles rollouts with abilities and items enabled have passed;
+the latest engine still needs full-environment `vmap`/`scan` acceptance. Remaining work includes interaction
 audits against the pinned Showdown reference, additional item interactions, and complete
 curated rollouts with enabled abilities/items. Doubles and transformations remain
 future work. See [mechanics progress](docs/design/curated-mechanics-progress.md)
-for the current scope and validation gaps.
+for the current scope and validation gaps, and [remaining mechanics](docs/design/remaining-mechanics.md)
+for a prioritized inventory.
 
 ## Minimal trace-derived sandbox
 

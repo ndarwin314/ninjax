@@ -5,7 +5,8 @@ Start with [prototype decisions](prototype-decisions.md). Answers can be brief;
 mark anything undecided or outside the first milestone. Link to a source when a
 rule should match a particular Pokémon Champions format or version.
 
-For current implementation status, start with
+For a prioritized inventory of gaps, see [remaining mechanics](remaining-mechanics.md).
+For current implementation status and historical validation, start with
 [curated mechanics progress](curated-mechanics-progress.md). The singles
 environment and all current curated move slots are implemented; full mechanics
 parity and compiled acceptance of the latest engine remain outstanding. The
