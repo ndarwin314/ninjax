@@ -26,7 +26,7 @@ from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventBuffer
 from ninjax.restrictions import allowed_moves
 from ninjax.side.item_effects import refresh_paradox
-from ninjax.side.queries import is_choice_item, is_floating
+from ninjax.side.queries import is_choice_item, is_floating_fields
 from ninjax.side.state import BattleState
 
 
@@ -155,10 +155,15 @@ class Battle(Environment):
         battle = state.battle
         alive = (battle.team.current_hp[..., 0] > 0) & state.selected
         switches = alive & (jnp.arange(6)[None, :] != battle.active_index)
-        active = battle.active
-        moves = (active.moves.current_pp[..., 0] > 0) & ~active.moves.disabled[..., 0]
+        ability = battle.ability
+        hp = battle.active_field('current_hp')
+        base_types = battle.active_field('type_list')
+        types = battle.effective_types()
+        items = battle.active_field('item')[:, 0]
+        categories = battle.active_move_field('move_type')[..., 0]
+        moves = (battle.active_move_field('current_pp')[..., 0] > 0) & ~battle.active_move_field('disabled')[..., 0]
 
-        moves &= allowed_moves(active.moves.identifier[..., 0], active.moves.move_type[..., 0],
+        moves &= allowed_moves(battle.active_move_field('identifier')[..., 0], categories,
             disabled_move_id=battle.volatile_status.disabled_move_id,
             disable_turns=battle.volatile_status.disable_turns,
             taunt_turns=battle.volatile_status.taunt_turns,
@@ -166,27 +171,26 @@ class Battle(Environment):
             encore_turns=battle.volatile_status.encore_turns,
             gravity_duration=battle.gravity_duration)
 
-        items = active.item[:, 0]
 
         choice = is_choice_item(items)
         lock = battle.volatile_status.choice_lock[:, 0]
         moves &= ~choice[:, None] | (lock[:, None] < 0) | (jnp.arange(4)[None, :] == lock[:, None])
-        moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (active.moves.move_type[..., 0] != MoveType.STATUS)
-        trapped = (battle.ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (active.current_hp[::-1, 0] > 0) & (battle.ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(active.type_list == Type.GHOST, axis=1)
+        moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (categories != MoveType.STATUS)
+        trapped = (ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (hp[::-1, 0] > 0) & (ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(base_types == Type.GHOST, axis=1)
 
-        opposing = battle.ability[::-1, 0]
-        ghost = jnp.any(battle.effective_active.type_list == Type.GHOST, axis=1)
-        grounded = (~is_floating(battle.effective_active) | (battle.gravity_duration > 0))[:, 0]
+        opposing = ability[::-1, 0]
+        ghost = jnp.any(types == Type.GHOST, axis=1)
+        grounded = (~is_floating_fields(types, ability, items[:, None]) | (battle.gravity_duration > 0))[:, 0]
         arena = (opposing == AbilityEnum.ARENA_TRAP) & grounded
-        magnet = (opposing == AbilityEnum.MAGNET_PULL) & jnp.any(battle.effective_active.type_list == Type.STEEL, axis=1)
-        trapped |= (arena | magnet) & ~ghost & (active.current_hp[::-1, 0] > 0)
+        magnet = (opposing == AbilityEnum.MAGNET_PULL) & jnp.any(types == Type.STEEL, axis=1)
+        trapped |= (arena | magnet) & ~ghost & (hp[::-1, 0] > 0)
         switches &= ~trapped[:, None] | (state.phase != Phase.TURN)
         forced = ~jnp.any(moves, axis=1) & (state.phase == Phase.TURN)
         moves &= state.phase == Phase.TURN
         mask = jnp.concatenate((moves, jnp.concatenate((forced[:, None], jnp.zeros((2, 3), bool)), axis=1), switches,
                                 jnp.zeros((2, 1), bool)), axis=1)
         v = battle.volatile_status
-        continuing = ((v.charging_move_id[:, 0] != 0) | v.recharging[:, 0]) & (state.phase == Phase.TURN) & (active.current_hp[:, 0] > 0)
+        continuing = ((v.charging_move_id[:, 0] != 0) | v.recharging[:, 0]) & (state.phase == Phase.TURN) & (hp[:, 0] > 0)
         mask = jnp.where(continuing[:, None], jnp.arange(15)[None, :] == 5, mask)
         # Inactive players supply a no-op; their actual input is ignored.
         return jnp.where(state.acting_player_mask[:, None], mask,

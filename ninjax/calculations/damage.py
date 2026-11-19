@@ -17,7 +17,7 @@ from ninjax.calculations.modifiers import (
     four_thirds,
     one_point_three,
 )
-from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier, type_effectiveness_factors
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
 from ninjax.enums.items import ItemEnum
@@ -34,15 +34,16 @@ def compute_base_power(
         attacker: Pokemon,
         defender: Pokemon,
         move: Move,
-        terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False) -> chex.Array:
+        terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None) -> chex.Array:
     """Calculate represented power modifiers, including grounded terrain effects."""
 
     power = fixed_modifier(move.base_power, 1.5,
         (move.identifier == 797) & (terrain.terrain == TerrainEnum.PSYCHIC) &
         (~is_floating(attacker) | jnp.asarray(gravity_active)))
     power = fixed_modifier(power, 1.25, (defender.ability == AbilityEnum.DRY_SKIN) & (move.type == Type.FIRE))
-    power = fixed_modifier(power, 5461/4096,
-        (move.identifier == 879) & (calculate_effectiveness_multiplier(move.type, defender.type_list) > 1))
+    if raw_effectiveness is None:
+        raw_effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
+    power = fixed_modifier(power, 5461/4096, (move.identifier == 879) & (raw_effectiveness > 1))
     ability = attacker.ability
     #TODO: tera boost
     # TODO at some point test if this can be optimized by putting all the values in arrays and doing one conditional mult round
@@ -194,6 +195,18 @@ def compute_base_damage(
     return base_damage
 
 
+def hit_type_effectiveness(move_type, defender_types, defender_ability, gravity_active):
+    """Return the raw item matchup and the damage matchup from one type lookup."""
+    factors = type_effectiveness_factors(move_type, defender_types)
+    raw = jnp.prod(factors)
+    # Gravity neutralizes Flying's type factor and suppresses Levitate.
+    gravity = jnp.asarray(gravity_active)
+    ground = move_type == Type.GROUND
+    damage_factors = jnp.where(gravity & ground & (defender_types == Type.FLYING), 1, factors)
+    levitate = (defender_ability == AbilityEnum.LEVITATE) & ground & ~gravity
+    return raw, jnp.prod(damage_factors) * (1 - levitate)
+
+
 def compute_damage_multipliers(
         key: chex.PRNGKey,
         attacker,
@@ -203,7 +216,8 @@ def compute_damage_multipliers(
         base_damage,
         is_crit,
         damage_roll,
-        gravity_active=False
+        gravity_active=False,
+        *, effectiveness=None,
 ) -> Array:
     # there is a specific order to the multipliers that i will preserve since rounding is done
     # between every multiplication by a modifier
@@ -234,13 +248,8 @@ def compute_damage_multipliers(
             0.5 * jnp.logical_or(is_matching_tera, is_adaptability_boosted) +
             0.25 * jnp.logical_and(is_matching_tera, is_adaptability_boosted))
     base_damage = conditional_mult_round(base_damage, stab_multiplier, is_stab)
-    # Type effectiveness, when we get around to implementing observations
-    # it should include does not affect, not very effective, or super effective
-    defending_types = jnp.where(jnp.asarray(gravity_active) & (move.type == Type.GROUND) &
-                                (defender.type_list == Type.FLYING), Type.NONE, defender.type_list)
-    effectiveness = calculate_effectiveness_multiplier(move.type, defending_types)
-    is_levitate = defender.ability==AbilityEnum.LEVITATE
-    effectiveness = effectiveness * (1-jnp.logical_and(jnp.logical_and(is_levitate, move.type==Type.GROUND), ~jnp.asarray(gravity_active)))
+    if effectiveness is None:
+        _, effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity_active)
     is_tinted_lens = (effectiveness > 0) & (effectiveness < 1) & (attacker.ability==AbilityEnum.TINTED_LENS)
     is_filter = (effectiveness > 1) & (defender.ability==AbilityEnum.FILTER)
     is_neuroforce = (effectiveness > 1) & (attacker.ability==AbilityEnum.NEUROFORCE)

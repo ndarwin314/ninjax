@@ -10,10 +10,10 @@ from ninjax.calculations.damage import (
     compute_base_power,
     compute_damage_multipliers,
     damage_post_modifiers,
+    hit_type_effectiveness,
 )
 from ninjax.calculations.modifiers import CRIT_STAGES, conditional_mult_round
 from ninjax.calculations.stats import raw_boosted_stats
-from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Weather
 from ninjax.enums.items import ItemEnum
@@ -63,9 +63,9 @@ def _damage_hit_target(s, *, target_idx, damage, ident, attacker_idx):
                 fixed_damage=(ident == 101) | (ident == 162) | (ident == 877) | (ident == 283), source=attacker_idx)
 
 
-def _apply_drain(s, *, attacker_idx, defender, healing):
+def _apply_drain(s, *, attacker_idx, defender_ability, healing):
     """Heal the attacker, or deal indirect damage for Liquid Ooze."""
-    return take_damage_value(s, attacker_idx, jnp.where(defender.ability == AbilityEnum.LIQUID_OOZE, healing, -healing), False)
+    return take_damage_value(s, attacker_idx, jnp.where(defender_ability == AbilityEnum.LIQUID_OOZE, healing, -healing), False)
 
 
 def _unchanged_recoil_state(s, p, d):
@@ -78,9 +78,9 @@ def _run_hit_effects(k, s, *, attacker_idx, move, is_crit):
     return after_every_hit(k, s, attacker_idx, move, is_crit)
 
 
-def _run_held_hit_effects(s, *, attacker_idx, move, damage, defender):
+def _run_held_hit_effects(s, *, attacker_idx, move, damage, raw_effectiveness):
     """Apply held-item reactions using this hit and its effectiveness."""
-    return after_hit(s, attacker_idx, move, damage, calculate_effectiveness_multiplier(move.type, defender.type_list))
+    return after_hit(s, attacker_idx, move, damage, raw_effectiveness)
 
 
 def _knock_off_item(s, *, target_idx, attacker_idx):
@@ -113,17 +113,21 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     active = state.effective_active
     attacker = active[attacker_idx]
     defender = active[1-attacker_idx]
+    # Damage calculation reads the same weather before any HP changes.
+    weather = effective_weather(state.weather.weather, active.ability, active.current_hp)
     # Explosion's user has already fainted, but damage uses its pre-faint HP.
     pre_faint_hp = state.volatile_status.explosion_hp[attacker_idx]
     attacker = attacker.replace(current_hp=jnp.where((move.identifier == 153) & (pre_faint_hp > 0), pre_faint_hp, attacker.current_hp))
 
 
-    # base power modifications, technician, tera, terrain etc
+    gravity = state.gravity_duration > 0
+    raw_effectiveness, damage_effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity)
+    # Base power, Expert Belt and held-item reactions share the raw matchup.
     power = compute_base_power(
         attacker,
         defender,
         move,
-        state.terrain, effective_weather(state.weather.weather, state.ability, state.active.current_hp), state.gravity_duration > 0
+        state.terrain, weather, gravity, raw_effectiveness=raw_effectiveness
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier
@@ -138,7 +142,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     # Select stage-adjusted stats before computing offensive and defensive
     # modifiers. Moves such as Body Press can select a nonstandard attack stat.
-    raw_stats = state.active.stats
+    raw_stats = active.stats
     boosts = state.boosts
     attacker_stats, defender_stats = raw_boosted_stats(
         raw_stats,
@@ -151,8 +155,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     )
 
 
-    attacker_stats = modify_stats(state, attacker_idx, attacker_stats)
-    defender_stats = modify_stats(state, 1-attacker_idx, defender_stats)
+    attacker_stats = modify_stats(state, attacker_idx, attacker_stats, weather)
+    defender_stats = modify_stats(state, 1-attacker_idx, defender_stats, weather)
     base_damage = compute_base_damage(
         attacker.ability,
         defender.ability,
@@ -174,12 +178,12 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         key,
         attacker,
         defender,
-        Weather(effective_weather(state.weather.weather, state.ability, state.active.current_hp), state.weather.duration),
+        Weather(weather, state.weather.duration),
         move,
         base_damage,
         is_crit,
         damage_roll,
-        state.gravity_duration > 0
+        gravity, effectiveness=damage_effectiveness
     )
 
     damage = damage_post_modifiers(damage, defender.ability, move)
@@ -192,7 +196,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     damage = conditional_mult_round(damage, 5324/4096, attacker.item == ItemEnum.LIFE_ORB)
 
     damage = fixed_modifier(damage, 4915/4096,
-        (attacker.item == ItemEnum.EXPERT_BELT) & (calculate_effectiveness_multiplier(move.type, defender.type_list) > 1))
+        (attacker.item == ItemEnum.EXPERT_BELT) & (raw_effectiveness > 1))
     bypass = state.volatile_status.protected[1-attacker_idx] & (attacker.ability == AbilityEnum.UNSEEN_FIST) & move.contact
     damage = conditional_mult_round(damage, UNSEEN_FIST_PROTECT_MULTIPLIER, bypass)
 
@@ -228,15 +232,15 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     intercepted = result.recipient == HitRecipient.SUBSTITUTE
     actual_loss = jnp.reshape(result.damage, (1,))
     # A damaging Fire move thaws its target after the hit, even if it faints.
-    target = state.active[1-attacker_idx]
-    thaw = (move.type == Type.FIRE) & (actual_loss > 0) & ~intercepted & (target.status == Status.FREEZE)
-    state = update_active_fields(state, 1-attacker_idx, status=jnp.where(thaw, Status.NONE, target.status))
+    target_status = state.active_field('status', target_idx)
+    thaw = (move.type == Type.FIRE) & (actual_loss > 0) & ~intercepted & (target_status == Status.FREEZE)
+    state = update_active_fields(state, 1-attacker_idx, status=jnp.where(thaw, Status.NONE, target_status))
     # Drain and recoil use HP removed before a berry heals, with half-up
     # rounding, and never the uncapped calculated damage.
     healing = jnp.maximum(1, jnp.floor(actual_loss * move.drain_fraction + .5)).astype(jnp.int32)
     state = jax.lax.cond(
         (move.drain_fraction[0] > 0) & (actual_loss[0] > 0),
-        partial(_apply_drain, attacker_idx=attacker_idx, defender=defender, healing=healing),
+        partial(_apply_drain, attacker_idx=attacker_idx, defender_ability=defender.ability, healing=healing),
         _identity,
         state,
     )
@@ -261,12 +265,12 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     state = jax.lax.cond(
         intercepted,
         _identity,
-        partial(_run_held_hit_effects, attacker_idx=attacker_idx, move=move, damage=damage, defender=defender),
+        partial(_run_held_hit_effects, attacker_idx=attacker_idx, move=move, damage=damage, raw_effectiveness=raw_effectiveness),
         state,
     )
     # Knock Off removes the item after a real hit, only if the attacker survives.
     state = jax.lax.cond(
-        (ident == 282) & ~intercepted & (state.active.current_hp[attacker_idx, 0] > 0),
+        (ident == 282) & ~intercepted & (state.active_field('current_hp', attacker_idx)[0] > 0),
         partial(_knock_off_item, target_idx=target_idx, attacker_idx=attacker_idx),
         _identity,
         state,
@@ -279,7 +283,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         state,
     )
     # These moves have explicit after-Substitute callbacks in Scarlet/Violet.
-    after_sub = ((ident == 229) | (ident == 830) | (ident == 845)) & (state.active.current_hp[attacker_idx, 0] > 0)
+    after_sub = ((ident == 229) | (ident == 830) | (ident == 845)) & (state.active_field('current_hp', attacker_idx)[0] > 0)
     state = jax.lax.cond(
         ~intercepted | after_sub,
         partial(_run_after_damage, attacker_idx=attacker_idx, move=move),

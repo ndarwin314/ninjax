@@ -12,7 +12,7 @@ from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import effective_move
 from ninjax.records.events import EventKind
 from ninjax.side.hp_effects import take_damage_value
-from ninjax.side.item_effects import refresh_paradox
+from ninjax.side.item_effects import after_hp_change, refresh_paradox
 from ninjax.side.queries import effective_weather, modify_stats
 from ninjax.side.updates import clear_volatile_status
 from unit_tests.test_battle import neutral_type
@@ -31,6 +31,30 @@ def test_sash_consumed_once_and_berry_heals(neutral_type):
     out = hit(state, maxhp//2+1)
     assert out.active.current_hp[1, 0] == maxhp-(maxhp//2+1)+maxhp//4
     assert out.active.item[1, 0] == I.NONE
+
+
+def test_sitrus_and_cheek_pouch_emit_separate_heals(neutral_type):
+    """One HP write preserves consumption and both ordered healing events."""
+    _, state = neutral_type
+    max_hp = state.active_stats(1)[0]
+    start_hp = max_hp // 2
+    berry_hp = start_hp + max_hp // 4
+    state = state.replace(team=state.team.replace(
+        current_hp=state.team.current_hp.at[1, 0, 0].set(start_hp),
+        ability=state.team.ability.at[1, 0, 0].set(A.CHEEK_POUCH),
+        item=state.team.item.at[1, 0, 0].set(I.SITRUS_BERRY)))
+    result = jax.jit(after_hp_change)(state, jnp.int32(1))
+
+    assert result.team.current_hp[1, 0, 0] == max_hp
+    assert result.team.item[1, 0, 0] == I.NONE
+    events = result.events.unpack()
+    assert events.count == 3
+    assert jnp.array_equal(events.kind[:3], jnp.array([EventKind.ITEM, EventKind.HP, EventKind.HP]))
+    assert events.detail[0] == I.SITRUS_BERRY
+    assert jnp.array_equal(events.target[:3], jnp.array([1, 1, 1]))
+    assert jnp.array_equal(events.before[1:3], jnp.array([start_hp, berry_hp]))
+    assert jnp.array_equal(events.after[1:3], jnp.array([berry_hp, max_hp]))
+    assert jnp.array_equal(events.hp_change[1:3], jnp.array([berry_hp - start_hp, max_hp - berry_hp]))
 
 
 def test_booster_weather_and_switch_reset(neutral_type):

@@ -20,7 +20,13 @@ SLEEP_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.INSOMNIA, Abil
 def is_floating(mon):
     """Check Flying type, effective Levitate and Air Balloon before grounding."""
 
-    return mon.is_type(Type.FLYING) | (mon.ability == AbilityEnum.LEVITATE) | (mon.item == ItemEnum.AIR_BALLOON)
+    return is_floating_fields(mon.type_list, mon.ability, mon.item)
+
+
+def is_floating_fields(types, ability, item):
+    """Check airborne type, effective ability and held item."""
+    flying = jnp.any(types == Type.FLYING, axis=-1, keepdims=True)
+    return flying | (ability == AbilityEnum.LEVITATE) | (item == ItemEnum.AIR_BALLOON)
 
 
 def is_sand_immune(mon):
@@ -32,22 +38,32 @@ def is_sand_immune(mon):
 
 def is_powder_immune(mon):
     """Check represented Grass and Overcoat immunities to powder effects."""
-    return mon.is_type(Type.GRASS) | (mon.ability == AbilityEnum.OVERCOAT)
+    return is_powder_immune_fields(mon.type_list, mon.ability)
+
+
+def is_powder_immune_fields(types, ability):
+    """Check powder immunity from effective types and ability."""
+    return jnp.any(types == Type.GRASS, axis=-1, keepdims=True) | (ability == AbilityEnum.OVERCOAT)
 
 
 def is_immune_to_move(mon, move, gravity_active=False):
     """Check represented move immunities using a resolved active snapshot."""
+    return move_immune_from_fields(mon.type_list, mon.ability, mon.item, move, gravity_active)
+
+
+def move_immune_from_fields(defender_types, ability, item, move, gravity_active):
+    """Check move immunities without gathering unrelated Pokémon fields."""
     types = jnp.where(jnp.asarray(gravity_active) & (move.type == Type.GROUND) &
-                      (mon.type_list == Type.FLYING), Type.NONE, mon.type_list)
+                      (defender_types == Type.FLYING), Type.NONE, defender_types)
     checks_type = (move.move_type != MoveType.STATUS) | (move.identifier == 86)
     type_immunity = (calculate_effectiveness_multiplier(move.type, types) == 0) & checks_type
 
-    levitate = ((mon.ability == AbilityEnum.LEVITATE) | (mon.item == ItemEnum.AIR_BALLOON)) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active) & checks_type
+    levitate = ((ability == AbilityEnum.LEVITATE) | (item == ItemEnum.AIR_BALLOON)) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active) & checks_type
     return jnp.any(jnp.stack(jnp.broadcast_arrays(
-        is_powder_immune(mon) & move.powder,
-        (mon.ability == AbilityEnum.SOUNDPROOF) & move.sound,
-        (mon.ability == AbilityEnum.BULLET_PROOF) & move.bullet,
-        (mon.ability == AbilityEnum.GOOD_AS_GOLD) & (move.move_type == MoveType.STATUS) & (move.hazard_effect == 0) & ~move.target_self,
+        is_powder_immune_fields(defender_types, ability) & move.powder,
+        (ability == AbilityEnum.SOUNDPROOF) & move.sound,
+        (ability == AbilityEnum.BULLET_PROOF) & move.bullet,
+        (ability == AbilityEnum.GOOD_AS_GOLD) & (move.move_type == MoveType.STATUS) & (move.hazard_effect == 0) & ~move.target_self,
         type_immunity, levitate)))
 
 
@@ -56,12 +72,10 @@ def is_choice_item(item):
     return (item == I.CHOICE_BAND) | (item == I.CHOICE_SPECS) | (item == I.CHOICE_SCARF)
 
 
-def berry_allowed(state, player):
+def berry_allowed(ability, opposing_hp):
     """Living opposing Unnerve/As One users prevent eating held berries."""
-    other = 1-player
-    ability = state.ability[other, 0]
     unnerve = (ability == A.UNNERVE) | (ability == A.AS_ONE_CHILLING) | (ability == A.AS_ONE_GRIM)
-    return ~unnerve | (state.active.current_hp[other, 0] <= 0)
+    return ~unnerve | (opposing_hp <= 0)
 
 
 def contact_reactions_allowed(ability, item):
@@ -116,48 +130,76 @@ def can_remove_item(state, holder, source):
     not governed by these transfer rules. A fainted holder loses Sticky Hold's
     protection, which matters for Knock Off's after-hit removal.
     """
-    item = state.active.item[holder, 0]
-    sticky = (source != holder) & (state.active.current_hp[holder, 0] > 0) & (state.ability[holder, 0] == A.STICKY_HOLD)
-    return (item != I.NONE) & item_transfer_allowed(state.active.species[holder, 0], state.active.form[holder, 0], item) & ~sticky
+    item = state.active_field('item', holder)[0]
+    sticky = (source != holder) & (state.active_field('current_hp', holder)[0] > 0) & (state.ability[holder, 0] == A.STICKY_HOLD)
+    return (item != I.NONE) & item_transfer_allowed(state.active_field('species', holder)[0], state.active_field('form', holder)[0], item) & ~sticky
 
 
-def modify_stats(state, player, stats):
+def modify_stats(state, player, stats, weather=None):
     """Chain represented stat modifiers at 4096 precision, then round once.
 
     For example, Choice Specs plus Hadron Engine combines into a 2x modifier;
     rounding the two stat changes separately loses a point on odd base stats.
     """
 
-    mon = state.active[player]
-    item, ability = mon.item[0], state.ability[player, 0]
+    item, ability = state.active_field('item', player)[0], state.ability[player, 0]
+    species = state.active_field('species', player)[0]
+    types = state.active_field('type_list', player)
+    status = state.active_field('status', player)[0]
+    if weather is None:
+        weather = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp'))
+    return modify_stats_from_fields(stats, item, ability, species, types, status, weather,
+                                    state.terrain.terrain, state.volatile_status.paradox_stat[player, 0],
+                                    state.tailwind[player, 0])
+
+
+def modify_stats_from_fields(stats, item, ability, species, types, status, weather,
+                             terrain, paradox_stat, tailwind):
+    """Apply battle stat modifiers to a stage-adjusted stat vector."""
     indices = jnp.arange(6)
-    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
     choice = (((indices == S.ATTACK) & (item == I.CHOICE_BAND)) |
               ((indices == S.SPECIAL_ATTACK) & (item == I.CHOICE_SPECS)) |
               ((indices == S.SPEED) & (item == I.CHOICE_SCARF)))
-    light_ball = (item == I.LIGHT_BALL) & (mon.species[0] == 25) & ((indices == S.ATTACK) | (indices == S.SPECIAL_ATTACK))
+    light_ball = (item == I.LIGHT_BALL) & (species == 25) & ((indices == S.ATTACK) | (indices == S.SPECIAL_ATTACK))
     vest = (indices == S.SPECIAL_DEFENSE) & (item == I.ASSAULT_VEST)
     field = ((indices == S.ATTACK) & (ability == A.ORICHALCUM_PULSE) & (weather == W.SUN)) | (
-        (indices == S.SPECIAL_ATTACK) & (ability == A.HADRON_ENGINE) & (state.terrain.terrain == T.ELECTRIC))
-    weather_defense = ((indices == S.DEFENSE) & (weather == W.SNOW) & jnp.any(mon.type_list == Type.ICE)) | (
-        (indices == S.SPECIAL_DEFENSE) & (weather == W.SANDSTORM) & jnp.any(mon.type_list == Type.ROCK))
-    paradox = indices == state.volatile_status.paradox_stat[player, 0]
-    speed_ability = (((ability == A.CHLOROPHYLL) & (weather == W.SUN)) |
-                     ((ability == A.SWIFT_SWIM) & (weather == W.RAIN)) |
-                     ((ability == A.SLUSH_RUSH) & (weather == W.SNOW)) |
-                     ((ability == A.SAND_RUSH) & (weather == W.SANDSTORM)) |
-                     ((ability == A.SURGE_SURFER) & (state.terrain.terrain == T.ELECTRIC)))
-    quick_feet = (ability == A.QUICK_FEET) & (mon.status[0] != Status.NONE)
+        (indices == S.SPECIAL_ATTACK) & (ability == A.HADRON_ENGINE) & (terrain == T.ELECTRIC))
+    weather_defense = ((indices == S.DEFENSE) & (weather == W.SNOW) & jnp.any(types == Type.ICE)) | (
+        (indices == S.SPECIAL_DEFENSE) & (weather == W.SANDSTORM) & jnp.any(types == Type.ROCK))
+    paradox = indices == paradox_stat
+    ability_factor, quick_feet_factor, tailwind_factor = _speed_factors(ability, status, weather, terrain, tailwind)
     modifiers = jnp.full(6, 4096, jnp.int32)
     for factor in (jnp.where(choice | vest, 6144, 4096),
                    jnp.where(light_ball, 8192, 4096),
                    jnp.where(field, 5461, 4096),
                    jnp.where(weather_defense, 6144, 4096),
-                   jnp.where((indices == S.SPEED) & speed_ability, 8192, 4096),
-                   jnp.where((indices == S.SPEED) & quick_feet, 6144, 4096),
-                   jnp.where((indices == S.SPEED) & (state.tailwind[player, 0] > 0), 8192, 4096),
+                   jnp.where(indices == S.SPEED, ability_factor, 4096),
+                   jnp.where(indices == S.SPEED, quick_feet_factor, 4096),
+                   jnp.where(indices == S.SPEED, tailwind_factor, 4096),
                    jnp.where(paradox, jnp.where(indices == S.SPEED, 6144, 5325), 4096)):
         modifiers = (modifiers * factor + 2048) // 4096
     result = conditional_mult_round(stats, modifiers / 4096, True)
     # Paralysis halves the final Speed, unless Quick Feet replaces its effect.
-    return jnp.where((indices == S.SPEED) & (mon.status[0] == Status.PARALYZE) & (ability != A.QUICK_FEET), result // 2, result)
+    return jnp.where((indices == S.SPEED) & (status == Status.PARALYZE) & (ability != A.QUICK_FEET), result // 2, result)
+
+
+def _speed_factors(ability, status, weather, terrain, tailwind):
+    """Return the three intermediate Speed modifiers in calculation order."""
+    doubled = (((ability == A.CHLOROPHYLL) & (weather == W.SUN)) |
+               ((ability == A.SWIFT_SWIM) & (weather == W.RAIN)) |
+               ((ability == A.SLUSH_RUSH) & (weather == W.SNOW)) |
+               ((ability == A.SAND_RUSH) & (weather == W.SANDSTORM)) |
+               ((ability == A.SURGE_SURFER) & (terrain == T.ELECTRIC)))
+    quick_feet = (ability == A.QUICK_FEET) & (status != Status.NONE)
+    return (jnp.where(doubled, 8192, 4096), jnp.where(quick_feet, 6144, 4096),
+            jnp.where(tailwind > 0, 8192, 4096))
+
+
+def modify_speed(speed, item, ability, status, weather, terrain, paradox_stat, tailwind):
+    """Apply only Speed modifiers, preserving the full stat path's rounding."""
+    modifier = jnp.where(item == I.CHOICE_SCARF, 6144, 4096)
+    for factor in (*_speed_factors(ability, status, weather, terrain, tailwind),
+                   jnp.where(paradox_stat == S.SPEED, 6144, 4096)):
+        modifier = (modifier * factor + 2048) // 4096
+    result = conditional_mult_round(speed, modifier / 4096, True)
+    return jnp.where((status == Status.PARALYZE) & (ability != A.QUICK_FEET), result // 2, result)

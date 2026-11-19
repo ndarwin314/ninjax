@@ -5,7 +5,6 @@ import jax.lax
 import jax.numpy as jnp
 from jax import random
 
-from ninjax.enums.pokemon import StatEnum
 from ninjax.side.state import BattleState
 
 
@@ -22,16 +21,17 @@ def action_order(
     priorities: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
     """Order priority brackets, reversing effective Speed under Trick Room."""
-    # for now im just going to go off speed stats of active pokemon
-    # obviously this needs to account for priority brackets later
-    # key and actions arent used now but they will be needed for
+    return order_by_speed(key, priorities, state.effective_speeds, state.trick_room_duration > 0)
+
+
+def order_by_speed(key, priorities, speeds, trick_room):
+    """Choose the first player using priority, effective Speed and a tie roll."""
     key, sub_key = random.split(key, 2)
     r = random.uniform(sub_key)
 
     priorities = jnp.array(priorities)
     diff_priorities = priorities[0] != priorities[1]
-    speeds = state.boosted_stats[:, StatEnum.SPEED]
-    speeds = jnp.where(state.trick_room_duration > 0, -speeds, speeds)
+    speeds = jnp.where(trick_room, -speeds, speeds)
     diff_speeds = speeds[0] != speeds[1]
     first_prio = jnp.argmax(priorities)
     first_speed = jnp.argmax(speeds)

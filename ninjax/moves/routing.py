@@ -26,7 +26,7 @@ from ninjax.moves.status import _status_move_effects
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_percent
-from ninjax.side.queries import contact_reactions_allowed
+from ninjax.side.queries import contact_reactions_allowed, is_floating_fields, move_immune_from_fields
 from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts
 
@@ -41,7 +41,7 @@ def _unchanged_key_state(k, s):
     return (k, s)
 
 
-def _unchanged_selected_move(k, s, p, i):
+def _unchanged_selected_move(k, s, p, move):
     """Skip a selected move while accepting its player and slot operands."""
     return (k, s)
 
@@ -77,17 +77,18 @@ def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx,
 
 def _apply_move_effects(key, state, attacker_index, move_index):
     """Skip Struggle accuracy while sharing the downstream hit executor."""
+    move = _selected_hit_move(state, attacker_index, move_index)
     # Forced Struggle already uses -1 as its action-local public move marker.
-    # Prepare only a routing flag here so the heavy hit executor has one call.
+    # Accuracy can write events but does not change the resolved move.
     key, state, ready = jax.lax.cond(
         state.event_move == -1,
         _ready_move,
-        partial(_prepare_accuracy, attacker_index=attacker_index, move_index=move_index),
+        partial(_prepare_accuracy, attacker_index=attacker_index, move=move),
         key,
         state,
     )
     return jax.lax.cond(ready, _move_hits, _unchanged_selected_move,
-        key, state, attacker_index, move_index)
+        key, state, attacker_index, move)
 
 
 def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
@@ -104,29 +105,28 @@ def _block_accuracy_target(k, s, *, attacker_index):
     return k, record_hit(emit(s, EventKind.IMMUNE, 1-attacker_index), 0, 1-attacker_index, HitOutcome.IMMUNE), jnp.bool_(False)
 
 
-def _attempt_accuracy(k, s, *, hit, attacker_index, move_index):
+def _attempt_accuracy(k, s, *, hit, attacker_index, move):
     """Retain the accuracy draw and record a miss when the hit is gated out."""
     k, s = jax.lax.cond(
         hit,
         _unchanged_key_state,
-        partial(move_misses, attacker_index=attacker_index, move_index=move_index),
+        partial(_record_move_miss, attacker_index=attacker_index, move=move),
         k,
         s,
     )
     return k, s, hit
 
 
-def _prepare_accuracy(key, state, attacker_index, move_index):
+def _prepare_accuracy(key, state, attacker_index, move):
     """Record misses/immunity and return whether normal hit routing is allowed."""
     key, subkey = random.split(key)
     r = random.uniform(subkey)
-    move = effective_move(state, attacker_index, state.active[attacker_index].moves[move_index])
     accuracy = move_accuracy(state, attacker_index, move)
 
     # Worry Seed fails against these identities before accuracy, including
     # while an ability's effects are suppressed.
 
-    old = underlying_ability(state.active.ability[1-attacker_index, 0], state.volatile_status.ability_override[1-attacker_index, 0])
+    old = underlying_ability(state.active_field('ability', 1-attacker_index)[0], state.volatile_status.ability_override[1-attacker_index, 0])
     cannot_target = (move.identifier[0] == 388) & ((old == AbilityEnum.INSOMNIA) | (old == AbilityEnum.TRUANT))
 
     # Gen 9 protection resolves before accuracy; an inaccurate contact move
@@ -138,7 +138,7 @@ def _prepare_accuracy(key, state, attacker_index, move_index):
     return jax.lax.cond(
         cannot_target,
         partial(_block_accuracy_target, attacker_index=attacker_index),
-        partial(_attempt_accuracy, hit=hit, attacker_index=attacker_index, move_index=move_index),
+        partial(_attempt_accuracy, hit=hit, attacker_index=attacker_index, move=move),
         key,
         state,
     )
@@ -151,12 +151,28 @@ def is_immune(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, s
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     """Dispatch an implemented move after an accuracy check, or do nothing."""
-    move = state.active[attacker_index].moves[move_index]
-    return jax.lax.cond(move.implemented[0], _move_hits, move_misses,
-                        key, state, attacker_index, move_index)
+    move = state.active_moves(attacker_index, move_index)
+    return jax.lax.cond(move.implemented[0], _resolve_and_hit, _record_move_miss,
+                        key, state, attacker_index, move)
 
 
-def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
+def _resolve_and_hit(key, state, attacker_index, move):
+    """Resolve a selected move for callers that already checked accuracy."""
+    move = _resolve_hit_move(state, attacker_index, move)
+    return _move_hits(key, state, attacker_index, move)
+
+
+def _selected_hit_move(state, player, index):
+    """Read the selected move and resolve its effective hit metadata."""
+    return _resolve_hit_move(state, player, state.active_moves(player, index))
+
+
+def _resolve_hit_move(state, player, move):
+    """Use synthetic Struggle or resolve an ordinary move exactly once."""
+    return jax.lax.cond(state.event_move == -1, _struggle_move, effective_move, state, player, move)
+
+
+def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move: Move) -> Tuple[chex.PRNGKey, BattleState]:
     """Join normal and forced routing before one damage/status executor.
 
     Ability and type immunities, status moves, and damaging moves share one
@@ -165,7 +181,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_
     """
 
     state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
-        _prepare_struggle_hit, _prepare_normal_hit, state, attacker_index, move_index)
+        _prepare_struggle_hit, _prepare_normal_hit, state, attacker_index, move)
     # Only Whirlwind routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
     forced = (branch == 1) & (move.identifier[0] == 18)
@@ -185,14 +201,17 @@ def _match_move_leaf_dtype(value, ref):
     return value.astype(ref.dtype)
 
 
-def _prepare_struggle_hit(state, player, index):
-    """Supply typeless Struggle to the same damaging branch as ordinary hits."""
-    reference = state.active[player].moves[index]
+def _struggle_move(state, player, reference):
+    """Build typeless Struggle with the same leaf dtypes as a stored move."""
     move = Move(move_type=jnp.array([0]), max_pp=jnp.array([1]), current_pp=jnp.array([1]),
         type=jnp.array([Type.NONE]), base_power=jnp.array([50]), accuracy=jnp.array([1.]),
         priority=jnp.array([0]), offensive_stat=jnp.array([StatEnum.ATTACK]),
         defensive_stat=jnp.array([StatEnum.DEFENSE]), crit_stage=jnp.array([0]))
-    move = jax.tree.map(_match_move_leaf_dtype, move, reference)
+    return jax.tree.map(_match_move_leaf_dtype, move, reference)
+
+
+def _prepare_struggle_hit(state, player, move):
+    """Send synthetic Struggle directly to the shared damage branch."""
     ability = state.ability[1-player]
     return state, move, jnp.int32(0), jnp.zeros_like(ability), 1 + (ability == AbilityEnum.WELL_BAKED_BODY)
 
@@ -205,14 +224,17 @@ def _spiky_shield_retaliation(s, *, attacker_index):
     return s.replace(event_source=source)
 
 
-def _prepare_normal_hit(state, attacker_index, move_index):
+def _prepare_normal_hit(state, attacker_index, move):
     """Resolve normal hit routing before the common damage/status executor."""
     # decide branch to execute based on ability immunities
-    defender = state.effective_active[1 - attacker_index]
-    move = effective_move(state, attacker_index, state.active[attacker_index].moves[move_index])
+    defender_idx = 1 - attacker_index
+    ability = state.ability[defender_idx]
+    defender_types = state.effective_types(defender_idx)
+    defender_item = state.active_field('item', defender_idx)
+    defender_hp = state.active_field('current_hp', defender_idx)[0]
+    gravity = state.gravity_duration > 0
     v = state.volatile_status
     move = move.replace(priority=jnp.where(v.encore_overridden[attacker_index], v.queued_priority[attacker_index], move.priority))
-    ability = defender.ability
     is_flash_fire = jnp.logical_and(ability==AbilityEnum.FLASH_FIRE, move.type==Type.FIRE)
     is_spa_boost = jnp.logical_or(
         jnp.logical_and(ability==AbilityEnum.STORM_DRAIN, move.type==Type.WATER),
@@ -234,7 +256,7 @@ def _prepare_normal_hit(state, attacker_index, move_index):
     # all of this is hacky and inelegant and probably could be simplified
     is_stat_boost = quad_or(is_speed_boost, is_attack_boost, is_spa_boost, is_def_boost)
     not_bypass_move = triple_or(is_flash_fire, is_stat_boost, is_heal)
-    immune = state.is_immune_to_move(1-attacker_index, move)
+    immune = move_immune_from_fields(defender_types, ability, defender_item, move, gravity)
     immune = jnp.logical_and(immune, ~not_bypass_move)
     is_status = jnp.logical_and(move.move_type == MoveType.STATUS, ~not_bypass_move & ~immune)
     # Encode the selected outcome for lax.switch. Self-targeted status moves
@@ -249,11 +271,11 @@ def _prepare_normal_hit(state, attacker_index, move_index):
     branch_index = jnp.where(move.target_self & (move.move_type == MoveType.STATUS), 1, branch_index)
     # Psychic Terrain blocks opposing priority moves before absorption abilities
     # or other hit effects can activate, but only for grounded targets.
-    grounded = state.is_grounded(1-attacker_index)[0]
+    grounded = (~is_floating_fields(defender_types, ability, defender_item) | gravity)[0]
     priority_blocked = (((state.terrain.terrain == TerrainEnum.PSYCHIC) & grounded) |
         (ability[0] == AbilityEnum.QUEENLY_MAJESTY)) & (move.priority[0] > 0) & ~move.target_self[0]
     prankster_dark = ((state.ability[attacker_index, 0] == AbilityEnum.PRANKSTER) &
-        (move.move_type[0] == MoveType.STATUS) & jnp.any(defender.type_list == Type.DARK) &
+        (move.move_type[0] == MoveType.STATUS) & jnp.any(defender_types == Type.DARK) &
         ~move.target_self[0] & (move.hazard_effect[0] == 0))
     priority_blocked |= prankster_dark
     branch_index = jnp.where(priority_blocked, 5, branch_index)
@@ -265,25 +287,26 @@ def _prepare_normal_hit(state, attacker_index, move_index):
     # blocks; Long Reach and Magic Guard prevent this retaliation.
     spiky = blocked & (state.volatile_status.protection_kind[1-attacker_index, 0] == ProtectionKind.SPIKY_SHIELD)
 
-    spiky &= move.contact[0] & contact_reactions_allowed(state.ability[attacker_index, 0], state.active.item[attacker_index, 0])
-    spiky &= (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD) & (state.active.current_hp[attacker_index, 0] > 0)
+    spiky &= move.contact[0] & contact_reactions_allowed(state.ability[attacker_index, 0], state.active_field('item', attacker_index)[0])
+    spiky &= (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD) & (state.active_field('current_hp', attacker_index)[0] > 0)
     state = jax.lax.cond(spiky, partial(_spiky_shield_retaliation, attacker_index=attacker_index), _identity, state)
     # Side and field moves do not target the Pokémon behind its Substitute.
     sub_blocked = substitute_intercepts(state.volatile_status.substitute_hp[1-(attacker_index), 0], state.ability[attacker_index, 0],
         move.target_self[0], move.sound[0], move.bypass_substitute[0]) & (move.move_type[0] == MoveType.STATUS) & (move.hazard_effect[0] == 0)
     branch_index = jnp.where(sub_blocked, 5, branch_index)
-    failed_endeavor = (move.identifier[0] == 283) & (defender.current_hp[0] <= state.active.current_hp[attacker_index, 0])
-    failed_poltergeist = (move.identifier[0] == 809) & (defender.item[0] == 0)
+    failed_endeavor = (move.identifier[0] == 283) & (defender_hp <= state.active_field('current_hp', attacker_index)[0])
+    failed_poltergeist = (move.identifier[0] == 809) & (defender_item[0] == 0)
     branch_index = jnp.where(failed_endeavor | failed_poltergeist, 5, branch_index)
 
     revealed = (move.identifier[0] == 809) & (branch_index[0] == 0)
-    state = remember_item(state, 1-attacker_index, defender.item[0], revealed)
-    state = emit(state, EventKind.ITEM_REVEALED, 1-attacker_index, detail=defender.item[0], enabled=revealed)
+    state = remember_item(state, 1-attacker_index, defender_item[0], revealed)
+    state = emit(state, EventKind.ITEM_REVEALED, 1-attacker_index, detail=defender_item[0], enabled=revealed)
     target = jnp.where(move.target_self[0], attacker_index, 1-attacker_index)
-    mon = state.active[attacker_index]
+    max_hp = state.active_stats(attacker_index)[0]
+    hp = state.active_field('current_hp', attacker_index)[0]
     failed_substitute = (move.identifier[0] == 164) & (
         (state.volatile_status.substitute_hp[attacker_index, 0] > 0) |
-        (mon.max_hp <= 1) | (4 * mon.current_hp[0] <= mon.max_hp))
+        (max_hp <= 1) | (4 * hp <= max_hp))
     outcome = jnp.where(blocked, HitOutcome.PROTECTED, jnp.where(sub_blocked | priority_blocked | failed_substitute, HitOutcome.BLOCKED,
                         jnp.where(branch_index[0] >= 2, HitOutcome.IMMUNE, HitOutcome.HIT)))
     recipient = jnp.where(outcome == HitOutcome.HIT, HitRecipient.POKEMON, HitRecipient.NONE)
@@ -295,7 +318,11 @@ def _prepare_normal_hit(state, attacker_index, move_index):
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
     """Return unchanged key and state for a miss or unsupported move."""
-    move = state.active[attacker_index].moves[move_index]
+    return _record_move_miss(key, state, attacker_index, state.active_moves(attacker_index, move_index))
+
+
+def _record_move_miss(key, state, attacker_index, move):
+    """Record a missed attempt from the already selected move's metadata."""
     target = jnp.where(move.target_self[0], attacker_index, 1-attacker_index)
     state = record_hit(state, 0, target, HitOutcome.MISS)
     return key, emit(state, EventKind.MISS, target, detail=move.implemented[0])

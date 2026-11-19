@@ -20,7 +20,7 @@ from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import do_contact, secondary_effects
 from ninjax.moves.execution import _prepare_move_use
 from ninjax.moves.hit_resolution import resolve_damaging_hit
-from ninjax.moves.properties import effective_move, move_accuracy
+from ninjax.moves.properties import effective_move, effective_priority, move_accuracy
 from ninjax.moves.routing import move_hits
 from ninjax.moves.status import do_status_move
 from ninjax.restrictions import apply_restriction
@@ -358,10 +358,12 @@ def test_priority_ability_projection(neutral_type, ability, move, expected):
     state = configure(state, {'ability': ability})
     original = make_move(move)
     assert effective_move(state, 0, original).priority[0] == expected
+    assert effective_priority(state, 0, original)[0] == expected
     assert original.priority[0] == 0
     if ability == 'Gale Wings':
         state = update_active(state, 0, state.active[0].replace(current_hp=jnp.array([1])))
         assert effective_move(state, 0, original).priority[0] == 0
+        assert effective_priority(state, 0, original)[0] == 0
 
 
 def test_prankster_dark_and_good_as_gold_field_targets(neutral_type):

@@ -22,13 +22,25 @@ from ninjax.side.queries import (
     POISON_IMMUNE_ABILITIES,
     SLEEP_IMMUNE_ABILITIES,
     effective_weather,
-    is_floating,
-    is_immune_to_move,
+    is_floating_fields,
+    move_immune_from_fields,
+    modify_speed,
     modify_stats,
 )
 
 
 Array = jax.Array
+
+def _roost_types(original_types, remove):
+    """Remove Flying during Roost, preserving primary and secondary order."""
+    types = jnp.where(remove & (original_types == Type.FLYING), Type.NONE, original_types)
+    first, second = types[..., 0], types[..., 1]
+    promote = first == Type.NONE
+    primary = jnp.where(promote, second, first)
+    primary = jnp.where(primary == Type.NONE, Type.NORMAL, primary)
+    secondary = jnp.where(promote, Type.NONE, second)
+    return jnp.where(remove, jnp.stack((primary, secondary), axis=-1), original_types)
+
 
 def _negative_ones(shape, dtype):
     """Create negative sentinel arrays when a new battle state is constructed."""
@@ -242,6 +254,35 @@ class BattleState(struct.PyTreeNode):
         """
         return _active_pokemon(self.team, self.active_index)
 
+    def active_field(self, name, player=None):
+        """Gather one stored team array for a player or both active slots."""
+        field = getattr(self.team, name)
+        if player is None:
+            return field[jnp.arange(2), self.active_index[:, 0]]
+        return field[player, self.active_index[player, 0]]
+
+    def active_move_field(self, name, player=None):
+        """Read a stored move field for the requested active bank or both banks."""
+        field = getattr(self.team.moves, name)
+        if player is None:
+            return field[jnp.arange(2), self.active_index[:, 0]]
+        return field[player, self.active_index[player, 0]]
+
+    def active_moves(self, player, move_index=None):
+        """Read the active move bank or one move directly from the team."""
+        slot = self.active_index[player, 0]
+        if move_index is None:
+            return self.team.moves[player, slot]
+        return self.team.moves[player, slot, move_index]
+
+    def active_stats(self, player=None):
+        """Calculate stats after selecting the active slots' stat inputs."""
+        if player is None:
+            index = (jnp.arange(2), self.active_index[:, 0])
+        else:
+            index = (player, self.active_index[player, 0])
+        return self.team.stat_table[index].stats
+
     @property
     def ability(self):
         """Effective active abilities, shape (2, 1), including volatile changes.
@@ -263,47 +304,51 @@ class BattleState(struct.PyTreeNode):
         ability remains the original, including while an override is active.
         """
         active = self.active
-        original_types = active.type_list
-        types = original_types
         remove = self.volatile_status.roost & ~active.is_terastallized
-        types = jnp.where(remove & (types == Type.FLYING), Type.NONE, types)
-        # Preserve primary-type ordering for effects such as Revelation Dance.
-        types = jnp.stack((jnp.where(types[:, 0] == Type.NONE, types[:, 1], types[:, 0]),
-                           jnp.where(types[:, 0] == Type.NONE, Type.NONE, types[:, 1])), axis=1)
-        types = types.at[:, 0].set(jnp.where(remove[:, 0] & (types[:, 0] == Type.NONE), Type.NORMAL, types[:, 0]))
-        types = jnp.where(remove, types, original_types)
-        return active.replace(ability=self.ability, type_list=types)
+        return active.replace(ability=self.ability, type_list=_roost_types(active.type_list, remove))
+
+    def effective_types(self, player=None):
+        """Read active types with Roost applied unless the Pokémon has Terastallized."""
+        original_types = self.active_field('type_list', player)
+        roost = self.volatile_status.roost
+        remove = (roost if player is None else roost[player]) & ~self.active_field('is_terastallized', player)
+        return _roost_types(original_types, remove)
 
     def is_status_immune(self, player, status):
-        """Check represented active status immunities using the effective ability."""
+        """Check status immunity using active types, ability, item and field."""
+        types = self.effective_types(player)
+        abilities = self.ability
+        ability = abilities[player]
+        item = self.active_field('item', player)
+        sunny = effective_weather(self.weather.weather, abilities, self.active_field('current_hp')) == WeatherEnum.SUN
 
-        mon = self.effective_active[player]
-        ability = self.ability[player]
         immune = (((status == Status.POISON) | (status == Status.TOXIC)) &
-                  (mon.is_type(Type.POISON) | mon.is_type(Type.STEEL) | jnp.any(jnp.asarray(POISON_IMMUNE_ABILITIES) == ability)))
-        immune |= (status == Status.PARALYZE) & (mon.is_type(Type.ELECTRIC) | jnp.any(jnp.asarray(PARALYSIS_IMMUNE_ABILITIES) == ability))
-        immune |= (status == Status.BURN) & (mon.is_type(Type.FIRE) | jnp.any(jnp.asarray(BURN_IMMUNE_ABILITIES) == ability))
-        immune |= (status == Status.FREEZE) & (mon.is_type(Type.ICE) | jnp.any(jnp.asarray(FREEZE_IMMUNE_ABILITIES) == ability) |
-                                                (effective_weather(self.weather.weather, self.ability, self.active.current_hp) == WeatherEnum.SUN))
+                  (jnp.any((types == Type.POISON) | (types == Type.STEEL)) |
+                   jnp.any(jnp.asarray(POISON_IMMUNE_ABILITIES) == ability)))
+        immune |= (status == Status.PARALYZE) & (jnp.any(types == Type.ELECTRIC) | jnp.any(jnp.asarray(PARALYSIS_IMMUNE_ABILITIES) == ability))
+        immune |= (status == Status.BURN) & (jnp.any(types == Type.FIRE) | jnp.any(jnp.asarray(BURN_IMMUNE_ABILITIES) == ability))
+        immune |= (status == Status.FREEZE) & (jnp.any(types == Type.ICE) | jnp.any(jnp.asarray(FREEZE_IMMUNE_ABILITIES) == ability) | sunny)
         immune |= (status == Status.SLEEP) & jnp.any(jnp.asarray(SLEEP_IMMUNE_ABILITIES) == ability)
-        immune |= (ability == AbilityEnum.LEAF_GUARD) & (effective_weather(self.weather.weather, self.ability, self.active.current_hp) == WeatherEnum.SUN)
-        grounded = ~is_floating(mon) | (self.gravity_duration > 0)
+        immune |= (ability == AbilityEnum.LEAF_GUARD) & sunny
+        grounded = ~is_floating_fields(types, ability, item) | (self.gravity_duration > 0)
         immune |= grounded & ((self.terrain.terrain == TerrainEnum.MISTY) |
                               ((self.terrain.terrain == TerrainEnum.ELECTRIC) & (status == Status.SLEEP)))
         return immune | (ability == AbilityEnum.COMATOSE)
 
     def is_grounded(self, player):
         """Check grounding of an active player, including Gravity."""
-        return ~is_floating(self.effective_active[player]) | (self.gravity_duration > 0)
+        airborne = is_floating_fields(self.effective_types(player), self.ability[player], self.active_field('item', player))
+        return ~airborne | (self.gravity_duration > 0)
 
     def is_immune_to_move(self, player, move):
         """Check an active player's move immunity in the current field."""
-        return is_immune_to_move(self.effective_active[player], move, self.gravity_duration > 0)
+        return move_immune_from_fields(self.effective_types(player), self.ability[player],
+                                       self.active_field('item', player), move, self.gravity_duration > 0)
 
     @property
     def raw_boosted_stats(self):
         """Apply stage multipliers to active stats without ability modifiers."""
-        stats = self.active.stats
+        stats = self.active_stats()
         return jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6 + self.boosts.normal_boosts])
 
     @property
@@ -333,6 +378,18 @@ class BattleState(struct.PyTreeNode):
         return jax.vmap(partial(_modify_stats_row, state=self))(jnp.arange(2), stats)
 
     @property
+    def effective_speeds(self):
+        """Calculate only the stage-adjusted Speed needed for battle order."""
+        base = self.active_stats()[:, StatEnum.SPEED]
+        stages = self.boosts.normal_boosts[:, StatEnum.SPEED]
+        speed = jnp.floor(base * STAT_MULTIPLIER_LOOKUP[6 + stages])
+        ability = self.ability
+        weather = effective_weather(self.weather.weather, ability, self.active_field('current_hp'))
+        return modify_speed(speed, self.active_field('item')[:, 0], ability[:, 0],
+                            self.active_field('status')[:, 0], weather, self.terrain.terrain,
+                            self.volatile_status.paradox_stat[:, 0], self.tailwind[:, 0])
+
+    @property
     def accuracy_boosts(self):
         """Return accuracy and evasion stages for both players, shape ``(2, 2)``."""
         return self.boosts.acc_boosts
@@ -340,7 +397,7 @@ class BattleState(struct.PyTreeNode):
     @property
     def current_hp(self):
         """Return the active Pokémon's current HP for each player."""
-        return self.active.current_hp
+        return self.active_field('current_hp')
 
     def legal_switch_mask(self):
         """Build the legacy six-slot switch mask for a side view.

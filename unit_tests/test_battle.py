@@ -9,7 +9,7 @@ from ninjax.battle.environment import Battle
 from ninjax.battle.field import step_field
 from ninjax.battle.residuals import end_turn_damage
 from ninjax.battle.types import BattleParams, InformationMode, Phase
-from ninjax.calculations.damage import compute_base_damage, compute_damage_multipliers
+from ninjax.calculations.damage import compute_base_damage, compute_damage_multipliers, hit_type_effectiveness
 from ninjax.calculations.stats import Nature, StatBoosts, StatTable
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
@@ -20,7 +20,7 @@ from ninjax.moves.execution import move_used
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.pokemon import Pokemon
-from ninjax.records.events import CAPACITY, Cause, EventBuffer, EventKind, emit
+from ninjax.records.events import CAPACITY, Cause, EventBuffer, EventKind, capture_conditions, emit
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status, status_helper
@@ -227,6 +227,20 @@ def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
     assert fainted.active.current_hp[1, 0] == 0
     assert fainted.active.current_hp[0, 0] == attacker_hp - 5
 
+    # If both Pokémon have Innards Out, retaliation is indirect and stops
+    # after the attacker's faint. The original hit still owns its faint record.
+    team = team.replace(
+        ability=team.ability.at[0, 0, 0].set(AbilityEnum.INNARDS_OUT),
+        current_hp=team.current_hp.at[0, 0, 0].set(5))
+    state = state.replace(team=team, event_cause=jnp.int32(Cause.MOVE))
+    result = take_damage_value(state, 1, jnp.array([5]), True, source=0)
+    events = result.events.unpack()
+    assert events.count == 4
+    assert jnp.array_equal(events.kind[:4], jnp.array([EventKind.HP, EventKind.FAINT] * 2))
+    assert jnp.array_equal(events.target[:4], jnp.array([1, 1, 0, 0]))
+    assert jnp.array_equal(result.faint_source, jnp.array([-1, 0]))
+    assert jnp.array_equal(result.faint_cause, jnp.array([Cause.INDIRECT, Cause.MOVE]))
+
 
 def test_boost_events_keep_stat_order(neutral_type):
     """Stage updates emit only changed stats, in normal then accuracy order."""
@@ -247,6 +261,36 @@ def test_boost_events_keep_stat_order(neutral_type):
 def test_stat_helper(neutral_type):
     key, state = neutral_type
     status_helper(key, state.active[0], jnp.ones(1))
+
+
+def test_set_status_advances_key_only_on_application(neutral_type):
+    """A blocked major status preserves both the PRNG key and sleep counter."""
+    key, state = neutral_type
+    apply = jax.jit(set_status)
+    advanced, asleep = apply(key, state, jnp.int32(1), jnp.array([Status.SLEEP]))
+    assert jnp.array_equal(random.key_data(advanced), random.key_data(random.split(key)[0]))
+    assert asleep.team.status[1, 0, 0] == Status.SLEEP
+    assert 2 <= asleep.team.sleep_counter[1, 0, 0] <= 4
+    unchanged, blocked = apply(advanced, asleep, jnp.int32(1), jnp.array([Status.BURN]))
+    assert jnp.array_equal(random.key_data(unchanged), random.key_data(advanced))
+    assert blocked.team.status[1, 0, 0] == Status.SLEEP
+    assert blocked.team.sleep_counter[1, 0, 0] == asleep.team.sleep_counter[1, 0, 0]
+
+
+def test_scheduler_condition_events_keep_order_and_slot(neutral_type):
+    """Field and side events retain their order and active slot attribution."""
+    _, state = neutral_type
+    after = state.replace(
+        weather=Weather(WeatherEnum.RAIN, 5),
+        active_index=state.active_index.at[1, 0].set(2),
+        spikes=state.spikes.at[1, 0].set(1),
+        gravity_duration=jnp.int32(5))
+    events = jax.jit(capture_conditions)(state, after).events.unpack()
+    assert events.count == 3
+    assert jnp.array_equal(events.kind[:3], jnp.array([EventKind.WEATHER, EventKind.CONDITION, EventKind.CONDITION]))
+    assert jnp.array_equal(events.detail[:3], jnp.array([0, 2, 11]))
+    assert jnp.array_equal(events.target[:3], jnp.array([-1, 1, -1]))
+    assert jnp.array_equal(events.slot[:3], jnp.array([-1, 2, -1]))
 
 
 @pytest.mark.jit
@@ -507,6 +551,10 @@ def test_damage_ability_effectiveness_and_gravity(neutral_type):
     flying = levitate.replace(type_list=jnp.array([Type.FLYING, Type.NONE]), ability=jnp.array([0]))
     assert damage(attacker, flying, ground, False) == 0
     assert damage(attacker, flying, ground, True) == 100
+    # Gravity changes damage effectiveness without changing the item matchup.
+    raw, adjusted = hit_type_effectiveness(ground.type, jnp.array([Type.FLYING, Type.STEEL]),
+                                           levitate.ability, True)
+    assert raw == 0 and adjusted[0] == 2
 
 
 def test_levitate_blocks_ground_moves_unless_gravity_is_active(neutral_type, compiled_move_used):

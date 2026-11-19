@@ -5,7 +5,6 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from ninjax.calculations.logic import triple_and
 from ninjax.calculations.modifiers import conditional_mult_round
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
@@ -26,22 +25,71 @@ def _damage_fraction_for_player(i, s, *, fractions):
     return take_damage_percent(s, i, fractions[i])
 
 
-@jax.jit
 def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, fixed_damage=False, source=-1) -> BattleState:
-    """Apply signed HP damage to an active Pokémon and return updated state.
+    """Apply signed damage, with negative amounts healing the active Pokémon.
 
-    Negative values heal. ``is_attack_damage`` controls the represented Sturdy,
-    Multiscale, and Innards Out behavior; other damage-triggered effects remain
-    incomplete. Fixed damage bypasses Multiscale but retains Sturdy/Sash.
-    Fainted Pokémon are not marked alive again by healing. Direct attacks pass
-    their source side explicitly for deferred faint effects.
+    Callers passing Python False use the indirect path. An array flag remains
+    dynamic under JIT and gates attack protections and Innards Out at runtime.
     """
-    return _take_damage_value(state, defender_idx, damage, is_attack_damage, True, fixed_damage, source)
+    if is_attack_damage is False:
+        return apply_indirect_hp_change(state, defender_idx, damage, source)
+    return _apply_attack_hp_change(state, defender_idx, damage, is_attack_damage, fixed_damage, source)
+
+
+def _active_hp_fields(state, player):
+    """Read the active slot and the HP fields used by both damage paths."""
+    slot = state.active_index[player, 0]
+    return slot, state.team.current_hp[player, slot], state.active_stats(player)[0]
+
+
+@jax.jit
+def _record_hp_change(state, player, old_hp, new_hp, max_hp, alive, attack):
+    """Emit HP and faint events, then apply the opposing side's KO boost."""
+    delta = (new_hp - old_hp).reshape(())
+    # Public HP endpoints use the same rounding as observations.
+    public_delta = (jnp.ceil(new_hp / max_hp * 100) - jnp.ceil(old_hp / max_hp * 100)) / 100
+    state = emit(state, EventKind.HP, player, detail=jnp.asarray(attack, jnp.int32),
+                 before=old_hp, after=new_hp, hp_change=delta,
+                 hp_fraction_change=public_delta, enabled=delta != 0)
+    state = emit(state, EventKind.FAINT, player, enabled=(old_hp > 0) & (new_hp == 0))
+
+    opponent = 1 - player
+    slot = state.active_index[opponent, 0]
+    ability = state.ability[opponent]
+    moxie = ability == AbilityEnum.MOXIE
+    beast_boost = ability == AbilityEnum.BEAST_BOOST
+    beast_stat = 1 + jnp.argmax(state.active_stats(opponent))
+    index = jnp.where(beast_boost, beast_stat, StatEnum.ATTACK)
+    eligible = ((moxie | beast_boost) & ~alive & (state.team.current_hp[opponent, slot] > 0))[0]
+    return conditional_add_boosts(state, opponent, eligible, index, 1)
+
+
+@jax.jit
+def _finish_hp_change(state, player, old_hp, new_hp, alive, source, attack):
+    """Commit HP, run reactive items and queue the original faint if needed."""
+    state = update_active_fields(state, player, current_hp=new_hp, is_alive=alive)
+    state = after_hp_change(state, player)
+    indirect_cause = jnp.where(state.event_cause == Cause.MOVE, Cause.INDIRECT, state.event_cause)
+    return record_faint(state, player, source, jnp.where(attack, Cause.MOVE, indirect_cause),
+                        (old_hp[0] > 0) & (new_hp[0] == 0))
+
+
+@jax.jit
+def apply_indirect_hp_change(state, player, damage, source=-1):
+    """Apply indirect damage or healing with the usual item and faint reactions."""
+    slot, old_hp, max_hp = _active_hp_fields(state, player)
+    # HP changes truncate fractional damage toward zero before clamping.
+    damage = jnp.asarray(damage, dtype=old_hp.dtype)
+    new_hp = jax.lax.clamp(0, old_hp - damage, max_hp.reshape(()))
+    alive = (new_hp != 0) & state.team.is_alive[player, slot]
+    state = _record_hp_change(state, player, old_hp, new_hp, max_hp, alive, jnp.bool_(False))
+    return _finish_hp_change(state, player, old_hp, new_hp, alive, jnp.asarray(source, jnp.int32),
+                             jnp.bool_(False))
 
 
 def _innards_response(state, player, damage):
-    """Apply Innards Out once without recursively invoking the same ability."""
-    return _take_damage_value(state, player, damage, False, False)
+    """Apply Innards Out damage through the indirect HP path."""
+    return apply_indirect_hp_change(state, player, damage)
 
 
 def _unchanged_damage_state(state, player, damage):
@@ -49,80 +97,39 @@ def _unchanged_damage_state(state, player, damage):
     return state
 
 
-def _take_damage_value(state, defender_idx, damage, is_attack_damage, allow_innards, fixed_damage=False, source=-1):
-    """Implement HP updates; optionally allow a single Innards Out response."""
-    active = state.active
-    defender = active[defender_idx]
-    attacker = active[1-defender_idx]
-    # TODO: there are some effects that trigger based on damage taken, like mirror coat
-    health_full = defender.current_hp==defender.max_hp
-    is_sturdy = state.ability[defender_idx]==AbilityEnum.STURDY
-    is_multiscale = triple_and(health_full, state.ability[defender_idx]==AbilityEnum.MULTISCALE, is_attack_damage) & ~jnp.asarray(fixed_damage)
-    damage = conditional_mult_round(damage, 0.5, is_multiscale)
-    old_health = defender.current_hp
-    over_half = jnp.greater_equal(old_health/defender.max_hp, 0.5)
-    new_health = jax.lax.clamp(0, old_health-damage, jnp.asarray(defender.max_hp).reshape(()))
-    sturdy_survives = health_full & is_sturdy & jnp.asarray(is_attack_damage) & (damage > 0) & (new_health == 0)
+@jax.jit
+def _apply_attack_hp_change(state, player, damage, attack, fixed_damage, source):
+    """Apply attack protections and resolve Innards Out before committing HP."""
+    slot, old_hp, max_hp = _active_hp_fields(state, player)
+    ability = state.ability[player]
+    item = state.team.item[player, slot]
+    full = old_hp == max_hp
+    multiscale = full & (ability == AbilityEnum.MULTISCALE) & attack & ~jnp.asarray(fixed_damage)
+    damage = conditional_mult_round(damage, 0.5, multiscale)
+    new_hp = jax.lax.clamp(0, old_hp - damage, max_hp.reshape(()))
+    protected_ko = full & attack & (damage > 0) & (new_hp == 0)
+    sturdy = protected_ko & (ability == AbilityEnum.STURDY)
+    sash = protected_ko & (item == ItemEnum.FOCUS_SASH) & ~sturdy
+    new_hp = jnp.maximum(new_hp, (sturdy | sash).astype(new_hp.dtype))
+    alive = (new_hp != 0) & state.team.is_alive[player, slot]
 
-    sash = health_full & (defender.item == ItemEnum.FOCUS_SASH) & jnp.asarray(is_attack_damage) & (damage > 0) & (new_health == 0) & ~sturdy_survives
-    new_health = jnp.maximum(new_health, (sturdy_survives | sash).astype(new_health.dtype))
+    # Direct hits store actual damage before healing items have a chance to act.
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(last_damage=v.last_damage.at[defender_idx].set(
-        jnp.where(jnp.asarray(is_attack_damage), jnp.maximum(old_health-new_health, 0), v.last_damage[defender_idx]))))
-    state = emit(state, EventKind.ITEM, defender_idx, detail=ItemEnum.FOCUS_SASH, enabled=sash)
+    last_damage = jnp.where(attack, jnp.maximum(old_hp - new_hp, 0), v.last_damage[player])
+    state = state.replace(volatile_status=v.replace(last_damage=v.last_damage.at[player].set(last_damage)))
+    state = emit(state, EventKind.ITEM, player, detail=ItemEnum.FOCUS_SASH, enabled=sash)
+    state = remember_item(state, player, ItemEnum.NONE, sash)
+    state = _record_hp_change(state, player, old_hp, new_hp, max_hp, alive, jnp.asarray(attack))
 
-    state = remember_item(state, defender_idx, ItemEnum.NONE, sash)
-    defender = defender.replace(item=jnp.where(sash, ItemEnum.NONE, defender.item))
-    under_half = jnp.less(new_health/defender.max_hp, 0.5)
-
-    # check to make sure we don't accidentally revive a pokemon
-    alive = jnp.logical_and(new_health != 0, defender.is_alive)
-    defender = defender.replace(current_hp=new_health, is_alive=alive)
-
-    new_health = defender.current_hp
-    delta = (new_health - old_health).reshape(())
-    # Public HP endpoints use the same rounding as observations.
-    public_delta = (jnp.ceil(new_health / defender.max_hp * 100) - jnp.ceil(old_health / defender.max_hp * 100)) / 100
-    state = emit(state, EventKind.HP, defender_idx, detail=jnp.asarray(is_attack_damage, jnp.int32),
-                 before=old_health, after=new_health, hp_change=delta,
-                 hp_fraction_change=public_delta, enabled=delta != 0)
-    state = emit(state, EventKind.FAINT, defender_idx, enabled=(old_health > 0) & (new_health == 0))
-
-    # run moxie type abilities
-    is_soul_heart = state.ability[1-defender_idx]==AbilityEnum.SOUL_HEART
-    is_moxie = state.ability[1-defender_idx]==AbilityEnum.MOXIE
-    is_beast_boost = state.ability[1-defender_idx]==AbilityEnum.BEAST_BOOST
-    is_grim_neigh = state.ability[1-defender_idx]==AbilityEnum.GRIM_NEIGH
-    beast_boost_index = (1+jnp.argmax(attacker.stats))
-    index = (beast_boost_index*is_beast_boost +
-             is_moxie * StatEnum.ATTACK +
-             jnp.logical_or(is_soul_heart, is_grim_neigh) * StatEnum.SPECIAL_ATTACK)
-    # yeah idk why this needs double index thingy here
-    cond = (jnp.logical_or(is_moxie, is_beast_boost) & ~alive & (attacker.current_hp > 0))[0]
-    state = conditional_add_boosts(state, 1-defender_idx, cond, index, 1)
-
-    # innards out
-    is_innards_out = triple_and(1-alive, state.ability[defender_idx]==AbilityEnum.INNARDS_OUT, is_attack_damage) & (attacker.current_hp > 0)
-    # This flag is a static Python value: tracing the response with it disabled
-    # prevents an unbounded recursive JAX trace.
-    if allow_innards:
-        state = jax.lax.cond(
-            is_innards_out[0],
-            _innards_response,
-            _unchanged_damage_state,
-            state, 1-defender_idx, old_health
-        )
-    # TODO: consider making separate functions for take damage value and take damage from attack
-    # this keeps active the same if current_hp!=0 and sets field as empty otherwise
-    # there are some other conditions that should trigger emptying field like eject button
-    # idk if that should be handled here or elsewhere
-
-    state = after_hp_change(update_active_fields(state, defender_idx,
-        current_hp=defender.current_hp, is_alive=defender.is_alive, item=defender.item), defender_idx)
-    return record_faint(state, defender_idx, source,
-        jnp.where(is_attack_damage, Cause.MOVE,
-            jnp.where(state.event_cause == Cause.MOVE, Cause.INDIRECT, state.event_cause)),
-        (old_health[0] > 0) & (new_health[0] == 0))
+    # Preserve event order: retaliate after the original faint event, but
+    # before committing the original target's HP and running its item hooks.
+    opponent = 1 - player
+    opponent_hp = state.team.current_hp[opponent, state.active_index[opponent, 0]]
+    innards = (~alive & (ability == AbilityEnum.INNARDS_OUT) & attack & (opponent_hp > 0))[0]
+    state = jax.lax.cond(innards, _innards_response, _unchanged_damage_state, state, opponent, old_hp)
+    state = update_active_fields(state, player, item=jnp.where(sash, ItemEnum.NONE, item))
+    return _finish_hp_change(state, player, old_hp, new_hp, alive, jnp.asarray(source, jnp.int32),
+                             jnp.asarray(attack))
 
 
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array, cause=None) -> BattleState:
@@ -140,6 +147,6 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array, c
         fractions = jnp.broadcast_to(percent, (2, 1))
         return jax.lax.fori_loop(0, 2,
             partial(_damage_fraction_for_player, fractions=fractions), state)
-    amount = state.active.max_hp[defender_idx] * percent
+    amount = state.active_stats(defender_idx)[0] * percent
     damage = (jnp.sign(amount) * jnp.maximum(1, jnp.floor(jnp.abs(amount)))).astype(jnp.int32)
-    return take_damage_value(state, defender_idx, damage, False)
+    return apply_indirect_hp_change(state, defender_idx, damage)

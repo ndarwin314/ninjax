@@ -130,13 +130,13 @@ def observe(env, state):
     # The owner's active ability is always visible, even while suppressed.
     current = t.ability[..., 0].at[jnp.arange(2), b.active_index[:, 0]].set(
         jnp.where(b.volatile_status.ability_override[:, 0] >= 0,
-                  b.volatile_status.ability_override[:, 0], b.active.ability[:, 0]))
+                  b.volatile_status.ability_override[:, 0], b.active_field('ability')[:, 0]))
     abilities = jnp.where(own, relative(current), jnp.where(relative(b.known_abilities >= 0),
         jnp.maximum(relative(b.known_abilities), 0), jnp.where(sheet, relative(t.ability[..., 0]), 0)))
 
     disabled = t.moves.disabled[..., 0]
     disabled = disabled.at[jnp.arange(2), b.active_index[:, 0]].set(
-        disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b.active.moves.identifier[..., 0], b.active.moves.move_type[..., 0],
+        disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b.active_move_field('identifier')[..., 0], b.active_move_field('move_type')[..., 0],
             disabled_move_id=b.volatile_status.disabled_move_id,
             disable_turns=b.volatile_status.disable_turns,
             taunt_turns=b.volatile_status.taunt_turns,

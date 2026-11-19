@@ -89,7 +89,7 @@ def move_used(key, state: BattleState, attacker_index, move_index, continued=Fal
         attacker_index,
         move_index,
     )
-    move = state.active[attacker_index].moves[move_index]
+    move = state.active_moves(attacker_index, move_index)
     key, state = _execute_selected_or_called_move(key, state, attacker_index, move_index,
         ~jnp.asarray(struggle) & ~jnp.asarray(continued) & (move.identifier[0] == 214) & move.implemented[0], continued)
     return key, jax.lax.cond(struggle, partial(_struggle_recoil, player=attacker_index), _identity, state)
@@ -123,7 +123,7 @@ def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
     Unsupported moves consume PP but otherwise take the no-effect branch. The
     caller is responsible for ensuring the selected move has PP remaining.
     """
-    move = state.active[attacker_index].moves[move_index]
+    move = state.active_moves(attacker_index, move_index)
 
     state = jax.lax.cond(
         move.identifier[0] != 194,
@@ -226,7 +226,7 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
     attempt finalization; release bookkeeping was handled by the scheduler.
     """
     struggle = state.event_move == -1
-    move = state.active[attacker_index].moves[move_index]
+    move = state.active_moves(attacker_index, move_index)
     explosion = (move.identifier[0] == 153) & move.implemented[0]
     electro_shot = (move.identifier[0] == 905) & move.implemented[0]
 
@@ -293,7 +293,7 @@ def _select_sleep_talk_move(k, s, *, eligible, player):
     # Keep the selected slot aligned with the action's int32 index, also
     # when a caller enables JAX's 64-bit default integer mode.
     selected = random.categorical(select_key, jnp.where(eligible, 0., -jnp.inf)).astype(jnp.int32)
-    called = s.active[player].moves[selected]
+    called = s.active_moves(player, selected)
     v = s.volatile_status
     s = s.replace(event_move=called.identifier[0], volatile_status=v.replace(
         sleep_talk_active=v.sleep_talk_active.at[player, 0].set(True),
@@ -308,7 +308,7 @@ def _select_sleep_talk_move(k, s, *, eligible, player):
 
 def _prepare_sleep_talk(key, state, player, move_index):
     """Return a called slot and execution flag without entering the hit pipeline."""
-    moves = state.active[player].moves
+    moves = state.active_moves(player)
     asleep = (state.active.status[player, 0] == Status.SLEEP) | (state.ability[player, 0] == AbilityEnum.COMATOSE)
     eligible = moves.sleep_talk_eligible[:, 0] & moves.implemented[:, 0] & (moves.identifier[:, 0] != 0) & (moves.identifier[:, 0] != 214)
     eligible &= jnp.arange(4) != move_index

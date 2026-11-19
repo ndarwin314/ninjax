@@ -87,7 +87,7 @@ def step_move(
     key, state, index, restriction_blocked = lax.cond(struggle,
         _prepare_struggle_action,
         partial(_prepare_selected_or_continued, continued=continued, is_tera=is_tera), key, state, player_idx, index)
-    selected_move = state.active[player_idx].moves[index]
+    selected_move = state.active_moves(player_idx, index)
     key, state, is_interrupted = before_move(key, state, player_idx, inclusive_paralysis=~struggle, restriction_blocked=restriction_blocked,
         defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
     key, state = jax.lax.cond(
@@ -117,10 +117,10 @@ def _prepare_selected_action(key, state, player_idx, index, is_tera):
     """Resolve Encore, priority and transformation for a newly selected move."""
 
     original_index = index
-    moves, v = state.active.moves, state.volatile_status
+    v = state.volatile_status
     index, restriction_blocked = resolve_move(
-        moves.identifier[player_idx, :, 0], moves.move_type[player_idx, :, 0],
-        moves.current_pp[player_idx, :, 0], index,
+        state.active_move_field('identifier', player_idx)[:, 0], state.active_move_field('move_type', player_idx)[:, 0],
+        state.active_move_field('current_pp', player_idx)[:, 0], index,
         disabled_move_id=v.disabled_move_id[player_idx, 0],
         disable_turns=v.disable_turns[player_idx, 0],
         taunt_turns=v.taunt_turns[player_idx, 0],
@@ -130,13 +130,12 @@ def _prepare_selected_action(key, state, player_idx, index, is_tera):
     v = v.replace(active_move_actions=v.active_move_actions.at[player_idx, 0].add(1))
     # Encore replaces an already ordered action without changing its priority.
     priority = jnp.where(v.queued_priority_valid[player_idx, 0], v.queued_priority[player_idx, 0],
-                         state.active[player_idx].moves.priority[original_index, 0])
+                         state.active_move_field('priority', player_idx)[original_index, 0])
     state = state.replace(volatile_status=v.replace(
         queued_priority=v.queued_priority.at[player_idx, 0].set(priority),
         encore_overridden=v.encore_overridden.at[player_idx, 0].set(index != original_index)))
-    attacker = state.active[player_idx]
     state = update_active_fields(state, player_idx,
-        is_terastallized=attacker.is_terastallized | jnp.bool([is_tera]))
+        is_terastallized=state.active_field('is_terastallized', player_idx) | jnp.bool([is_tera]))
     return key, state, jnp.asarray(index, jnp.int32), restriction_blocked
 
 
@@ -145,7 +144,7 @@ def _prepare_charge_release(key, state, player, unused_index):
 
     v = state.volatile_status
     identifier = v.charging_move_id[player, 0]
-    matches = (state.active[player].moves.identifier[:, 0] == identifier) & (identifier != 0)
+    matches = (state.active_move_field('identifier', player)[:, 0] == identifier) & (identifier != 0)
     index = jnp.argmax(matches).astype(jnp.int32)
     state = state.replace(hit_results=HitResults.empty(), event_move=identifier,
         volatile_status=v.replace(

@@ -217,6 +217,7 @@ def test_trick_room_and_tailwind_order(neutral_type):
     odd = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 5].set(1)))
     raw = odd.active.stats[0, 5]
     assert odd.boosted_stats[0, 5] == jnp.floor(raw*1.5)*2
+    assert jnp.array_equal(odd.effective_speeds, odd.boosted_stats[:, 5])
 
 
 def test_stat_change_vectors_stack_with_scalar_moves():

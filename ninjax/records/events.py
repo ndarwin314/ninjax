@@ -1,4 +1,5 @@
 """Fixed-capacity, ordered transition events; no Python containers grow while tracing."""
+from functools import partial
 from enum import IntEnum
 
 import jax
@@ -152,13 +153,21 @@ class EventBuffer:
 def emit(state, kind, target=-1, detail=0, before=0, after=0,
          hp_change=0, hp_fraction_change=0., enabled=True):
     """Append only actual events. Overflow is explicit and never overwrites history."""
-    e = state.events
+    events = _append_event(state.events, state.active_index, state.event_source,
+                           state.event_cause, state.event_move, kind, target, detail,
+                           before, after, hp_change, hp_fraction_change, enabled)
+    return state.replace(events=events)
+
+
+def _append_event(e, active_index, source, cause, move, kind, target, detail, before, after,
+                  hp_change, hp_fraction_change, enabled):
+    """Append one event using the buffer and the fields recorded in its rows."""
     enabled = jnp.asarray(enabled).reshape(())
     room = e.count < CAPACITY
     target = jnp.asarray(target, jnp.int32).reshape(())
-    slot = jnp.where(target >= 0, state.active_index[jnp.maximum(target, 0), 0], -1)
-    values = dict(valid=True, kind=kind, source=state.event_source, target=target,
-                  slot=slot, detail=detail, cause=state.event_cause, move=state.event_move,
+    slot = jnp.where(target >= 0, active_index[jnp.maximum(target, 0), 0], -1)
+    values = dict(valid=True, kind=kind, source=source, target=target,
+                  slot=slot, detail=detail, cause=cause, move=move,
                   before=before, after=after, hp_change=hp_change,
                   hp_fraction_change=hp_fraction_change)
     index = jnp.where(enabled & room, e.count, CAPACITY)
@@ -166,41 +175,42 @@ def emit(state, kind, target=-1, detail=0, before=0, after=0,
     e = e.replace(data=e.data.at[index].set(row, mode='drop'),
                   hp_fraction_change=e.hp_fraction_change.at[index].set(jnp.asarray(hp_fraction_change, jnp.float32).reshape(()), mode='drop'),
                   count=e.count + (enabled & room).astype(jnp.int32))
-    return state.replace(events=e.replace(overflow=e.overflow | (enabled & ~room)))
+    return e.replace(overflow=e.overflow | (enabled & ~room))
+
+
+_SIDE_CONDITIONS = ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes',
+                    'reflect', 'light_screen', 'aurora_veil', 'tailwind', 'perish_turns')
+
+
+def condition_values(state):
+    """Read the field and side values used for scheduler condition events."""
+    shared = jnp.array([state.weather.weather, state.terrain.terrain], jnp.int32)
+    sides = tuple(getattr(state, name)[:, 0] for name in _SIDE_CONDITIONS)
+    endings = jnp.array([state.trick_room_duration, state.gravity_duration], jnp.int32)
+    return jnp.concatenate((shared, *sides, state.volatile_status.flash_fire[:, 0], endings)).astype(jnp.int32)
 
 
 def capture_conditions(before, after):
-    """Record field/side changes not already emitted by HP/status/stage helpers.
-
-    CONDITION detail IDs: hazards 0..3, screens 4..6, tailwind 7,
-    Perish Song 8, Flash Fire 9, Trick Room 10, gravity 11, confusion 12,
-    Substitute 13, charging move ID 14, recharge 15, Destiny Bond 16. Volatile lifecycle events
-    are emitted directly by their corresponding helpers.
-    """
-    kinds, targets, details, old, new = [], [], [], [], []
-    def add(kind, target, detail, a, b):
-        """Add."""
-        kinds.append(kind)
-        targets.append(target)
-        details.append(detail)
-        old.append(jnp.asarray(a, jnp.int32))
-        new.append(jnp.asarray(b, jnp.int32))
-    add(EventKind.WEATHER, -1, 0, before.weather.weather, after.weather.weather)
-    add(EventKind.TERRAIN, -1, 0, before.terrain.terrain, after.terrain.terrain)
-    names = ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes',
-             'reflect', 'light_screen', 'aurora_veil', 'tailwind', 'perish_turns')
-    for detail, name in enumerate(names):
-        for player in range(2):
-            add(EventKind.CONDITION, player, detail, getattr(before, name)[player, 0], getattr(after, name)[player, 0])
-    for player in range(2):
-        add(EventKind.CONDITION, player, 9, before.volatile_status.flash_fire[player, 0], after.volatile_status.flash_fire[player, 0])
-    for detail, name in ((10, 'trick_room_duration'), (11, 'gravity_duration')):
-        add(EventKind.CONDITION, -1, detail, getattr(before, name), getattr(after, name))
-    data = tuple(jnp.asarray(x) for x in (kinds, targets, details, old, new))
-    return jax.lax.scan(_record_condition, after, data)[0]
+    """Record field and side changes from two battle states."""
+    return capture_conditions_from_values(condition_values(before), after)
 
 
-def _record_condition(state, row):
-    """Record a changed field or side condition from one scan row."""
+def capture_conditions_from_values(old, after):
+    """Record condition changes in their existing field and side order."""
+    # Detail IDs 0–8 are side conditions, 9 is Flash Fire, and 10–11
+    # are Trick Room and Gravity. Other volatile events are emitted elsewhere.
+    sides = len(_SIDE_CONDITIONS) + 1
+    kinds = jnp.array([EventKind.WEATHER, EventKind.TERRAIN] + [EventKind.CONDITION] * (sides * 2 + 2))
+    targets = jnp.array([-1, -1] + [0, 1] * sides + [-1, -1])
+    details = jnp.array([0, 0] + [detail for detail in range(sides) for _ in range(2)] + [10, 11])
+    record = partial(_record_condition, active_index=after.active_index, source=after.event_source,
+                     cause=after.event_cause, move=after.event_move)
+    events, _ = jax.lax.scan(record, after.events, (kinds, targets, details, old, condition_values(after)))
+    return after.replace(events=events)
+
+
+def _record_condition(events, row, *, active_index, source, cause, move):
+    """Append a changed condition without carrying the battle through the scan."""
     kind, target, detail, a, b = row
-    return emit(state, kind, target, detail, a, b, enabled=a != b), None
+    return _append_event(events, active_index, source, cause, move, kind, target, detail,
+                         a, b, 0, 0., a != b), None

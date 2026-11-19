@@ -14,7 +14,6 @@ from ninjax.battle.residuals import (
     step_side_conditions,
 )
 from ninjax.enums.field import Terrain, Weather
-from ninjax.enums.pokemon import StatEnum
 from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import refresh_paradox, update_items
@@ -57,7 +56,7 @@ def step_field(
     key, state = residual_orbs(key, state)
     state = update_items(state)
     # Perish Song resolves at the end of the turn, using effective speed order.
-    speeds = state.boosted_stats[:, StatEnum.SPEED]
+    speeds = state.effective_speeds
     effective = jnp.where(state.trick_room_duration > 0, -speeds, speeds)
     expiring = state.perish_turns[:, 0] == 1
     for player in range(2):

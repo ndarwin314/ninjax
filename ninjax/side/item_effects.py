@@ -88,7 +88,7 @@ def _activate_absorb_bulb(s, *, target):
 def cure_status(state, player):
     """Clear a major status, its sleep counter and its toxic counter together."""
 
-    old = state.active.status[player, 0]
+    old = state.active_field('status', player)[0]
     state = emit(state, EventKind.STATUS, player, before=old, after=Status.NONE, enabled=old != Status.NONE)
     state = update_active_fields(state, player, status=jnp.array([Status.NONE]), sleep_counter=jnp.zeros(1, jnp.int32))
     return state.replace(toxic_counter=state.toxic_counter.at[player, 0].set(0))
@@ -96,26 +96,39 @@ def cure_status(state, player):
 
 def cheek_pouch(state, player, eaten=True):
     """Heal after a represented berry's own effect, without recursive HP hooks."""
-    mon = state.active[player]
-    eligible = eaten & (state.ability[player, 0] == A.CHEEK_POUCH) & (mon.current_hp[0] > 0)
-    hp = jnp.minimum(mon.max_hp, mon.current_hp + jnp.where(eligible, jnp.maximum(1, mon.max_hp // 3), 0))
-    state = emit(state, EventKind.HP, player, before=mon.current_hp, after=hp,
-        hp_change=hp-mon.current_hp,
-        hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
-        enabled=hp[0] != mon.current_hp[0])
+    current_hp = state.active_field('current_hp', player)
+    max_hp = state.active_stats(player)[0]
+    hp = _cheek_pouch_hp(current_hp, max_hp, state.ability[player, 0], eaten)
+    state = _emit_hp_change(state, player, current_hp, hp, max_hp)
     return update_active_fields(state, player, current_hp=hp)
+
+
+def _cheek_pouch_hp(hp, max_hp, ability, eaten):
+    """Calculate the additional Cheek Pouch healing after a berry."""
+    eligible = eaten & (ability == A.CHEEK_POUCH) & (hp[0] > 0)
+    return jnp.minimum(max_hp, hp + jnp.where(eligible, jnp.maximum(1, max_hp // 3), 0))
+
+
+def _emit_hp_change(state, player, before, after, max_hp):
+    """Emit the actual HP change and its public rounded fraction."""
+    return emit(state, EventKind.HP, player, before=before, after=after,
+        hp_change=after-before,
+        hp_fraction_change=(jnp.ceil(after/max_hp*100)-jnp.ceil(before/max_hp*100))/100,
+        enabled=after[0] != before[0])
 
 
 @jax.jit
 def status_berry(state, player):
     """Eat Chesto for sleep or Lum for major status/confusion, respecting Unnerve."""
 
-    mon = state.active[player]
+    item = state.active_field('item', player)
+    status = state.active_field('status', player)
+    current_hp = state.active_field('current_hp', player)
     confused = state.volatile_status.confusion_turns[player, 0] > 0
-    lum = mon.item[0] == I.LUM_BERRY
-    eligible = ((lum & ((mon.status[0] != Status.NONE) | confused)) |
-                ((mon.item[0] == I.CHESTO_BERRY) & (mon.status[0] == Status.SLEEP)))
-    eligible &= (mon.current_hp[0] > 0) & berry_allowed(state, player)
+    lum = item[0] == I.LUM_BERRY
+    eligible = ((lum & ((status[0] != Status.NONE) | confused)) |
+                ((item[0] == I.CHESTO_BERRY) & (status[0] == Status.SLEEP)))
+    eligible &= (current_hp[0] > 0) & berry_allowed(state.ability[1-player, 0], state.active_field('current_hp', 1-player)[0])
     cure = partial(_status_berry_cure, player=player, lum=lum, confused=confused)
     return jax.lax.cond(eligible, cure, _identity, state)
 
@@ -125,7 +138,7 @@ def white_herb(state, player):
     """At an update boundary, consume once to clear all negative stat stages."""
 
     normal, accuracy = state.boosts.normal_boosts[player], state.boosts.acc_boosts[player]
-    eligible = ((state.active.item[player, 0] == I.WHITE_HERB) & (state.active.current_hp[player, 0] > 0) &
+    eligible = ((state.active_field('item', player)[0] == I.WHITE_HERB) & (state.active_field('current_hp', player)[0] > 0) &
                 (jnp.any(normal < 0) | jnp.any(accuracy < 0)))
     restore = partial(_white_herb_restore, player=player, normal=normal, accuracy=accuracy)
     return jax.lax.cond(eligible, restore, _identity, state)
@@ -143,30 +156,33 @@ def kings_rock_flinch(key, state, player, move):
 
     target = 1-player
     ability = state.ability[target, 0]
-    eligible = ((state.active.item[player, 0] == I.KINGS_ROCK) &
+    eligible = ((state.active_field('item', player)[0] == I.KINGS_ROCK) &
         (move.move_type[0] != MoveType.STATUS) & ~move.secondary_flinch[0] &
         # Sheer Force runs before the item adds its secondary. Its later
         # suppression applies only when the original move earned its boost.
         ((state.ability[player, 0] != A.SHEER_FORCE) | (move.secondary_chance[0] == 0)) &
         (ability != A.SHIELD_DUST) & (ability != A.INNER_FOCUS) &
-        (state.active.current_hp[target, 0] > 0))
+        (state.active_field('current_hp', target)[0] > 0))
     roll = partial(_kings_rock_flinch_roll, player=player, target=target)
     return jax.lax.cond(eligible, roll, _identity, (key, state))
 
 
 def consume(state, player, enabled=True):
     """Consume a held item and remember its publicly visible disappearance."""
-    mon = state.active[player]
-    used = jnp.asarray(enabled).reshape(()) & (mon.item[0] != I.NONE)
-    state = emit(state, EventKind.ITEM, player, detail=mon.item[0], enabled=used)
+    return _consume_held_item(state, player, state.active_field('item', player), enabled)
+
+
+def _consume_held_item(state, player, item, enabled):
+    """Consume the supplied current item and publish its disappearance."""
+    used = jnp.asarray(enabled).reshape(()) & (item[0] != I.NONE)
+    state = emit(state, EventKind.ITEM, player, detail=item[0], enabled=used)
     state = remember_item(state, player, I.NONE, used)
-    return update_active_fields(state, player, item=jnp.where(used, I.NONE, mon.item))
+    return update_active_fields(state, player, item=jnp.where(used, I.NONE, item))
 
 
 def _assign_item(state, holder, item, source):
     """Commit a validated public item mutation and clean up Choice lock state."""
-    mon = state.active[holder]
-    old = mon.item[0]
+    old = state.active_field('item', holder)[0]
     old_choice = is_choice_item(old)
     new_choice = is_choice_item(item)
     state = update_active_fields(state, holder, item=jnp.asarray(item, jnp.int32).reshape((1,)))
@@ -185,7 +201,7 @@ def _activate_received_item(state, holder):
     """Run represented Sitrus and Mental Herb effects after an atomic transfer."""
     state = white_herb(status_berry(after_hp_change(state, holder), holder), holder)
     v = state.volatile_status
-    herb = ((state.active.item[holder, 0] == I.MENTAL_HERB) & (state.active.current_hp[holder, 0] > 0) &
+    herb = ((state.active_field('item', holder)[0] == I.MENTAL_HERB) & (state.active_field('current_hp', holder)[0] > 0) &
             ((v.disable_turns[holder, 0] > 0) | (v.encore_turns[holder, 0] > 0) | (v.taunt_turns[holder, 0] > 0)))
     state = consume(state, holder, herb)
     v = state.volatile_status
@@ -215,11 +231,11 @@ def swap_items(state, source, target, enabled=True):
     outgoing and incoming bindings before committing. Item activation follows
     both assignments, so a received berry cannot change the transferred item.
     """
-    own, other = state.active.item[source, 0], state.active.item[target, 0]
-    species, forms = state.active.species[:, 0], state.active.form[:, 0]
+    own, other = state.active_field('item', source)[0], state.active_field('item', target)[0]
+    species, forms = state.active_field('species')[:, 0], state.active_field('form')[:, 0]
     sticky = state.ability[target, 0] == A.STICKY_HOLD
     success = (jnp.asarray(enabled).reshape(()) & (source != target) &
-        (state.active.current_hp[source, 0] > 0) & (state.active.current_hp[target, 0] > 0) & ~sticky &
+        (state.active_field('current_hp', source)[0] > 0) & (state.active_field('current_hp', target)[0] > 0) & ~sticky &
         ((own != I.NONE) | (other != I.NONE)) &
         item_transfer_allowed(species[source], forms[source], own) &
         item_transfer_allowed(species[target], forms[target], other) &
@@ -231,21 +247,26 @@ def swap_items(state, source, target, enabled=True):
 
 def refresh_paradox(state):
     """Activate once per field effect, retaining the chosen stat until it ends."""
-    ability = state.ability[:, 0]
-    field = ((ability == A.PROTOSYNTHESIS) & (effective_weather(state.weather.weather, state.ability, state.active.current_hp) == W.SUN)) | (
+    abilities = state.ability
+    ability = abilities[:, 0]
+    hp = state.active_field('current_hp')
+    items = state.active_field('item')
+    weather = effective_weather(state.weather.weather, abilities, hp)
+    field = ((ability == A.PROTOSYNTHESIS) & (weather == W.SUN)) | (
              (ability == A.QUARK_DRIVE) & (state.terrain.terrain == T.ELECTRIC))
     eligible = (ability == A.PROTOSYNTHESIS) | (ability == A.QUARK_DRIVE)
+    # Booster Energy consumption changes neither base stats nor stages.
+    best_stats = 1 + jnp.argmax(state.raw_boosted_stats[:, 1:], axis=1)
     v = state.volatile_status
     for player in range(2):
-        live = state.active.current_hp[player, 0] > 0
-        item = state.active.item[player, 0]
-        use = live & eligible[player] & ~field[player] & ~v.paradox_booster[player, 0] & (item == I.BOOSTER_ENERGY)
-        state = consume(state, player, use)
+        live = hp[player, 0] > 0
+        item = items[player]
+        use = live & eligible[player] & ~field[player] & ~v.paradox_booster[player, 0] & (item[0] == I.BOOSTER_ENERGY)
+        state = _consume_held_item(state, player, item, use)
         boosted = v.paradox_booster[player, 0] | use
         active = live & eligible[player] & (field[player] | boosted)
         # getBestStat uses stages, with Atk/Def/SpA/SpD/Spe tie order.
-        stats = state.raw_boosted_stats[player, 1:]
-        best = 1 + jnp.argmax(stats)
+        best = best_stats[player]
         old = v.paradox_stat[player, 0]
         stat = jnp.where(active, jnp.where((old >= 1) & ~use, old, best), -1)
         state = emit(state, EventKind.ABILITY, player, detail=ability[player], after=stat,
@@ -257,27 +278,30 @@ def refresh_paradox(state):
 
 def after_hp_change(state, player):
     """Consume a reactive Sitrus Berry and update only the holder's HP leaf."""
-    mon = state.active[player]
-    berry = ((mon.item[0] == I.SITRUS_BERRY) & (mon.current_hp[0] > 0) &
-             (mon.hp_percent <= .5) & berry_allowed(state, player))
-    state = consume(state, player, berry)
-    hp = jnp.minimum(mon.max_hp, mon.current_hp + jnp.where(berry, jnp.maximum(1, mon.max_hp // 4), 0))
-    state = emit(state, EventKind.HP, player, before=mon.current_hp, after=hp,
-        hp_change=hp-mon.current_hp,
-        hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
-        enabled=hp[0] != mon.current_hp[0])
-    return cheek_pouch(update_active_fields(state, player, current_hp=hp), player, berry)
+    item = state.active_field('item', player)
+    current_hp = state.active_field('current_hp', player)
+    max_hp = state.active_stats(player)[0]
+    berry = ((item[0] == I.SITRUS_BERRY) & (current_hp[0] > 0) &
+             ((current_hp[0] / max_hp) <= .5) & berry_allowed(state.ability[1-player, 0], state.active_field('current_hp', 1-player)[0]))
+    state = _consume_held_item(state, player, item, berry)
+    berry_hp = jnp.minimum(max_hp, current_hp + jnp.where(berry, jnp.maximum(1, max_hp // 4), 0))
+    final_hp = _cheek_pouch_hp(berry_hp, max_hp, state.ability[player, 0], berry)
+    # Each effect retains its own event and intermediate HP endpoint.
+    state = _emit_hp_change(state, player, current_hp, berry_hp, max_hp)
+    state = _emit_hp_change(state, player, berry_hp, final_hp, max_hp)
+    return update_active_fields(state, player, current_hp=final_hp)
 
 
 def after_hit(state, attacker, move, damage, effectiveness):
     """Activate represented held items after a damaging hit reaches its holder."""
 
     target = 1-attacker
-    mon = state.active[target]
-    policy = (mon.item[0] == I.WEAKNESS_POLICY) & (mon.current_hp[0] > 0) & (damage > 0) & (effectiveness > 1)
+    item = state.active_field('item', target)
+    current_hp = state.active_field('current_hp', target)
+    policy = (item[0] == I.WEAKNESS_POLICY) & (current_hp[0] > 0) & (damage > 0) & (effectiveness > 1)
     state = consume(state, target, policy)
     state = jax.lax.cond(jnp.asarray(policy).reshape(()), partial(_activate_weakness_policy, target=target), _identity, state)
-    bulb = ((mon.item[0] == I.ABSORB_BULB) & (mon.current_hp[0] > 0) &
+    bulb = ((item[0] == I.ABSORB_BULB) & (current_hp[0] > 0) &
             (damage > 0) & (move.type[0] == Type.WATER))
     state = consume(state, target, bulb)
     return jax.lax.cond(jnp.asarray(bulb).reshape(()),

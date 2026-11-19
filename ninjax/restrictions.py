@@ -53,11 +53,12 @@ def apply_restriction(state, attacker, move):
     v = state.volatile_status
     ident = move.identifier[0]
     last = v.last_move_id[target, 0]
-    mon = state.active[target]
-    matching = (mon.moves.identifier[:, 0] == last) & (mon.moves.current_pp[:, 0] > 0)
+    ids = state.active_move_field('identifier', target)[:, 0]
+    pp = state.active_move_field('current_pp', target)[:, 0]
+    matching = (ids == last) & (pp > 0)
     eligible = jnp.any(matching)
     selected = jnp.argmax(matching)
-    encore_ok = eligible & mon.moves.encore_eligible[selected, 0]
+    encore_ok = eligible & state.active_move_field('encore_eligible', target)[selected, 0]
     protected = (state.ability[target, 0] == A.AROMA_VEIL) | ((ident == 269) & (state.ability[target, 0] == A.OBLIVIOUS))
     disable = (ident == 50) & eligible & (last != 0) & (v.disable_turns[target, 0] == 0) & ~protected
     encore = (ident == 227) & encore_ok & (last != 0) & (v.encore_turns[target, 0] == 0) & ~protected
@@ -73,7 +74,7 @@ def apply_restriction(state, attacker, move):
         encore_turns=v.encore_turns.at[target, 0].set(jnp.where(encore, encore_duration, v.encore_turns[target, 0])),
         taunt_turns=v.taunt_turns.at[target, 0].set(jnp.where(taunt, taunt_duration, v.taunt_turns[target, 0])))
     state = state.replace(volatile_status=v)
-    herb = (disable | encore | taunt) & (mon.item[0] == I.MENTAL_HERB)
+    herb = (disable | encore | taunt) & (state.active_field('item', target)[0] == I.MENTAL_HERB)
     state = consume(state, target, herb)
     v = state.volatile_status
     return state.replace(volatile_status=v.replace(
@@ -87,8 +88,8 @@ def apply_restriction(state, attacker, move):
 def tick(state):
     """Expire restrictions at residual time, including exhausted Encore PP."""
     v = state.volatile_status
-    ids = state.active.moves.identifier[..., 0]
-    pp = state.active.moves.current_pp[..., 0]
+    ids = state.active_move_field('identifier')[..., 0]
+    pp = state.active_move_field('current_pp')[..., 0]
     valid = jnp.any((ids == v.encore_move_id) & (pp > 0), axis=1, keepdims=True)
     disable_turns = jnp.maximum(v.disable_turns-1, 0)
     encore_turns = jnp.where(valid, jnp.maximum(v.encore_turns-1, 0), 0)

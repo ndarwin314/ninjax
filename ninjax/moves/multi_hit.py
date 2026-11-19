@@ -13,7 +13,7 @@ from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import finish_damaging_move
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.model import Move
-from ninjax.moves.properties import move_accuracy
+from ninjax.moves.properties import accuracy_fields, move_accuracy_from_fields
 from ninjax.records.events import EventKind, emit
 from ninjax.records.hits import HitOutcome, record_hit
 from ninjax.side.stat_effects import conditional_reduce_boosts
@@ -49,15 +49,15 @@ def _single_hit_count(k):
     return (k, jnp.int32(1))
 
 
-def _sample_move_hit_count(k, *, move, attacker):
+def _sample_move_hit_count(k, *, hit_rule, ability, item):
     """Sample hits using the move rule and effective attacker modifiers."""
-    return sample_hit_count(k, move.hit_rule[0], attacker.ability[0], attacker.item[0])
+    return sample_hit_count(k, hit_rule, ability, item)
 
 
-def _check_multi_hit_accuracy(k, *, state, attacker_idx, move):
+def _check_multi_hit_accuracy(k, *, move, fields):
     """Advance the key for this independent accuracy check."""
     k, subkey = random.split(k)
-    return k, random.uniform(subkey) < move_accuracy(state, attacker_idx, move)[0]
+    return k, random.uniform(subkey) < move_accuracy_from_fields(move, *fields)[0]
 
 
 def _apply_multi_hit(args, *, move, index, contributors, attacker_idx, beat_up, no_recoil):
@@ -85,9 +85,11 @@ def _record_multi_hit_miss(s, *, index, attacker_idx):
 def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, no_recoil, contributors):
     """Check later-hit accuracy and apply its result."""
     key, state, total, hits = args
+    # Read accuracy fields after the preceding hit, then roll only when needed.
+    fields = accuracy_fields(state, attacker_idx)
     key, hit = jax.lax.cond(
         per_hit & (index > 0),
-        partial(_check_multi_hit_accuracy, state=state, attacker_idx=attacker_idx, move=move),
+        partial(_check_multi_hit_accuracy, move=move, fields=fields),
         _successful_check,
         key,
     )
@@ -136,8 +138,8 @@ def _multi_hit_scan(
     key, state, alive, total, hits = carry
     # Contact can induce sleep between hits; a move called by Sleep Talk
     # is allowed to continue while its user is asleep.
-    awake = (index == 0) | (state.active.status[attacker_idx, 0] != Status.SLEEP) | state.volatile_status.sleep_talk_active[attacker_idx, 0]
-    can_hit = (state.active.current_hp[attacker_idx, 0] > 0) & (state.active.current_hp[1-attacker_idx, 0] > 0) & awake
+    awake = (index == 0) | (state.active_field('status', attacker_idx)[0] != Status.SLEEP) | state.volatile_status.sleep_talk_active[attacker_idx, 0]
+    can_hit = (state.active_field('current_hp', attacker_idx)[0] > 0) & (state.active_field('current_hp', 1-attacker_idx)[0] > 0) & awake
     valid = alive & (index < target_hits) & (((move.hit_rule[0] == 1) & ~beat_up) | can_hit)
     return jax.lax.cond(
         valid,
@@ -170,7 +172,8 @@ def _roll_self_effect(k, *, move):
 
 def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     """Resolve up to ten hits in a fixed scan; initial accuracy was already checked."""
-    attacker = state.effective_active[attacker_idx]
+    ability = state.ability[attacker_idx, 0]
+    item = state.active_field('item', attacker_idx)[0]
     defender = state.effective_active[1-attacker_idx]
     beat_up = move.identifier[0] == 251
     # Beat Up includes the user even when statused; eligible teammates must
@@ -179,15 +182,16 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     eligible = state.roster[attacker_idx] & ((slots == state.active_index[attacker_idx, 0]) |
         ((state.team.current_hp[attacker_idx, :, 0] > 0) & (state.team.status[attacker_idx, :, 0] == Status.NONE)))
     contributors = jnp.nonzero(eligible, size=6, fill_value=0)[0]
+    hit_rule = move.hit_rule[0]
     key, target_hits = jax.lax.cond(
-        move.hit_rule[0] == 1,
+        hit_rule == 1,
         _single_hit_count,
-        partial(_sample_move_hit_count, move=move, attacker=attacker),
+        partial(_sample_move_hit_count, hit_rule=hit_rule, ability=ability, item=item),
         key,
     )
     target_hits = jnp.where(beat_up, jnp.sum(eligible), target_hits)
     # Loaded Dice and Skill Link remove multiaccuracy in the pinned generation.
-    per_hit = move.per_hit_accuracy[0] & (attacker.ability[0] != AbilityEnum.SKILL_LINK) & (attacker.item[0] != ItemEnum.LOADED_DICE)
+    per_hit = move.per_hit_accuracy[0] & (ability != AbilityEnum.SKILL_LINK) & (item != ItemEnum.LOADED_DICE)
     no_recoil = move.replace(recoil_percent=jnp.where(move.hit_rule == 1, move.recoil_percent, 0))
     (key, state, _, damage, hits), _ = jax.lax.scan(
         partial(
@@ -208,7 +212,7 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     # aggregated across hits.
     # Scale Shot (Showdown move ID 799) lowers Defense and raises Speed after hitting.
     state = jax.lax.cond(
-        (move.identifier[0] == 799) & (hits > 0) & (state.active.current_hp[attacker_idx, 0] > 0),
+        (move.identifier[0] == 799) & (hits > 0) & (state.active_field('current_hp', attacker_idx)[0] > 0),
         partial(_scale_shot_boosts, attacker_idx=attacker_idx),
         _identity,
         state,

@@ -29,5 +29,9 @@ TYPE_EFFECTIVENESS = jnp.array(
 
 def calculate_effectiveness_multiplier(attacking_type, defending_types) -> Array:
     """Multiply type matchup factors across the defending Pokémon types."""
-    temp = TYPE_EFFECTIVENESS[attacking_type, defending_types]
-    return jnp.prod(temp)
+    return jnp.prod(type_effectiveness_factors(attacking_type, defending_types))
+
+
+def type_effectiveness_factors(attacking_type, defending_types) -> Array:
+    """Look up the matchup factor for each defending type."""
+    return TYPE_EFFECTIVENESS[attacking_type, defending_types]

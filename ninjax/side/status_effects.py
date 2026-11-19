@@ -56,16 +56,29 @@ def status_helper(key, active, status: Status):
     The counter is sampled from 2 through 4 inclusive for sleep and set to zero
     for other statuses. The returned key has been advanced once.
     """
+    key, sleep_counter = _roll_sleep_counter(key, status)
+    return key, active.replace(status=status, sleep_counter=sleep_counter)
+
+
+def _roll_sleep_counter(key, status):
+    """Advance the status key and sample a counter only used for sleep."""
     key, sub_key = random.split(key, 2)
     # The move transition decrements this counter before checking sleep.
     turns = random.randint(sub_key, (1,), minval=2, maxval=5)[0]
-    active = active.replace(status=status, sleep_counter=turns*(status==Status.SLEEP))
-    return key, active
+    return key, turns * (status == Status.SLEEP)
 
 
-def _unchanged_status(key, active, status):
-    """Preserve key and Pokémon when a status attempt is blocked."""
-    return key, active
+def _apply_status_fields(key, old_status, old_sleep, status):
+    """Return only the status and sleep counter that the caller writes back."""
+    key, sleep = _roll_sleep_counter(key, status)
+    new_status = jnp.asarray(status, old_status.dtype).reshape(old_status.shape)
+    new_sleep = jnp.asarray(sleep, old_sleep.dtype).reshape(old_sleep.shape)
+    return key, new_status, new_sleep
+
+
+def _unchanged_status(key, old_status, old_sleep, status):
+    """Preserve the status fields and key when a status attempt is blocked."""
+    return key, old_status, old_sleep
 
 
 def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, activate_items=True) -> Tuple[chex.PRNGKey, BattleState]:
@@ -73,16 +86,19 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, 
 
     Existing status, represented terrain/type/ability immunities, and a NONE status
     prevent the update. Rest delays item activation until its healing completes.
-    A key is consumed only when ``status_helper`` runs.
+    A key is consumed only when the status is applied.
     """
-    active = state.active[side_idx]
-    already_statused = active.status != Status.NONE
+    old_status = state.active_field('status', side_idx)
+    old_sleep = state.active_field('sleep_counter', side_idx)
+    already_statused = old_status != Status.NONE
     is_immune = state.is_status_immune(side_idx, status)
-    key, active = jax.lax.cond(
-        (triple_or(already_statused, is_immune, status==Status.NONE) | (active.current_hp <= 0))[0],
+    fainted = state.active_field('current_hp', side_idx) <= 0
+    # Keep the conditional operands limited to the fields changed by status.
+    key, new_status, new_sleep = jax.lax.cond(
+        (triple_or(already_statused, is_immune, status == Status.NONE) | fainted)[0],
         _unchanged_status,
-        status_helper,
-        key, active, status)
-    state = update_active_fields(state, side_idx, status=active.status, sleep_counter=active.sleep_counter)
+        _apply_status_fields,
+        key, old_status, old_sleep, status)
+    state = update_active_fields(state, side_idx, status=new_status, sleep_counter=new_sleep)
 
     return key, jax.lax.cond(jnp.asarray(activate_items), partial(_activate_status_berry, side_idx=side_idx), _identity, state)

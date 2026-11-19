@@ -23,7 +23,7 @@ def compiled_field_status():
 
 
 @pytest.mark.parametrize('player', [0, 1])
-@pytest.mark.parametrize('name', ['Clear Smog', 'Steel Roller', 'Rapid Spin', 'Tackle'])
+@pytest.mark.parametrize('name', ['Clear Smog', 'Ice Spinner', 'Rapid Spin', 'Tackle'])
 def test_hit_callback_scope(neutral_type, compiled_after_damage, player, name):
     """Stage, terrain and hazard callbacks change only their intended state."""
     _, state = neutral_type
@@ -45,7 +45,7 @@ def test_hit_callback_scope(neutral_type, compiled_after_damage, player, name):
     assert jnp.array_equal(out.boosts.normal_boosts, expected_normal)
     assert jnp.array_equal(out.boosts.acc_boosts, expected_accuracy)
     assert jnp.array_equal(out.spikes, expected_spikes)
-    assert out.terrain.terrain == (TerrainEnum.NONE if name == 'Steel Roller' else TerrainEnum.GRASSY)
+    assert out.terrain.terrain == (TerrainEnum.NONE if name == 'Ice Spinner' else TerrainEnum.GRASSY)
     assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
 
 
