@@ -12,14 +12,15 @@ import jax.numpy as jnp
 from ninjax.calculations.stats import Nature, StatTable
 from ninjax.data.load_json import dex
 from ninjax.enums.field import TerrainEnum, WeatherEnum
-from ninjax.enums.moves import MoveFlags, MoveType
+from ninjax.enums.moves import HitRule, MoveFlags, MoveType
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.moves.model import Move
+from ninjax.moves.support import is_move_supported
 from ninjax.pokemon import Pokemon
 from ninjax.tree import stack
 
 
-CATALOGUE = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'prototype-moves.json').read_text())
+CATALOGUE = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'moves.json').read_text())
 STAT_NAMES = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
 
 # Showdown's Terastallized form names use the same Ivy Cudgel typing.
@@ -31,27 +32,51 @@ FORM_IDS = {name + suffix: value for name, value in {
 
 
 def make_move(name):
-    """Create a supported sandbox move or an unavailable placeholder."""
+    """Project metadata, enabling PP only for reviewed singles implementations.
+
+    Known unsupported moves retain their identity and metadata for observations
+    and diagnostics, but have zero PP and ``implemented=False``.
+    """
     data = CATALOGUE.get(name)
-    supported = data is not None
+    supported = data is not None and is_move_supported(name)
     data = data or dict(type='Normal', category='Status', power=0, accuracy=1., priority=0, pp=0, num=0, contact=False)
     category = MoveType[data['category'].upper()]
     physical = int(category) == int(MoveType.PHYSICAL)
     effects = {}
+    # Normalize Showdown condition IDs on the host, never inside traced code.
+    weather_ids = {'raindance': WeatherEnum.RAIN, 'sunnyday': WeatherEnum.SUN,
+                   'sandstorm': WeatherEnum.SANDSTORM, 'snowscape': WeatherEnum.SNOW}
+    terrain_ids = {'electricterrain': TerrainEnum.ELECTRIC, 'grassyterrain': TerrainEnum.GRASSY,
+                   'psychicterrain': TerrainEnum.PSYCHIC, 'mistyterrain': TerrainEnum.MISTY}
+    if data.get('weather'):
+        effects['weather_effect'] = jnp.array([weather_ids[data['weather'].lower()]])
+    if data.get('terrain'):
+        effects['terrain_effect'] = jnp.array([terrain_ids[data['terrain'].lower()]])
+    if data.get('target') in ('self', 'allySide', 'all') and category == MoveType.STATUS:
+        effects['target_self'] = jnp.array([True])
+    effects['primary_confusion'] = jnp.array([data.get('volatileStatus') == 'confusion'])
     stat_ids = {'atk': 1, 'def': 2, 'spa': 3, 'spd': 4, 'spe': 5, 'accuracy': 6, 'evasion': 7}
     status_ids = {'brn': Status.BURN, 'psn': Status.POISON, 'tox': Status.TOXIC,
                   'par': Status.PARALYZE, 'slp': Status.SLEEP, 'frz': Status.FREEZE}
+    for source, destination in (('overrideOffensiveStat', 'offensive_stat'),
+                                ('overrideDefensiveStat', 'defensive_stat')):
+        if data.get(source):
+            effects[destination] = jnp.array([stat_ids[data[source]]])
     # Move metadata is projected on the host; traced transitions only consume
     # arrays. Stat-index and stage vectors are padded by Move on construction.
+    secondary = data.get('secondary') or {}
+    self_effect = data.get('self') or secondary.get('self') or {}
     for prefix, boosts in [('boost', data.get('boosts', {})),
-                           ('self', data.get('self', {}).get('boosts', {}))]:
+                           ('self', self_effect.get('boosts', {}))]:
         if boosts:
             effects[f'{prefix}_stat'] = jnp.array([stat_ids[stat] for stat in boosts])
             effects[f'{prefix}_stages'] = jnp.array(list(boosts.values()))
     if data.get('boosts'):
-        effects['target_self'] = jnp.array([True])
-    secondary = data.get('secondary') or {}
-    effects['self_chance'] = jnp.array([data.get('self', {}).get('chance', 100) / 100])
+        # Top-level boosts apply to the move's target, which may be the user.
+        effects['target_self'] = jnp.array([data.get('target') == 'self'])
+    # Secondary self boosts use the secondary effect's chance.
+    self_chance = self_effect.get('chance', 100 if data.get('self') else secondary.get('chance', 100))
+    effects['self_chance'] = jnp.array([self_chance / 100])
     if data.get('status'):
         effects['status_effect'] = jnp.array([status_ids[data['status']]])
     if data.get('heal'):
@@ -75,19 +100,23 @@ def make_move(name):
         effects['offensive_stat'] = jnp.array([2])
     if name == 'Psyshock':
         effects['defensive_stat'] = jnp.array([2])
-    if name in ('Bullet Seed', 'Scale Shot', 'Tail Slap', 'Rock Blast'):
-        effects['hit_rule'] = jnp.array([2])
-    if name in ('Triple Axel', 'Surging Strikes'):
-        effects['hit_rule'] = jnp.array([3])
-    if name == 'Population Bomb':
-        effects['hit_rule'] = jnp.array([4])
-    if name in ('Triple Axel', 'Population Bomb'):
+    # Catalogue multi-hit counts describe fixed hits or the standard 2–5 distribution.
+    multihit = data.get('multihit')
+    if multihit == [2, 5]:
+        effects['hit_rule'] = jnp.array([HitRule.TWO_TO_FIVE])
+    elif multihit == 2:
+        effects['hit_rule'] = jnp.array([HitRule.FIXED_TWO])
+    elif multihit == 3:
+        effects['hit_rule'] = jnp.array([HitRule.FIXED_THREE])
+    elif name == 'Population Bomb':
+        effects['hit_rule'] = jnp.array([HitRule.POPULATION_BOMB])
+    if name in ('Triple Axel', 'Triple Kick', 'Population Bomb'):
         effects['per_hit_accuracy'] = jnp.array([True])
-    if name == 'Triple Axel':
+    if name in ('Triple Axel', 'Triple Kick'):
         effects['escalating_power'] = jnp.array([True])
     if name == 'Surging Strikes':
         effects['always_crit'] = jnp.array([True])
-    if name in ('U-turn', 'Volt Switch'):
+    if name in ('U-turn', 'Volt Switch', 'Flip Turn'):
         effects['switch_out'] = jnp.array([True])
     if name in ('Swords Dance', 'Nasty Plot'):
         effects.update(target_self=jnp.array([True]), boost_stat=jnp.array([StatEnum.ATTACK if name == 'Swords Dance' else StatEnum.SPECIAL_ATTACK]), boost_stages=jnp.array([2]))
@@ -111,7 +140,7 @@ def make_move(name):
         effects['perish_effect'] = jnp.array([True])
     if name == 'Defog':
         effects['always_hit'] = jnp.array([True])
-    pp = data['pp'] * 8 // 5
+    pp = data['pp'] * 8 // 5 if supported else 0
     flags = (int(MoveFlags.CONTACT) if data['contact'] else 0) | (int(MoveFlags.BULLET) if name in ('Bullet Seed', 'Rock Blast') else 0) | (int(MoveFlags.PUNCHING) if name == 'Surging Strikes' else 0)
     for source, flag in [('sound', MoveFlags.SOUND), ('bullet', MoveFlags.BULLET),
                          ('pulse', MoveFlags.LAUNCHER), ('bite', MoveFlags.BITING),
@@ -161,7 +190,7 @@ def make_sandbox_teams(reference):
             # Captures use Showdown IDs; catalogue keys are display names.
             by_id = {data['id']: name for name, data in CATALOGUE.items()}
             display = [by_id.get(n, n) for n in names]
-            missing = [n for n in display if n not in CATALOGUE]
+            missing = [n for n in display if not is_move_supported(n)]
             omissions.append({'species': species, 'moves': missing, 'ability': config.get('ability'), 'item': config.get('item')})
             types = [int(Type[t.upper()]) for t in record['types']]
             mons.append(Pokemon(type_list=jnp.array(types + [0]*(2-len(types))), moves=stack([make_move(n) for n in display]),

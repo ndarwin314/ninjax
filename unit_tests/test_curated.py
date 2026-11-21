@@ -15,6 +15,12 @@ from ninjax.teams.curated import (
 )
 
 
+@pytest.fixture(scope='module')
+def compiled_sample_teams():
+    """Reuse the sampling executable across compatible team pools."""
+    return jax.jit(sample_teams)
+
+
 def test_curated_file_and_defaults():
     """Load the evolving curated file and verify independent parser defaults."""
     sets = load_sets()
@@ -52,7 +58,7 @@ Ability: Protean
         parse_sets('X @ Y\nAbility: Z\nUnexpected: ignored')
 
 
-def test_sampled_teams_and_explicit_omissions():
+def test_sampled_teams_and_explicit_omissions(compiled_sample_teams):
     """Sampling is reproducible and projected mechanics are reported."""
     sets = load_sets()
     pool, omissions = make_sandbox_pool(sets)
@@ -65,8 +71,8 @@ def test_sampled_teams_and_explicit_omissions():
     assert pool.stat_table.nature.increased[0, 0] == 5
     assert pool.stat_table.nature.decreased[0, 0] == 3
     key = jax.random.key(42)
-    teams, indices = jax.jit(sample_teams)(key, pool)
-    again, repeated = jax.jit(sample_teams)(key, pool)
+    teams, indices = compiled_sample_teams(key, pool)
+    again, repeated = compiled_sample_teams(key, pool)
     assert indices.shape == (2, 6)
     assert jnp.all(jnp.diff(jnp.sort(indices, axis=-1), axis=-1) > 0)
     assert jnp.array_equal(indices, repeated)
@@ -78,7 +84,7 @@ def test_sampled_teams_and_explicit_omissions():
         assert omissions[row]['item'] == sets[row].item
 
 
-def test_curated_item_projection():
+def test_curated_item_projection(compiled_sample_teams):
     """Every current curated item survives construction and sampling."""
     sets = load_sets()
     pool, reports = make_item_pool(sets, abilities=True)
@@ -95,7 +101,7 @@ def test_curated_item_projection():
     i = next(i for i, s in enumerate(sets) if s.species == 'Gastrodon')
     assert pool.item[i, 0] == ItemEnum.ABSORB_BULB and reports[i]['item'] is None
     assert all(report['item'] is None or not report['item'] for report in reports)
-    teams, indices = jax.jit(sample_teams)(jax.random.key(3), pool)
+    teams, indices = compiled_sample_teams(jax.random.key(3), pool)
     assert jnp.array_equal(teams.item, pool.item[indices])
 
 

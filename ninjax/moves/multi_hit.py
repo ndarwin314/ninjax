@@ -9,6 +9,7 @@ import jax.random as random
 
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
+from ninjax.enums.moves import HitRule
 from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import finish_damaging_move
 from ninjax.moves.hit_resolution import resolve_damaging_hit
@@ -41,7 +42,11 @@ def sample_hit_count(key, rule, ability, item):
     skill = ability == AbilityEnum.SKILL_LINK
     standard = jnp.where(skill, 5, jnp.where(dice, random.randint(extra_key, (), 4, 6), ordinary))
     population = jnp.where(dice, random.randint(extra_key, (), 4, 11), 10)
-    return key, jnp.where(rule == 1, 1, jnp.where(rule == 2, standard, jnp.where(rule == 3, 3, population)))
+    return key, jnp.where(
+        rule == HitRule.SINGLE, 1, jnp.where(
+            rule == HitRule.TWO_TO_FIVE, standard, jnp.where(
+                rule == HitRule.FIXED_TWO, 2, jnp.where(
+                    rule == HitRule.FIXED_THREE, 3, population))))
 
 
 def _single_hit_count(k):
@@ -140,7 +145,7 @@ def _multi_hit_scan(
     # is allowed to continue while its user is asleep.
     awake = (index == 0) | (state.active_field('status', attacker_idx)[0] != Status.SLEEP) | state.volatile_status.sleep_talk_active[attacker_idx, 0]
     can_hit = (state.active_field('current_hp', attacker_idx)[0] > 0) & (state.active_field('current_hp', 1-attacker_idx)[0] > 0) & awake
-    valid = alive & (index < target_hits) & (((move.hit_rule[0] == 1) & ~beat_up) | can_hit)
+    valid = alive & (index < target_hits) & (((move.hit_rule[0] == HitRule.SINGLE) & ~beat_up) | can_hit)
     return jax.lax.cond(
         valid,
         partial(
@@ -184,7 +189,7 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     contributors = jnp.nonzero(eligible, size=6, fill_value=0)[0]
     hit_rule = move.hit_rule[0]
     key, target_hits = jax.lax.cond(
-        hit_rule == 1,
+        hit_rule == HitRule.SINGLE,
         _single_hit_count,
         partial(_sample_move_hit_count, hit_rule=hit_rule, ability=ability, item=item),
         key,
@@ -192,7 +197,7 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     target_hits = jnp.where(beat_up, jnp.sum(eligible), target_hits)
     # Loaded Dice and Skill Link remove multiaccuracy in the pinned generation.
     per_hit = move.per_hit_accuracy[0] & (ability != AbilityEnum.SKILL_LINK) & (item != ItemEnum.LOADED_DICE)
-    no_recoil = move.replace(recoil_percent=jnp.where(move.hit_rule == 1, move.recoil_percent, 0))
+    no_recoil = move.replace(recoil_percent=jnp.where(move.hit_rule == HitRule.SINGLE, move.recoil_percent, 0))
     (key, state, _, damage, hits), _ = jax.lax.scan(
         partial(
             _multi_hit_scan,

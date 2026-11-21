@@ -18,8 +18,9 @@ from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import secondary_effects
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.status import do_status_move
+from ninjax.moves.support import is_move_supported
 from ninjax.side.updates import update_active
-from ninjax.teams.construction import CATALOGUE, make_move
+from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 
 
@@ -50,8 +51,8 @@ def test_every_random_battle_role(role):
 @pytest.mark.parametrize('name', sorted(REFERENCE['moves']))
 def test_supported_move_metadata_matches_showdown(name):
     """Check represented scalar metadata for every move in the format."""
-    if name not in CATALOGUE:
-        pytest.skip('Unimplemented random-battle move: ' + name)
+    if not is_move_supported(name):
+        pytest.skip('Unavailable or unreviewed random-battle move: ' + name)
     expected = REFERENCE['moves'][name]
     move = make_move(name)
     assert move.implemented[0]

@@ -176,9 +176,10 @@ def test_forced_struggle_and_knockout_outcomes(neutral_type):
     perish = base.replace(perish_turns=jnp.ones((2, 1), jnp.int32),
                           team=base.team.replace(stat_table=base.team.stat_table.replace(
                               base_stats=base.team.stat_table.base_stats.at[0, :, StatEnum.SPEED].set(1))))
-    _, out = jax.jit(step_field)(key, perish)
+    field_step = jax.jit(step_field)
+    _, out = field_step(key, perish)
     assert out.winner == 0
-    _, out = jax.jit(step_field)(key, perish.replace(trick_room_duration=jnp.int32(3)))
+    _, out = field_step(key, perish.replace(trick_room_duration=jnp.int32(3)))
     assert out.winner == 1
 
 

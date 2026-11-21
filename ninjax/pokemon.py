@@ -60,7 +60,6 @@ class Pokemon(ArrayTree):
 
     @property
     def max_hp(self):
-        # TODO: idk if this works long term but im doing this as a hack right now
         return self.stat_table.stats[...,0]
 
     @property
@@ -73,7 +72,6 @@ class Pokemon(ArrayTree):
     def hp_greater_than(self, percent):
         return jnp.greater(self.hp_percent, percent)
 
-    # TODO: this method doesnt seem to work properly for stacked pokemon
     def is_type(self, t: Type):
         return jnp.any(self.type_list==t, axis=-1, keepdims=True)
 

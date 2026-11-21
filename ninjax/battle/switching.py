@@ -69,9 +69,9 @@ def _no_forced_switch(key, state, attacker):
                                           jnp.int32(0), key)
 
 
-def force_switch_target(key, state, attacker):
-    """Prepare and immediately execute a random forced switch for direct callers."""
-    key, state, request = prepare_forced_switch(key, state, attacker)
+def force_switch_target(key, state, attacker, *, wind=True):
+    """Execute a random drag, distinguishing Whirlwind from sound-based Roar."""
+    key, state, request = prepare_forced_switch(key, state, attacker, wind=wind)
     return key, execute_forced_switch(state, request)
 
 
@@ -80,10 +80,10 @@ def _wind_rider_boost(s, *, target):
     return add_boosts(s, target, StatEnum.ATTACK, 1)
 
 
-def _fail_forced_switch(k, s, *, wind_rider, anchored, allowed, target, ability, attacker):
+def _fail_forced_switch(k, s, *, wind_rider, anchored, soundproof, allowed, target, ability, attacker):
     """Record failure and reveal represented ability-based prevention."""
     s = jax.lax.cond(wind_rider, partial(_wind_rider_boost, target=target), _identity, s)
-    reveal = wind_rider | (anchored & jnp.any(allowed))
+    reveal = wind_rider | soundproof | (anchored & jnp.any(allowed))
     slot = s.active_index[target, 0]
     s = s.replace(known_abilities=s.known_abilities.at[target, slot].set(jnp.where(reveal, ability, s.known_abilities[target, slot])))
     s = emit(s, EventKind.ABILITY, target, detail=ability, enabled=reveal)
@@ -91,7 +91,8 @@ def _fail_forced_switch(k, s, *, wind_rider, anchored, allowed, target, ability,
     # missing bench or Wind Rider, it does not boost Stomping Tantrum.
     drag_prevented = anchored & jnp.any(allowed) & ~wind_rider
     s = record_hit(s, 0, target,
-        jnp.where(drag_prevented, HitOutcome.HIT, HitOutcome.FAILED),
+        jnp.where(soundproof, HitOutcome.IMMUNE,
+                  jnp.where(drag_prevented, HitOutcome.HIT, HitOutcome.FAILED)),
         jnp.where(drag_prevented, HitRecipient.POKEMON, HitRecipient.NONE))
     return _no_forced_switch(k, s, attacker)
 
@@ -104,24 +105,28 @@ def _sample_forced_switch(k, s, *, allowed, target):
     return k, s, request
 
 
-def prepare_forced_switch(key, state, attacker):
+def prepare_forced_switch(key, state, attacker, *, wind=True):
     """Resolve drag immunity and sample a replacement without applying entry effects.
 
     Only a successful request splits the key, preserving the selection/entry
     key sequence and blocked-attempt outcomes of immediate forced switching.
+    ``wind`` distinguishes Whirlwind's Wind Rider check from Roar's Soundproof
+    check; ordinary hit routing also checks the move's sound flag.
     """
     target = 1-attacker
     ability = state.ability[target, 0]
-    wind_rider = ability == AbilityEnum.WIND_RIDER
+    wind_rider = (ability == AbilityEnum.WIND_RIDER) & wind
     anchored = (ability == AbilityEnum.SUCTION_CUPS) | (ability == AbilityEnum.GUARD_DOG)
+    soundproof = ~jnp.asarray(wind) & (ability == AbilityEnum.SOUNDPROOF)
     allowed = state.roster[target] & (state.team.current_hp[target, :, 0] > 0) & (jnp.arange(6) != state.active_index[target, 0])
-    blocked = wind_rider | anchored | ~jnp.any(allowed)
+    blocked = wind_rider | anchored | soundproof | ~jnp.any(allowed)
     return jax.lax.cond(
         blocked,
         partial(
             _fail_forced_switch,
             wind_rider=wind_rider,
             anchored=anchored,
+            soundproof=soundproof,
             allowed=allowed,
             target=target,
             ability=ability,

@@ -38,15 +38,17 @@ def test_policy_forced_continuation():
 
 
 def test_damage_boosts_use_each_players_stages():
+    """Reuse one compiled stat calculation across the critical-hit cases."""
     stats = jnp.full((2, 6), 100)
     stages = jnp.zeros((2, 6), jnp.int32).at[0, 1].set(2).at[1, 2].set(-2)
     boosts = StatBoosts(normal_boosts=stages, acc_boosts=jnp.zeros((2, 2), jnp.int32))
-    attack, defense = jax.jit(raw_boosted_stats)(stats, boosts, 0, False, False, False)
+    compiled_stats = jax.jit(raw_boosted_stats)
+    attack, defense = compiled_stats(stats, boosts, 0, False, False, False)
     assert attack[1] == 200
     assert defense[2] == 50
-    _, defense = jax.jit(raw_boosted_stats)(stats, boosts, 0, False, False, True)
+    _, defense = compiled_stats(stats, boosts, 0, False, False, True)
     assert defense[2] == 50  # Critical hits preserve defensive drops.
-    _, defense = jax.jit(raw_boosted_stats)(stats, boosts, 0, True, False, False)
+    _, defense = compiled_stats(stats, boosts, 0, True, False, False)
     assert defense[2] == 100
 
 

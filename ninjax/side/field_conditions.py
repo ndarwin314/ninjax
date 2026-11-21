@@ -87,7 +87,8 @@ def field_status(state, player, move):
     ident = move.identifier[0]
     old_tailwind = state.tailwind[player, 0]
     duration = jnp.where(state.active.item[player, 0] == I.LIGHT_CLAY, 8, 5)
-    for name, enabled in [('light_screen', ident == 113),
+    for name, enabled in [('reflect', ident == 115),
+                          ('light_screen', ident == 113),
                           ('aurora_veil', (ident == 694) & (effective_weather(state.weather.weather, state.ability, state.active.current_hp) == W.SNOW)),
                           ('tailwind', ident == 366)]:
         current = getattr(state, name)

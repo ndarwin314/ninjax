@@ -1,4 +1,5 @@
 """Controlled checks for multi-hit rules and per-hit state transitions."""
+from ninjax.enums.moves import HitRule
 import jax
 import jax.numpy as jnp
 
@@ -9,7 +10,7 @@ from ninjax.enums.moves import MoveType
 from ninjax.enums.pokemon import StatEnum as S, Status
 from ninjax.moves.effects import after_every_hit
 from ninjax.moves.execution import move_used
-from ninjax.moves.multi_hit import resolve_multi_hit
+from ninjax.moves.multi_hit import resolve_multi_hit, sample_hit_count
 from ninjax.records.events import EventKind
 from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
@@ -23,12 +24,13 @@ def hit_events(state, target=1):
 
 def test_catalogue_distinguishes_multi_hit_rules():
     """Move metadata describes each implemented curated hit pattern."""
-    assert int(make_move('Bullet Seed').hit_rule[0]) == 2
-    assert int(make_move('Surging Strikes').hit_rule[0]) == 3
+    assert int(make_move('Bullet Seed').hit_rule[0]) == HitRule.TWO_TO_FIVE
+    assert int(make_move('Double Hit').hit_rule[0]) == HitRule.FIXED_TWO
+    assert int(make_move('Surging Strikes').hit_rule[0]) == HitRule.FIXED_THREE
     assert bool(make_move('Surging Strikes').always_crit[0])
     assert bool(make_move('Triple Axel').per_hit_accuracy[0])
     assert bool(make_move('Triple Axel').escalating_power[0])
-    assert int(make_move('Population Bomb').hit_rule[0]) == 4
+    assert int(make_move('Population Bomb').hit_rule[0]) == HitRule.POPULATION_BOMB
     assert not bool(make_move('Beat Up').implemented[0])
 
 
@@ -179,3 +181,9 @@ def test_first_miss_consumes_one_pp_without_hits(neutral_type):
     _, hit = use(key, state.replace(team=state.team.replace(moves=moves)), 0, 0)
     assert hit.active.moves.current_pp[0, 0, 0] == bullet.current_pp[0] - 1
     assert 2 <= jnp.sum(hit_events(hit)) <= 5
+
+
+def test_fixed_two_hit_rule_is_jittable():
+    """Fixed-two moves produce two hits under JIT, regardless of modifiers."""
+    _, count = jax.jit(sample_hit_count)(jax.random.PRNGKey(0), HitRule.FIXED_TWO, 0, 0)
+    assert int(count) == 2

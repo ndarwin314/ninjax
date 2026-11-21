@@ -7,13 +7,15 @@ all role candidates, not every legal four-move combination or interaction.
 import json
 from pathlib import Path
 
+from ninjax.moves.support import SUPPORTED_MOVES
 from ninjax.teams.construction import CATALOGUE
 from ninjax.teams.curated import CURATED_ABILITIES, CURATED_ITEMS
 
 
 def coverage_report(reference):
     """Return exhaustive role/move/ability gaps and explicitly sampled item gaps."""
-    missing_moves = sorted(set(reference['moves']) - CATALOGUE.keys())
+    supported = SUPPORTED_MOVES & CATALOGUE.keys()
+    missing_moves = sorted(set(reference['moves']) - supported)
     missing_abilities = sorted(set(reference['abilities']) - CURATED_ABILITIES.keys())
     missing_items = sorted(set(reference['sampledItems']) - CURATED_ITEMS.keys())
     affected = [f"{r['species']}:{r['index']}" for r in reference['roles']
@@ -22,6 +24,11 @@ def coverage_report(reference):
     return {'revision': reference['revision'], 'format': reference['format'],
             'roles': len(reference['roles']), 'moves': len(reference['moves']),
             'supported_moves': len(reference['moves']) - len(missing_moves),
+            'move_support_scope': 'Reviewed represented singles effects; not exhaustive interaction or doubles parity.',
+            'catalogue_moves': len(CATALOGUE),
+            'supported_catalogue_moves': len(supported),
+            'unsupported_catalogue_moves': sorted(CATALOGUE.keys() - supported),
+            'supported_move_names': sorted(set(reference['moves']) & supported),
             'abilities': len(reference['abilities']),
             'projected_abilities': len(reference['abilities']) - len(missing_abilities),
             'projected_ability_names': len(CURATED_ABILITIES),

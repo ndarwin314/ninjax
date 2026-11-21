@@ -142,7 +142,7 @@ def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
         last_move_id=v.last_move_id.at[attacker_index, 0].set(move.identifier[0]),
         called_move_id=v.called_move_id.at[attacker_index, 0].set(0),
         protect_chain=v.protect_chain.at[attacker_index, 0].set(
-            jnp.where((move.identifier[0] == 182) | (move.identifier[0] == 596), v.protect_chain[attacker_index, 0], 0))))
+            jnp.where((move.identifier[0] == 182) | (move.identifier[0] == 197) | (move.identifier[0] == 596), v.protect_chain[attacker_index, 0], 0))))
 
     state = state.replace(hit_results=HitResults.empty(), event_source=jnp.asarray(attacker_index, jnp.int32),
                           event_move=move.identifier[0], event_cause=jnp.int32(Cause.MOVE))

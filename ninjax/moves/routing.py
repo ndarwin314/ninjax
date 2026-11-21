@@ -182,14 +182,15 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
 
     state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
         _prepare_struggle_hit, _prepare_normal_hit, state, attacker_index, move)
-    # Only Whirlwind routed to the status branch can request a switch. Misses,
+    # Only status drags routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
-    forced = (branch == 1) & (move.identifier[0] == 18)
+    forced = (branch == 1) & ((move.identifier[0] == 18) | (move.identifier[0] == 46))
     key, state = jax.lax.switch(jnp.where(forced, 6, branch),
         [do_damaging_move, _status_move_effects, do_stat_boost_from_move,
          do_flash_fire_from_move, do_healing_from_move, is_immune, _defer_forced_switch],
         key, state, attacker_index, move, stat, boost_value)
-    key, state, request = jax.lax.cond(forced, prepare_forced_switch, _no_forced_switch,
+    key, state, request = jax.lax.cond(forced,
+                                      partial(prepare_forced_switch, wind=move.identifier[0] == 18), _no_forced_switch,
                                       key, state, attacker_index)
     state = execute_forced_switch(state, request)
     requested = move.switch_out[0] & (branch <= 1)

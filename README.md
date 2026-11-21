@@ -41,9 +41,8 @@ separate decisions. A decision cap catches nonterminating runs.
 This is explicitly a sandbox projection, not a replay of the original Showdown
 game: items and abilities are neutralized, and unsupported move slots are
 unavailable (zero PP). The output lists every omission. If no usable move remains,
-Struggle is available. Supported moves and their pinned reference parameters are
-listed in [prototype-moves.json](ninjax/data/prototype-moves.json); this small
-catalogue comes from Showdown commit `23b41aa29e2ff5ff80e03f57b257b595a5852047`.
+Struggle is available. Move reference parameters are loaded from [moves.json](ninjax/data/moves.json).
+The catalogue contains moves with effects beyond the subset implemented by the engine.
 Supported families include plain damage, priority, pivots, single-stat boosts,
 status, healing, weather, terrain, and entry hazards. Generic move effects are
 described in [the design guide](docs/design/implemented-move-effects.md).

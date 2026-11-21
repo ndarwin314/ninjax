@@ -7,6 +7,15 @@ import jax.numpy as jnp
 from ninjax.enums.base import JaxEnum
 
 
+class HitRule(JaxEnum):
+    """Number of hits or distribution used by a damaging move."""
+    SINGLE = 1
+    TWO_TO_FIVE = 2
+    FIXED_TWO = 3
+    FIXED_THREE = 4
+    POPULATION_BOMB = 5
+
+
 class ProtectionKind(JaxEnum):
     """Turn-scoped protection variants sharing the consecutive-use counter."""
     NONE = 0

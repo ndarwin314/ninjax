@@ -10,6 +10,7 @@ import jax.random as random
 from ninjax.ability_effects import worry_seed
 from ninjax.battle.switching import force_switch_target
 from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.field import TerrainEnum
 from ninjax.enums.moves import ProtectionKind
 from ninjax.enums.pokemon import Status
 from ninjax.moves.model import Move
@@ -22,7 +23,7 @@ from ninjax.side.hp_effects import take_damage_percent, take_damage_value
 from ninjax.side.item_effects import after_hp_change, status_berry, swap_items
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
-from ninjax.side.status_effects import set_status
+from ninjax.side.status_effects import apply_confusion, set_status
 from ninjax.side.updates import update_active_fields
 
 
@@ -116,8 +117,8 @@ def create_substitute(state, player):
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     """Execute a status move directly, including immediate forced switching."""
     return jax.lax.cond(
-        move.identifier[0] == 18,
-        partial(force_switch_target, attacker=attacker_idx),
+        (move.identifier[0] == 18) | (move.identifier[0] == 46),
+        partial(force_switch_target, attacker=attacker_idx, wind=move.identifier[0] == 18),
         partial(
             _status_move_effects,
             attacker_idx=attacker_idx,
@@ -251,6 +252,16 @@ def _record_status_failure(s, *, target):
     return record_hit(s, 0, target, HitOutcome.FAILED)
 
 
+def _apply_primary_confusion(key, state, target):
+    """Apply a primary confusion attempt through the shared immunity/berry path."""
+    return apply_confusion(key, state, target)
+
+
+def _skip_primary_confusion(key, state, target):
+    """Preserve key/state when this status move has no confusion component."""
+    return key, state
+
+
 def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value):
     """Apply the generic status-move fields and return the key and state.
 
@@ -261,7 +272,7 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     # Consecutive Protect attempts succeed with probability 1 / 3**chain.
     key, protect_key = random.split(key)
     v = state.volatile_status
-    protect = (move.identifier[0] == 182) | (move.identifier[0] == 596)
+    protect = (move.identifier[0] == 182) | (move.identifier[0] == 197) | (move.identifier[0] == 596)
     success = protect & (random.uniform(protect_key) < jnp.power(1 / 3., v.protect_chain[attacker_idx, 0]))
     v = v.replace(protected=v.protected.at[attacker_idx, 0].set(success),
                   protection_kind=v.protection_kind.at[attacker_idx, 0].set(jnp.where(success,
@@ -293,6 +304,20 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     state = stat_changes(state, target, move.boost_stat, move.boost_stages, target != attacker_idx)
     # Pure stat moves fail if every represented stage change was prevented.
     stat_failed = jnp.any(move.boost_stages != 0) & jnp.all(old_normal == state.boosts.normal_boosts[target]) & jnp.all(old_accuracy == state.boosts.acc_boosts[target])
+    # A successful confusion attempt counts even if Lum Berry immediately cures
+    # it. Conversely Swagger/Flatter can succeed solely through their boosts.
+    confusion_eligible = ((state.volatile_status.confusion_turns[target, 0] == 0) &
+        (state.ability[target, 0] != AbilityEnum.OWN_TEMPO) &
+        ~((state.terrain.terrain == TerrainEnum.MISTY) & state.is_grounded(target)[0]))
+    key, state = jax.lax.cond(move.primary_confusion[0],
+        _apply_primary_confusion, _skip_primary_confusion, key, state, target)
+    stat_success = jnp.any(move.boost_stages != 0) & ~stat_failed
+    confusion_failed = move.primary_confusion[0] & ~confusion_eligible & ~stat_success
+    stat_failed &= ~move.primary_confusion[0]
+    # Reapplying an active field condition fails without refreshing its timer.
+    field_failed = ((move.weather_effect[0] != 0) & (state.weather.weather == move.weather_effect[0])) | (
+        (move.terrain_effect[0] != 0) & (state.terrain.terrain == move.terrain_effect[0])) | (
+        (move.identifier[0] == 115) & (state.reflect[attacker_idx, 0] > 0))
     state = field_status(state, attacker_idx, move)
 
     state = apply_restriction(state, attacker_idx, move)
@@ -308,7 +333,7 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
         sticky_webs=state.sticky_webs.at[target].set(state.sticky_webs[target] | (hazard == 2)),
         spikes=state.spikes.at[target].set(jnp.minimum(3, state.spikes[target] + (hazard == 3))),
         toxic_spikes=state.toxic_spikes.at[target].set(jnp.minimum(2, state.toxic_spikes[target] + (hazard == 4))))
-    failed = (protect & ~success) | heal_failed | status_failed | stat_failed
+    failed = (protect & ~success) | heal_failed | status_failed | stat_failed | confusion_failed | field_failed
     state = jax.lax.cond(failed, partial(_record_status_failure, target=target), _identity, state)
     return key, state
 

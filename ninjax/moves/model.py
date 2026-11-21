@@ -4,7 +4,7 @@ from dataclasses import field, fields
 import jax
 import jax.numpy as jnp
 
-from ninjax.enums.moves import MoveFlags
+from ninjax.enums.moves import HitRule, MoveFlags
 from ninjax.tree import ArrayTree, is_tree_placeholder
 
 
@@ -37,14 +37,15 @@ class Move(ArrayTree):
     switch_out: jax.Array = field(default_factory=lambda: jnp.array([False]))
     implemented: jax.Array = field(default_factory=lambda: jnp.array([True]))
     target_self: jax.Array = field(default_factory=lambda: jnp.array([False]))
+    # Primary confusion composes with target boosts (Swagger and Flatter).
+    primary_confusion: jax.Array = field(default_factory=lambda: jnp.array([False]))
     status_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
     boost_stat: jax.Array = field(default_factory=lambda: jnp.array([-1]))
     boost_stages: jax.Array = field(default_factory=lambda: jnp.array([0]))
     weather_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
     terrain_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
-    # 1 = one hit; 2 = Gen 9 two-to-five distribution; 3 = fixed three;
-    # 4 = Population Bomb's ten attempts. Accuracy is independently specified.
-    hit_rule: jax.Array = field(default_factory=lambda: jnp.array([1]))
+    # Accuracy is independently specified by per_hit_accuracy.
+    hit_rule: jax.Array = field(default_factory=lambda: jnp.array([HitRule.SINGLE]))
     per_hit_accuracy: jax.Array = field(default_factory=lambda: jnp.array([False]))
     escalating_power: jax.Array = field(default_factory=lambda: jnp.array([False]))
     always_crit: jax.Array = field(default_factory=lambda: jnp.array([False]))
@@ -106,7 +107,7 @@ class Move(ArrayTree):
                     value = jnp.pad(value, padding)
                 object.__setattr__(self, name, value)
                 continue
-            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
+            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'primary_confusion', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):

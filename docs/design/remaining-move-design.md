@@ -1,12 +1,168 @@
-# Curated move architecture and remaining interactions
+# Move implementation coverage and remaining architecture
 
 Scarlet/Violet is the default ruleset. After implementing Disable, Encore and
 Taunt, Worry Seed, Ivy Cudgel, Blizzard, Hurricane, Substitute, Electro Shot,
 Hyper Beam, Destiny Bond, Knock Off, Trick, Switcheroo, Roost, High Jump Kick,
 Explosion, Memento, Spiky Shield, Fake Out, Sucker Punch, Stomping Tantrum and
-Foul Play, Beat Up, Sleep Talk and Whirlwind, no curated moves remain
-unavailable in the singles sandbox projection. The restriction design
-discussion below records the chosen dedicated-field approach.
+Foul Play, Beat Up, Sleep Talk and Whirlwind, all move slots in the original
+curated sets have represented singles implementations. This does not cover the
+expanded `moves.json` catalogue. The restriction design discussion below records
+the chosen dedicated-field approach.
+
+## Current coverage contract
+
+The catalogue contains **685 moves**, of which **409** have reviewed represented
+singles effects and **276** remain unavailable or unreviewed. In the pinned Gen 9
+random-battle inventory, **250 of 348** moves are supported and **98** remain
+gaps. These are implementation counts, not exhaustive interaction-parity counts.
+
+The explicit support inventory is
+[`supported-moves.json`](../../ninjax/data/supported-moves.json), read through
+`ninjax.moves.support`. It includes the previous 242-move projection plus reviewed
+generic damage, status, stat-change, drain, recoil and multi-hit additions.
+Catalogue membership, successful construction, and neutral damage probes alone
+do not establish implementation support. New names fail closed until reviewed.
+
+`make_move` retains known metadata for unsupported entries but sets
+`implemented=False` and PP to zero. Team construction reports these entries as
+omissions even when they occur in `moves.json`. Random-battle metadata checks
+skip unsupported entries explicitly. Controlled probes remain limited comparisons
+of the particular effects they exercise, not certifications of whole moves.
+
+Regenerate the machine-readable report with the configured project interpreter:
+
+```sh
+.venv/bin/python -m tools.audit_random_battle_mechanics > docs/design/gen9-random-coverage.json
+```
+
+The [coverage report](gen9-random-coverage.json) lists all unavailable catalogue
+moves, supported random-battle names, random-battle gaps and affected roles.
+The report uses the same support inventory as construction. Its ability/item
+sections retain their separate projection and sampling scopes. Existing
+historical batch counts in other design documents describe those earlier runs.
+
+To enable a move, review its complete primary effect and metadata against the
+execution path, add any required mechanics and focused regressions, then add its
+display name to the support inventory and regenerate the report. Do not infer
+support from base power, move flags or the existence of a catalogue record.
+
+## Implementation readiness after the catalogue field expansion
+
+The expanded catalogue now supplies `volatileStatus`, `sideCondition`,
+`selfSwitch`, `forceSwitch`, `weather`, `terrain`, `overrideOffensiveStat`,
+`overrideDefensiveStat`, `ignoreOffensive`, `ignoreNegativeOffensive` and
+`ignorePositiveDefensive`, alongside the existing `ignoreDefensive` field.
+These are host-side JSON descriptors. Construction now projects weather, terrain,
+primary confusion and stat overrides into move arrays. Reflect, Detect, Flip Turn
+and Roar reuse existing execution paths; some dispatch still selects by move
+name or ID. Other condition strings remain descriptors without lifecycle support.
+
+### Implemented batch using existing singles state
+
+These **17 moves are now enabled** using existing singles state and shared
+mechanics. The table records the wiring for this batch. Primary confusion adds
+one boolean move-metadata leaf, not a new battle-state condition. Focused behavior
+checks are in `unit_tests/test_wired_moves.py`; support remains scoped to the
+represented singles effects and the existing interaction limitations.
+
+| Catalogue information | Enabled moves | Wiring and scope |
+| --- | --- | --- |
+| `weather` | Sandstorm, Snowscape | Normalize weather names into `WeatherEnum`, project `weather_effect`, and reuse `set_weather` and existing weather residuals. Ensure field targeting avoids opponent-only immunity and Substitute checks. |
+| `terrain` | Electric Terrain, Psychic Terrain, Misty Terrain | Map into `TerrainEnum`, project `terrain_effect`, and reuse `set_terrain` with field targeting. Grassy Terrain is already enabled. |
+| `sideCondition: reflect` | Reflect | Extend screen application to the existing `BattleState.reflect` timer, including Light Clay, expiry and existing physical-damage reduction. Side targeting must bypass opponent-only hit gates. |
+| `overrideDefensiveStat: def` | Psystrike, Secret Sword | Project `defensive_stat` from metadata instead of limiting the override to Psyshock. Body Press's `overrideOffensiveStat: def` likewise describes an already-enabled effect. |
+| `volatileStatus: confusion` | Confuse Ray, Supersonic, Sweet Kiss | Dispatch primary confusion through `side.status_effects.apply_confusion` after normal hit checks; retain its existing counter, immunity and switch lifecycle. |
+| `volatileStatus: confusion` plus `boosts` | Flatter, Swagger | Compose the existing target stat-change and confusion helpers in move order. Determine success for the whole move: a blocked boost must not automatically discard successful confusion, or vice versa. |
+| `volatileStatus: confusion`, `target: allAdjacent` | Teeter Dance | Reuse primary confusion for the opposing active in singles. Full doubles execution still needs target enumeration and an attempt for each eligible adjacent Pokémon. |
+| `volatileStatus: protect` | Detect | Share Protect's execution, consecutive-use counter and protection kind. Inherit the documented outstanding protection-timing limitations. |
+| `selfSwitch: true` on a damaging move | Flip Turn | Project `switch_out` and reuse the U-turn/Volt Switch pivot continuation. Preserve no-switch behavior on a miss, protection or absorption and when the user cannot switch. |
+| `forceSwitch: true` on a status move | Roar | Generalize Whirlwind's ID-specific routing to a forced-switch descriptor. Reuse replacement selection, switch lifecycle and displaced-actor cancellation, while applying Roar's sound flag and keeping Whirlwind-specific wind handling separate. |
+
+Weather strings are not consistently cased: the current values include
+`RainDance`, `Sandstorm`, `sunnyday` and `snowscape`. Normalize them through an
+explicit mapping; `snowscape` selects `WeatherEnum.SNOW`. Terrain values are
+Showdown condition IDs such as `electricterrain`. Do this conversion on the
+host and pass numeric, fixed-shape metadata into traced execution.
+
+### Described by the new fields, with additional execution work
+
+| Moves | What the fields provide | Work still required |
+| --- | --- | --- |
+| Teleport, Chilly Reception | `selfSwitch: true`; Chilly Reception also has `weather: snowscape` | Reuse the existing pivot request with status/field targeting and correct success rules. Chilly Reception must set snow before switching. Verify replacement availability and queued-action timing; a status pivot cannot simply use damage-success rules. |
+| Parting Shot | `selfSwitch: true` and sound/bypass flags | Its current record has no `boosts` vector for the offensive drops. Add those semantics and compose drops, reflection/immunity handling and switching with move-specific success rules. |
+| Dragon Tail, Circle Throw | `forceSwitch: true` | Add a damaging-hit switch continuation, gated by the actual `HitResult` recipient and survival. Substitute interception must not drag the target; do not reuse Whirlwind's status-only gate unchanged. |
+| Baton Pass, Shed Tail | `selfSwitch: copyvolatile` or `shedtail`; Shed Tail also names `substitute` | Typed transfer policies and departure/entry lifecycle. Shed Tail additionally needs its own HP cost and transfer timing; naming Substitute does not implement those rules. |
+| Revival Blessing | `selfSwitch: true` | This marker is insufficient to describe revival. Implement fainted-party-member selection and HP restoration; do not treat it as an ordinary active-Pokémon pivot. |
+| Mist, Safeguard, Quick Guard, Wide Guard | Named `sideCondition` values | Side-condition state/timers or turn-scoped guards and their consumers in stat, status and move routing. Reflect's existing timer does not provide these effects. |
+| Baneful Bunker, Burning Bulwark, Silk Trap, Endure | Named protection/survival volatiles | Extend protection kinds and retaliation or damage-survival rules. Detect can share ordinary Protect; these variants cannot. |
+| Bind, Fire Spin, Infestation, Magma Storm, Sand Tomb, Thunder Cage, Whirlpool, Wrap | `volatileStatus: partiallytrapped` | Source-aware trapping state, duration, residual damage, switch restrictions and cleanup. |
+| Aqua Ring, Attract, Charge, Curse, Defense Curl, Dragon Cheer, Focus Energy, Gastro Acid, Imprison, Ingrain, Leech Seed, Magnet Rise, Minimize, No Retreat, Power Trick, Smack Down, Stockpile, Tar Shot, Torment, Yawn | Their condition identity | Move-specific condition payloads, application rules, consumers and expiry. The condition string identifies the required handler; it does not supply its lifecycle. |
+
+`selfSwitch` must retain its distinction between boolean `true`, `copyvolatile`
+and `shedtail`; reducing all three to a boolean loses transfer semantics. The
+Revival Blessing record also demonstrates why even boolean `true` requires
+move-specific interpretation. Likewise, compound moves must execute every
+required effect before claiming support.
+
+### Gaps the field expansion does not resolve
+
+The added stat-ignore fields need separate offensive/defensive stage policies
+if used; they must not all map to the existing defensive-ignore boolean.
+Currently `ignoreOffensive`, `ignoreNegativeOffensive` and
+`ignorePositiveDefensive` are false for every catalogue entry. The true
+`ignoreDefensive` entries are Darkest Lariat and Sacred Sword, both already
+enabled, so these additions alone unlock no additional move names.
+
+The existing `secondaries` list describes Fire Fang, Ice Fang, Thunder Fang and
+Triple Arrows, but construction still reads only singular `secondary`. These
+moves still need multiple-effect representation and independent rolls. Tri
+Attack and Dire Claw require custom status-selection rules beyond those lists.
+Similarly, `thawsTarget` is present in the catalogue but is not projected into
+the current Fire-type-only target-thaw path.
+
+Facade, Hex, Eruption, Electro Ball and Freeze-Dry still need contextual damage
+rules; Wish and Future Sight still need pending-effect state; Solar Beam still
+needs its charge/weather rules; Seismic Toss still needs fixed-damage dispatch.
+None becomes implemented merely through the new condition/switch/stat fields.
+Transformations, richer battle history and doubles target resolution remain
+architectural work as described below.
+
+The metadata-wiring batch is implemented. Next candidates are status pivots and
+damaging forced switches, with the composition requirements listed above. The
+support inventory and generated coverage report include the seventeen additions.
+
+### Remaining architecture families
+
+The examples below are unavailable or partial; the report is the full inventory.
+Some moves need several of these capabilities.
+
+| Missing support | Example moves | Required extension |
+| --- | --- | --- |
+| Wiring existing primitives | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
+| Conditional damage/type rules | Facade, Hex, Eruption, Electro Ball, Freeze-Dry, Flying Press, Hydro Steam | Resolve contextual power, category, typing and effectiveness before damage. |
+| Multiple/custom secondaries | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
+| Residual conditions and trapping | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
+| Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
+| Restrictions and prerequisites | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
+| Charge/recharge/locked sequences | Solar Beam, Meteor Beam, Giga Impact, Outrage, Rollout | Generalize Electro Shot/Hyper Beam continuations and interruption rules. |
+| Preparation and semi-invulnerability | Fly, Dig, Dive, Phantom Force, Focus Punch, Beak Blast | Preparation timing, targetability and pre-execution reactions. |
+| Damage/action/team history | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
+| Protection and survival | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Additional protection variants, retaliation, bypass and HP survival rules. Detect now shares ordinary Protect. |
+| Switching composition and state transfer | Dragon Tail, Circle Throw, Parting Shot, Chilly Reception, Teleport, Baton Pass, Shed Tail | The switch descriptors are available; add trigger-specific continuations, compound-effect ordering and transfer policies. Flip Turn and Roar are implemented above. |
+| Item lifecycle | Thief, Bug Bite, Incinerate, Fling, Recycle, Stuff Cheeks, Teatime | Theft/consumption operations, provenance and recoverable-item history. |
+| Ability/type/form/moveset mutation | Skill Swap, Gastro Acid, Soak, Conversion, Transform, Mimic, Sketch | Eligibility, lifecycle hooks, restoration, copied PP and public knowledge. |
+| Custom stats, healing and costs | Belly Drum, Guard Split, Power Trick, Stockpile, Strength Sap, Synthesis, Revival Blessing | Direct assignments, HP costs, counters, contextual healing and party selection. |
+| Special damage outcomes | Seismic Toss, Final Gambit, Fissure, False Swipe, Present, Steel Beam, Supercell Slam | Fixed/OHKO damage, HP floors, direct costs, randomized outcomes and crash rules. |
+| Field/accuracy conditions | Gravity, Magic Room, Wonder Room, Safeguard, Mist, Magnet Rise, Lock-On, Focus Energy | Application plus lifecycle and consumers for each condition. |
+| Calls and queue manipulation | Metronome, Copycat, Instruct, After You, Quash, Upper Hand, Thunderclap | Call eligibility/history, queued prerequisites and action reordering. |
+| Doubles targeting/combinations | Follow Me, Rage Powder, Ally Switch, Helping Hand, Wide Guard, Dragon Darts, pledges | Target coordinates, redirection, spread plans, per-active queues and combinations. |
+| Transformations | Tera Blast, Tera Starstorm | Eligibility and transformation lifecycle; requests are currently rejected. |
+
+Supported means the represented singles effect exists, not that every exception
+is complete. Known cross-cutting gaps include status-failure classification,
+protection failure timing, residual ordering, non-Fire target-thaw metadata,
+ability/item interactions and full-environment batching acceptance. In particular,
+the existing Matcha Gotcha implementation does not establish target-thaw parity.
 
 Actions now use `BattleAction(index, move_type)` with `ActionType.ATTACK`,
 `SWITCH`, `CONTINUED`, and `NO_OP`. Queued actions retain this PyTree. The
@@ -28,9 +184,9 @@ user's pre-faint HP for damage calculation and commits its faint before target
 resolution; Damp prevents it. Memento uses `HitResult` to require reaching the
 target, then attempts its stat drops and directly faints even if they fail.
 
-Spiky Shield shares Protect's consecutive-use counter and tracks its variant
+Detect and Spiky Shield share Protect's consecutive-use counter; Spiky Shield tracks its variant
 for blocked-contact damage. Unseen Fist bypasses it; Long Reach and Magic Guard
-prevent its retaliation. Both protection moves still share the existing
+prevent its retaliation. All three protection moves still share the existing
 limitation around use when no other action remains.
 
 Fake Out counts move-action attempts in switch-cleared state. The scheduler
@@ -80,7 +236,7 @@ key and runs the normal switch lifecycle. Queued actions retain their original
 actor slot, so the displaced Pokémon's action is cancelled. The represented
 Wind Rider, Suction Cups and Guard Dog checks prevent the forced switch.
 
-No curated move remains unavailable, but additional forced-switch interactions,
+No original curated move remains unavailable, but additional forced-switch interactions,
 protection variants, status-failure classification, ability/item interactions
 and new charge/semi-invulnerable variants still need work. The focused tests do
 not establish full parity or a completed compiled acceptance pass. See
