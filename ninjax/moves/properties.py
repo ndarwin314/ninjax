@@ -1,6 +1,7 @@
 """Properties helpers for immutable JAX battle state."""
 import jax.numpy as jnp
 
+from ninjax.calculations.damage import resolve_variable_base_power
 from ninjax.calculations.modifiers import (
     COMPOUND_EYES_MULTIPLIER,
     VICTORY_STAR,
@@ -13,10 +14,7 @@ from ninjax.enums.items import ItemEnum, ItemEnum as I
 from ninjax.enums.moves import MoveFlags, MoveResult, MoveType
 from ninjax.enums.pokemon import FormEnum, Type
 from ninjax.side.queries import (
-    conditional_mult_round as fixed_modifier,
-    conditional_mult_round,
     effective_weather,
-    item_transfer_allowed,
     is_floating_fields,
 )
 
@@ -32,8 +30,7 @@ def effective_move(state, attacker_index, move):
     excluded = _excludes_type_conversion(move.identifier)
     # Normalize runs before move-specific type callbacks in the pinned rules.
     normalize = (ability == AbilityEnum.NORMALIZE) & ~excluded
-    move = move.replace(type=jnp.where(normalize, Type.NORMAL, move.type),
-        base_power=fixed_modifier(move.base_power, 4915/4096, normalize))
+    move = move.replace(type=jnp.where(normalize, Type.NORMAL, move.type))
     move = move_overrides(state, attacker_index, move)
     move = move.replace(priority=_ability_priority(state, attacker_index, move, move.type, move.priority, ability))
     normal = (move.type == Type.NORMAL) & ~excluded
@@ -44,8 +41,7 @@ def effective_move(state, attacker_index, move):
     move_type = jnp.where(normal & (ability == AbilityEnum.REFRIGERATE), Type.ICE, move_type)
     move_type = jnp.where(normal & (ability == AbilityEnum.GALVANIZE), Type.ELECTRIC, move_type)
     move_type = jnp.where((ability == AbilityEnum.LIQUID_VOICE) & move.sound, Type.WATER, move_type)
-    return move.replace(type=move_type, base_power=fixed_modifier(move.base_power, 4915/4096,
-                        changed))
+    return move.replace(type=move_type, type_power_boost=normalize | changed)
 
 
 def _excludes_type_conversion(identifier):
@@ -156,27 +152,16 @@ def move_overrides(state, player, move):
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
     types = state.effective_types(player)
     item = state.active_field('item', player)
-    power = jnp.where((ident == 512) & (item == I.NONE), 110, move.base_power)
-    power = jnp.where((ident == 707) & (state.volatile_status.previous_move_result[player] == MoveResult.FAILED), power * 2, power)
-
     opponent = 1-player
-    target_item = state.active_field('item', opponent)[0]
-    species = state.active_field('species', opponent)[0]
-    form = state.active_field('form', opponent)[0]
-    knock_boost = (ident == 282) & (target_item != I.NONE) & item_transfer_allowed(species, form, target_item)
-    power = conditional_mult_round(power, 1.5, knock_boost)
     positive = jnp.sum(jnp.maximum(state.boosts.normal_boosts[player, 1:], 0)) + jnp.sum(jnp.maximum(state.boosts.acc_boosts[player], 0))
-    power = jnp.where(ident == 500, 20 + 20 * positive, power)
     weight = _move_overrides_weight(state.active_field('weight_hg', player), abilities[player])
     target_weight = _move_overrides_weight(state.active_field('weight_hg', opponent), abilities[opponent])
-    low_kick = 20 + 20 * sum((target_weight >= threshold).astype(jnp.int32) for threshold in (100, 250, 500, 1000, 2000))
-    heavy_slam = jnp.where(weight >= 5*target_weight, 120,
-                 jnp.where(weight >= 4*target_weight, 100,
-                 jnp.where(weight >= 3*target_weight, 80,
-                 jnp.where(weight >= 2*target_weight, 60, 40))))
-    power = jnp.where(ident == 67, low_kick, power)
-    power = jnp.where(ident == 484, heavy_slam, power)
-    power = jnp.where((ident == 311) & (weather != W.NONE), 100, power)
+    # Gather only the live inputs needed by the pure variable-power formulas.
+    power = resolve_variable_base_power(move.base_power, move.power_rule,
+        no_item=item == I.NONE,
+        previous_failed=state.volatile_status.previous_move_result[player] == MoveResult.FAILED,
+        positive_stages=positive, user_weight=weight, target_weight=target_weight,
+        weather_active=weather != W.NONE)
     move_type = _override_type(state, player, ident, move.type, weather, types)
     priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
     return move.replace(base_power=power, type=move_type, priority=priority)

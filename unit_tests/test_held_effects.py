@@ -94,7 +94,7 @@ def test_pixilate_changes_effective_move_without_changing_slot(neutral_type):
     original = state.active[0].moves[0]
     move = jax.jit(effective_move)(state, 0, original)
     assert move.type[0] == Type.FAIRY
-    assert move.base_power[0] == 96
+    assert move.base_power[0] == 80 and move.type_power_boost[0]
     assert state.active[0].moves[0].type[0] == Type.NORMAL
 
 

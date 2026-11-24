@@ -4,7 +4,7 @@ from dataclasses import field, fields
 import jax
 import jax.numpy as jnp
 
-from ninjax.enums.moves import HitRule, MoveFlags
+from ninjax.enums.moves import HitRule, MoveFlags, PowerRule
 from ninjax.tree import ArrayTree, is_tree_placeholder
 
 
@@ -27,6 +27,7 @@ class Move(ArrayTree):
     offensive_stat: jax.Array
     defensive_stat: jax.Array
     crit_stage: jax.Array
+    power_rule: jax.Array = field(default_factory=lambda: jnp.array([PowerRule.FIXED]))
     move_flags: jax.Array = field(default_factory=lambda: jnp.array([0]))
     recoil_percent: jax.Array = field(default_factory=lambda: jnp.array([0]))
     healing_fraction: jax.Array = field(default_factory=lambda: jnp.array([0.]))
@@ -38,6 +39,8 @@ class Move(ArrayTree):
     implemented: jax.Array = field(default_factory=lambda: jnp.array([True]))
     target_self: jax.Array = field(default_factory=lambda: jnp.array([False]))
     # Primary confusion composes with target boosts (Swagger and Flatter).
+    # Whether type conversion earned its priority-23 power modifier.
+    type_power_boost: jax.Array = field(default_factory=lambda: jnp.array([False]))
     primary_confusion: jax.Array = field(default_factory=lambda: jnp.array([False]))
     status_effect: jax.Array = field(default_factory=lambda: jnp.array([0]))
     boost_stat: jax.Array = field(default_factory=lambda: jnp.array([-1]))
@@ -107,7 +110,7 @@ class Move(ArrayTree):
                     value = jnp.pad(value, padding)
                 object.__setattr__(self, name, value)
                 continue
-            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'primary_confusion', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
+            dtype = jnp.bool_ if name in ('switch_out', 'implemented', 'target_self', 'primary_confusion', 'type_power_boost', 'disabled', 'self_ko', 'perish_effect', 'per_hit_accuracy', 'escalating_power', 'always_crit', 'secondary_flinch', 'secondary_confusion', 'ignore_defensive', 'always_hit', 'protectable', 'encore_eligible', 'sleep_talk_eligible') else (jnp.float32 if name in ('accuracy', 'recoil_percent', 'healing_fraction', 'secondary_chance', 'drain_fraction', 'self_chance') else jnp.int32)
             object.__setattr__(self, name, jnp.broadcast_to(jnp.asarray(getattr(self, name), dtype), shape))
 
     def reduce_pp(self, index, increment):

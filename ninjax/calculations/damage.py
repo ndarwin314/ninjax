@@ -1,137 +1,261 @@
-
-
-
+"""Pure intrinsic-power formulas and ordered battle damage calculations."""
 import chex
+import jax.lax
 import jax.numpy as jnp
 
 from ninjax.calculations.logic import triple_and, triple_or
 from ninjax.calculations.modifiers import (
-    IRON_FIST,
-    RECKLESS,
-    TERRAIN_MULTIPLIER,
-    TOUGH_CLAWS,
     conditional_mult,
     conditional_mult_prod,
     conditional_mult_prod_round,
     conditional_mult_round,
-    four_thirds,
     one_point_three,
 )
 from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier, type_effectiveness_factors
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.moves import MoveFlags, MoveType
+from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from ninjax.side.queries import conditional_mult_round as fixed_modifier, is_floating
+from ninjax.side.queries import conditional_mult_round as fixed_modifier, is_floating, item_transfer_allowed
 
 
 Array = chex.Array
+
+def status_base_power(base_power, target_status, target_ability):
+    """Resolve status-dependent base power multiplier for Hex and Infernal Parade"""
+    has_status = (target_status != Status.NONE) | (target_ability == AbilityEnum.COMATOSE)
+    return jnp.where(has_status, base_power * 2, base_power)
+
+def proportional_hp_base_power(scale, current_hp, max_hp):
+    """Resolve base power for moves that deal damage based on proportion of HP remaining"""
+    return jnp.maximum(scale * current_hp // jnp.maximum(max_hp, 1), 1)
+
+
+def target_hp_base_power(scale, current_hp, max_hp):
+    """Resolve base power for moves that deal damage based on the proportion of opponent's hp remaining"""
+    hp_ratio = (current_hp * 4096) // jnp.maximum(max_hp, 1)
+    scaled = (scale * 100 * hp_ratio + 2047) // 4096
+    return jnp.maximum(scaled // 100, 1)
+
+
+def electro_ball_base_power(user_speed, target_speed):
+    """Resolve base power of Electro Ball"""
+    ratio = user_speed // jnp.maximum(target_speed, 1)
+    ratio = jnp.where(target_speed == 0, 0, ratio)
+    return jnp.select((ratio >= 4, ratio >= 3, ratio >= 2, ratio >= 1),
+                      (150, 120, 80, 60), default=40)
+
+
+def gyro_ball_base_power(user_speed, target_speed):
+    """Resolve capped integer Gyro Ball power with a safe zero-Speed fallback."""
+    power = 25 * target_speed // jnp.maximum(user_speed, 1) + 1
+    return jnp.where(user_speed == 0, 1, jnp.minimum(150, power))
+
+
+def resolve_hit_base_power(base_power, rule, user_hp, user_max_hp, target_hp,
+                           target_max_hp, target_status, target_ability,
+                           user_speed, target_speed):
+    """Resolve live intrinsic formulas before Technician and other modifiers.
+
+    Previously resolved property-time rules and per-hit plan powers pass through.
+    Numeric branches use safe denominators so unselected formulas remain finite.
+    """
+    return jnp.select(
+        (rule == PowerRule.TARGET_STATUS, rule == PowerRule.USER_HP,
+         rule == PowerRule.TARGET_HP_120, rule == PowerRule.TARGET_HP_100,
+         rule == PowerRule.ELECTRO_BALL, rule == PowerRule.GYRO_BALL),
+        (status_base_power(base_power, target_status, target_ability),
+         proportional_hp_base_power(base_power, user_hp, user_max_hp),
+         target_hp_base_power(120, target_hp, target_max_hp),
+         target_hp_base_power(100, target_hp, target_max_hp),
+         electro_ball_base_power(user_speed, target_speed),
+         gyro_ball_base_power(user_speed, target_speed)), default=base_power).astype(jnp.int32)
+
 
 def compute_base_power(
         attacker: Pokemon,
         defender: Pokemon,
         move: Move,
-        terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None) -> chex.Array:
-    """Calculate represented power modifiers, including grounded terrain effects."""
+        terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None,
+        user_speed=1, target_speed=1) -> chex.Array:
+    """Resolve live intrinsic power, then apply ordered power modifiers.
 
-    power = fixed_modifier(move.base_power, 1.5,
-        (move.identifier == 797) & (terrain.terrain == TerrainEnum.PSYCHIC) &
-        (~is_floating(attacker) | jnp.asarray(gravity_active)))
-    power = fixed_modifier(power, 1.25, (defender.ability == AbilityEnum.DRY_SKIN) & (move.type == Type.FIRE))
+    BasePower event factors are chained as 4096-based integers in descending
+    Showdown priority, then applied once with half-down rounding.
+    Existing property-time rules and hit-plan powers pass through unchanged.
+    HP, status and speed callbacks use this hit's effective snapshots before
+    Technician. Callers must supply effective user/target speeds for speed rules,
+    independently of critical-hit and Unaware damage-stat adjustments.
+    """
     if raw_effectiveness is None:
         raw_effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
-    power = fixed_modifier(power, 5461/4096, (move.identifier == 879) & (raw_effectiveness > 1))
-    ability = attacker.ability
-    #TODO: tera boost
-    # TODO at some point test if this can be optimized by putting all the values in arrays and doing one conditional mult round
-
-    # dark and fairy aura
-    # both of these  apply to both sides
-    fairy_aura = jnp.logical_and(move.type==Type.FAIRY,
-                                 jnp.logical_or(ability==AbilityEnum.FAIRY_AURA, defender.ability==AbilityEnum.FAIRY_AURA))
-    dark_aura = jnp.logical_and(move.type==Type.DARK,
-                                 jnp.logical_or(ability==AbilityEnum.DARK_AURA, defender.ability==AbilityEnum.DARK_AURA))
-    aura = jnp.logical_or(fairy_aura, dark_aura)
-    aura_break = jnp.logical_or(attacker.ability==AbilityEnum.AURA_BREAK, defender.ability==AbilityEnum.AURA_BREAK)
-
-    power = conditional_mult_round(power, four_thirds, jnp.logical_and(aura, 1-aura_break))
-    power = conditional_mult_round(power, 3/4, jnp.logical_and(aura, aura_break))
-
-
-    power = fixed_modifier(power, 5325/4096,
-        (ability == AbilityEnum.SAND_FORCE) & (weather == WeatherEnum.SANDSTORM) &
-        ((move.type == Type.ROCK) | (move.type == Type.GROUND) | (move.type == Type.STEEL)))
-    #technician
-    is_technician = ability==AbilityEnum.TECHNICIAN
-    is_technician_boosted = jnp.logical_and(
-        is_technician,
-        jnp.less_equal(power, 60)
-    )
-    power = conditional_mult(power, 1.5, is_technician_boosted)
-    # toxic boost
-    is_toxic_boosted = triple_and(
-        ability==AbilityEnum.TOXIC_BOOST,
-        attacker.is_poisoned,
-        move.move_type==MoveType.PHYSICAL
-    )
-    power = conditional_mult(power, 1.5, is_toxic_boosted)
-    # flare boost
-    is_flare_boosted = triple_and(
-        ability==AbilityEnum.FLARE_BOOST,
-        attacker.status==Status.BURN,
-        move.move_type==MoveType.SPECIAL
-    )
-    power = conditional_mult(power, 1.5, is_flare_boosted)
-
-    is_grounded = ~is_floating(attacker) | jnp.asarray(gravity_active)
-    t = terrain.terrain
-    terrain_boosted = triple_or(
-        jnp.logical_and(move.type==Type.GRASS, t==TerrainEnum.GRASSY),
-        jnp.logical_and(move.type == Type.PSYCHIC, t == TerrainEnum.PSYCHIC),
-        jnp.logical_and(move.type==Type.ELECTRIC, t==TerrainEnum.ELECTRIC),
-    )
-    terrain_boosted = jnp.logical_and(terrain_boosted, is_grounded)
-    power = conditional_mult_round(power, TERRAIN_MULTIPLIER, terrain_boosted)
+    grounded_user = ~is_floating(attacker) | jnp.asarray(gravity_active)
     grounded_target = ~is_floating(defender) | jnp.asarray(gravity_active)
-    # Earthquake (Showdown move ID 89) is weakened by Grassy Terrain.
-    weakened = ((t == TerrainEnum.GRASSY) & (move.identifier == 89)) | (
-        (t == TerrainEnum.MISTY) & (move.type == Type.DRAGON))
-    power = conditional_mult_round(power, .5, grounded_target & weakened)
+    # Rising Voltage is a basePowerCallback, before Technician's power check.
+    power = resolve_hit_base_power(move.base_power, move.power_rule, attacker.current_hp,
+        attacker.max_hp, defender.current_hp, defender.max_hp, defender.status,
+        defender.ability, user_speed, target_speed)
+    power = resolve_terrain_base_power(power, move.power_rule, terrain.terrain, grounded_target)
+    # Supported effects have a fixed priority sequence. Equal-priority attacker
+    # abilities are mutually exclusive; matching auras contribute only once.
+    modifier = jnp.ones_like(power, dtype=jnp.int32) * 4096
+    modifier = chain_attacker_power_modifiers(modifier, power, move, attacker.ability,
+        weather)
+    modifier = chain_aura_power_modifiers(modifier, move.type, attacker.ability, defender.ability)
+    modifier = chain_status_and_defender_power_modifiers(modifier, move, attacker.ability,
+        defender.ability, attacker.is_poisoned, attacker.status)
+    modifier = chain_item_power_modifiers(modifier, move.type, attacker.item, attacker.form, attacker.species)
+    # Punk Rock priority 7 precedes terrain priority 6 and move priority 0.
+    modifier = chain_power_modifier(modifier, 5325, (attacker.ability == AbilityEnum.PUNK_ROCK) & move.sound)
+    modifier = chain_terrain_power_modifiers(modifier, move, terrain.terrain, grounded_user, grounded_target)
+    modifier = chain_move_power_modifiers(modifier, move, terrain.terrain, grounded_user, raw_effectiveness, defender, attacker.status)
+    return jnp.maximum(1, apply_power_modifier(power, modifier))
 
-    ability = attacker.ability
-    # TODO: similar to with the low health abilities, we could put the conditions in an array and put mults in array
-    # that is probably faster than this
-    # iron fist
-    power = conditional_mult_round(power, IRON_FIST, jnp.logical_and(move.punching, ability==AbilityEnum.IRON_FIST))
-    # tough claws
-    power = conditional_mult_round(power, TOUGH_CLAWS, jnp.logical_and(move.contact, ability==AbilityEnum.TOUGH_CLAWS))
-    # reckless
-    power = conditional_mult_round(power, RECKLESS, (move.recoil | (move.identifier == 136)) & (ability==AbilityEnum.RECKLESS))
-    # strong jaw
-    power = conditional_mult_round(power, 1.5, jnp.logical_and(move.biting, ability==AbilityEnum.STRONG_JAW))
-    # mega launcher
-    power = conditional_mult_round(power, 1.5, jnp.logical_and(move.launcher, ability==AbilityEnum.MEGA_LAUNCHER))
-    # punk rock
-    power = fixed_modifier(power, 5325/4096, jnp.logical_and(move.sound, ability==AbilityEnum.PUNK_ROCK))
 
-    power = fixed_modifier(power, 1.5, (ability == AbilityEnum.SHARPNESS) & ((move.move_flags & MoveFlags.SLICING) != 0))
-    # Masks boost every damaging type for their matching stored Ogerpon form.
-    # Apply after the earlier power hooks (Showdown item priority 15).
+def resolve_variable_base_power(base_power, rule, *, no_item=False, previous_failed=False,
+                                positive_stages=0, user_weight=1, target_weight=1,
+                                weather_active=False):
+    """Resolve represented intrinsic formulas from explicit scalar/array inputs.
 
-    mask = (((attacker.item == ItemEnum.WELLSPRING_MASK) & (attacker.form == FormEnum.OGERPON_WELLSPRING)) |
-            ((attacker.item == ItemEnum.HEARTHFLAME_MASK) & (attacker.form == FormEnum.OGERPON_HEARTHFLAME)) |
-            ((attacker.item == ItemEnum.CORNERSTONE_MASK) & (attacker.form == FormEnum.OGERPON_CORNERSTONE)))
-    species = attacker.species
-    type_boost = (((attacker.item == ItemEnum.MAGNET) & (move.type == Type.ELECTRIC)) |
-                  ((attacker.item == ItemEnum.SILK_SCARF) & (move.type == Type.NORMAL)) |
-                  ((attacker.item == ItemEnum.SOUL_DEW) & ((species == 380) | (species == 381)) &
-                   ((move.type == Type.DRAGON) | (move.type == Type.PSYCHIC))) |
-                  ((attacker.item == ItemEnum.LUSTROUS_ORB) & (species == 484) &
-                   ((move.type == Type.DRAGON) | (move.type == Type.WATER))))
-    return fixed_modifier(power, 4915/4096, mask | type_boost)
+    Weights are effective integer hectograms. The caller supplies stage/history
+    summaries and item eligibility; this pure function never reads battle state.
+    Knock Off eligibility is evaluated at hit time by the modifier chain.
+    Unknown rules preserve the supplied power, as does PowerRule.FIXED.
+    """
+    power = jnp.where((rule == PowerRule.DOUBLE_WITHOUT_ITEM) & no_item, base_power * 2, base_power)
+    power = jnp.where((rule == PowerRule.DOUBLE_AFTER_FAILURE) & previous_failed, power * 2, power)
+    power = jnp.where(rule == PowerRule.POSITIVE_STAGES, 20 + 20 * positive_stages, power)
+    target_weight = jnp.maximum(1, target_weight)
+    weight_power = 20 + 20 * sum((target_weight >= threshold).astype(jnp.int32)
+                               for threshold in (100, 250, 500, 1000, 2000))
+    ratio_power = jnp.where(user_weight >= 5 * target_weight, 120,
+                  jnp.where(user_weight >= 4 * target_weight, 100,
+                  jnp.where(user_weight >= 3 * target_weight, 80,
+                  jnp.where(user_weight >= 2 * target_weight, 60, 40))))
+    power = jnp.where(rule == PowerRule.TARGET_WEIGHT, weight_power, power)
+    power = jnp.where(rule == PowerRule.WEIGHT_RATIO, ratio_power, power)
+    power = jnp.where((rule == PowerRule.DOUBLE_IN_WEATHER) & weather_active, base_power * 2, power)
+    # Knock Off is a BasePower event modifier, not an intrinsic formula.
+    return power
+
+
+def resolve_terrain_base_power(power, rule, terrain_type, grounded_target):
+    """Double Rising Voltage's intrinsic power for a grounded Electric Terrain target.
+
+    The user's grounding controls the separate ordinary terrain bonus. This
+    callback precedes power modifiers, including Technician's eligibility check.
+    """
+    return jnp.where((rule == PowerRule.DOUBLE_ON_GROUNDED_ELECTRIC_TARGET) &
+        (terrain_type == TerrainEnum.ELECTRIC) & grounded_target, power * 2, power)
+
+
+def chain_power_modifier(modifier, numerator, enabled):
+    """Chain a 4096-based modifier, rounding the chain half up like Showdown."""
+    next_modifier = jnp.where(enabled, numerator, 4096).astype(jnp.int32)
+    return (modifier * next_modifier + 2048) >> 12
+
+
+def apply_power_modifier(power, modifier):
+    """Apply the completed chain once, rounding base-power halves down."""
+    return (jnp.asarray(power, jnp.int32) * modifier + 2047) >> 12
+
+
+def chain_attacker_power_modifiers(modifier, power, move, ability, weather):
+    """Chain attacker effects at priorities 30, 23 and 21, before auras."""
+    modifier = chain_power_modifier(modifier, 6144,
+        (ability == AbilityEnum.TECHNICIAN) & (apply_power_modifier(power, modifier) <= 60))
+    # Priority 23: move-property abilities and type-conversion boosts.
+    property_boost = (((ability == AbilityEnum.IRON_FIST) & move.punching) |
+        ((ability == AbilityEnum.RECKLESS) & (move.recoil | (move.identifier == 136))) |
+        move.type_power_boost)
+    modifier = chain_power_modifier(modifier, 4915, property_boost)
+    # Priority 21; these abilities are mutually exclusive on the user.
+    sand = (ability == AbilityEnum.SAND_FORCE) & (weather == WeatherEnum.SANDSTORM) & (
+        (move.type == Type.ROCK) | (move.type == Type.GROUND) | (move.type == Type.STEEL))
+    return chain_power_modifier(modifier, 5325,
+        sand | ((ability == AbilityEnum.TOUGH_CLAWS) & move.contact))
+
+
+def chain_aura_power_modifiers(modifier, move_type, attacker_ability, defender_ability):
+    """Chain one matching aura at priority 20, including Aura Break inversion."""
+    aura = ((move_type == Type.FAIRY) & ((attacker_ability == AbilityEnum.FAIRY_AURA) |
+        (defender_ability == AbilityEnum.FAIRY_AURA))) | (
+        (move_type == Type.DARK) & ((attacker_ability == AbilityEnum.DARK_AURA) |
+        (defender_ability == AbilityEnum.DARK_AURA)))
+    broken = (attacker_ability == AbilityEnum.AURA_BREAK) | (defender_ability == AbilityEnum.AURA_BREAK)
+    return chain_power_modifier(modifier, jnp.where(broken, 3072, 5448), aura)
+
+
+def chain_status_and_defender_power_modifiers(modifier, move, ability, defender_ability, poisoned, status):
+    """Chain priority-19 attacker effects followed by priority-17 Dry Skin."""
+    boosted = (((ability == AbilityEnum.TOXIC_BOOST) & poisoned & (move.move_type == MoveType.PHYSICAL)) |
+        ((ability == AbilityEnum.FLARE_BOOST) & (status == Status.BURN) & (move.move_type == MoveType.SPECIAL)) |
+        ((ability == AbilityEnum.STRONG_JAW) & move.biting) |
+        ((ability == AbilityEnum.MEGA_LAUNCHER) & move.launcher) |
+        ((ability == AbilityEnum.SHARPNESS) & ((move.move_flags & MoveFlags.SLICING) != 0)))
+    modifier = chain_power_modifier(modifier, 6144, boosted)
+    # Fire vulnerability applies in all weather; weather HP effects are residuals.
+    return chain_power_modifier(modifier, 5120,
+        (defender_ability == AbilityEnum.DRY_SKIN) & (move.type == Type.FIRE))
+
+
+def chain_item_power_modifiers(modifier, move_type, item, form, species):
+    """Chain represented held-item power bonuses at priority 15."""
+    mask = (((item == ItemEnum.WELLSPRING_MASK) & (form == FormEnum.OGERPON_WELLSPRING)) |
+        ((item == ItemEnum.HEARTHFLAME_MASK) & (form == FormEnum.OGERPON_HEARTHFLAME)) |
+        ((item == ItemEnum.CORNERSTONE_MASK) & (form == FormEnum.OGERPON_CORNERSTONE)))
+    type_boost = (((item == ItemEnum.MAGNET) & (move_type == Type.ELECTRIC)) |
+        ((item == ItemEnum.SILK_SCARF) & (move_type == Type.NORMAL)) |
+        ((item == ItemEnum.SOUL_DEW) & ((species == 380) | (species == 381)) &
+            ((move_type == Type.DRAGON) | (move_type == Type.PSYCHIC))) |
+        ((item == ItemEnum.LUSTROUS_ORB) & (species == 484) &
+            ((move_type == Type.DRAGON) | (move_type == Type.WATER))))
+    return chain_power_modifier(modifier, 4915, mask | type_boost)
+
+
+def chain_terrain_power_modifiers(modifier, move, terrain_type, grounded_user, grounded_target):
+    """Chain priority-6 terrain effects, leaving intrinsic callbacks separate."""
+    bonus = grounded_user & (((move.type == Type.GRASS) & (terrain_type == TerrainEnum.GRASSY)) |
+        ((move.type == Type.PSYCHIC) & (terrain_type == TerrainEnum.PSYCHIC)) |
+        ((move.type == Type.ELECTRIC) & (terrain_type == TerrainEnum.ELECTRIC)))
+    modifier = chain_power_modifier(modifier, 5325, bonus)
+    weakened = grounded_target & (((terrain_type == TerrainEnum.GRASSY) & (move.identifier == 89)) |
+        ((terrain_type == TerrainEnum.MISTY) & (move.type == Type.DRAGON)))
+    return chain_power_modifier(modifier, 2048, weakened)
+
+
+def chain_move_power_modifiers(modifier, move, terrain_type, grounded_user, effectiveness, defender, user_status=Status.NONE):
+    """Chain represented priority-zero move effects without rounding power early."""
+    modifier = chain_power_modifier(modifier, 6144,
+        (move.identifier == 797) & (terrain_type == TerrainEnum.PSYCHIC) & grounded_user)
+    modifier = chain_power_modifier(modifier, 5461, (move.identifier == 879) & (effectiveness > 1))
+    modifier = chain_conditional_move_power_modifiers(modifier, move.power_rule,
+        user_status, defender.status, defender.current_hp, defender.max_hp)
+    modifier = chain_field_matchup_move_modifiers(modifier, move.power_rule, terrain_type, effectiveness)
+    eligible = (defender.item != ItemEnum.NONE) & item_transfer_allowed(defender.species, defender.form, defender.item)
+    return chain_power_modifier(modifier, 6144, (move.power_rule == PowerRule.REMOVABLE_ITEM_BOOST) & eligible)
+
+
+def chain_conditional_move_power_modifiers(modifier, rule, user_status, target_status, target_hp, target_max_hp):
+    """Chain Facade, poison-target moves and Brine at priority zero."""
+    eligible = ((rule == PowerRule.USER_STATUS_MODIFIER) &
+        (user_status != Status.NONE) & (user_status != Status.SLEEP)) | (
+        (rule == PowerRule.TARGET_POISON_MODIFIER) &
+        ((target_status == Status.POISON) | (target_status == Status.TOXIC))) | (
+        (rule == PowerRule.TARGET_HALF_HP_MODIFIER) & (2 * target_hp <= target_max_hp))
+    return chain_power_modifier(modifier, 8192, eligible)
+
+
+def chain_field_matchup_move_modifiers(modifier, rule, terrain_type, effectiveness):
+    """Chain Psyblade's terrain presence and Collision Course's matchup bonus."""
+    modifier = chain_power_modifier(modifier, 6144,
+        (rule == PowerRule.ELECTRIC_TERRAIN_MODIFIER) & (terrain_type == TerrainEnum.ELECTRIC))
+    return chain_power_modifier(modifier, 5461,
+        (rule == PowerRule.SUPER_EFFECTIVE_MODIFIER) & (effectiveness > 1))
+
 
 def compute_base_damage(
         attacker_ability: AbilityEnum,
@@ -258,7 +382,7 @@ def compute_damage_multipliers(
     is_burned = attacker.status == Status.BURN
     is_physical = move.move_type == MoveType.PHYSICAL
     is_guts = attacker.ability == AbilityEnum.GUTS
-    base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned))
+    base_damage = conditional_mult_round(base_damage, 0.5, triple_and(1-is_guts, is_physical, is_burned) & (move.identifier != 263))
     # Sniper is a final damage modifier, after the ordinary critical and random
     # rolls. Folding it into the critical multiplier changes integer rounding.
     base_damage = conditional_mult_round(base_damage, 1.5, is_crit & (attacker.ability == AbilityEnum.SNIPER))

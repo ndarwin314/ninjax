@@ -29,6 +29,7 @@ from ninjax.side.item_effects import after_hit, consume, remove_item
 from ninjax.side.queries import (
     conditional_mult_round as fixed_modifier,
     effective_weather,
+    effective_speed,
     modify_stats,
 )
 from ninjax.side.state import BattleState
@@ -127,7 +128,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         attacker,
         defender,
         move,
-        state.terrain, weather, gravity, raw_effectiveness=raw_effectiveness
+        state.terrain, weather, gravity, raw_effectiveness=raw_effectiveness,
+        user_speed=effective_speed(state, attacker_idx, weather),
+        target_speed=effective_speed(state, 1-attacker_idx, weather)
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier

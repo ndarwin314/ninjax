@@ -133,7 +133,7 @@ def test_pixilate_exceptions_and_slot_integrity(neutral_type):
     state = ability_state(state, A.PIXILATE)
     original = state.active[0].moves[0]
     converted = effective_move(state, 0, original)
-    assert converted.type[0] == Type.FAIRY and converted.base_power[0] == 96
+    assert converted.type[0] == Type.FAIRY and converted.base_power[0] == 80 and converted.type_power_boost[0]
     assert original.type[0] == Type.NORMAL
     for identifier in (449,718,363,686,546,805,311):
         excluded = effective_move(state, 0, original.replace(identifier=jnp.array([identifier])))

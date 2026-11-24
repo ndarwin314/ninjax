@@ -1,0 +1,542 @@
+{
+  "revision": "23b41aa29e2ff5ff80e03f57b257b595a5852047",
+  "scope": "Intrinsic callbacks followed by simulator clampIntRange; positive HP and explicit speed edge cases.",
+  "probes": [
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "",
+        false
+      ],
+      "expected": 65
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "brn",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "brn",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "psn",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "psn",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "tox",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "tox",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "par",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "par",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "slp",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "slp",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "frz",
+        false
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "status",
+      "name": "Hex",
+      "args": [
+        65,
+        "frz",
+        true
+      ],
+      "expected": 130
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        1,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        1,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        1,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        2,
+        100
+      ],
+      "expected": 3
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        2,
+        100
+      ],
+      "expected": 2
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        2,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        33,
+        100
+      ],
+      "expected": 49
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        33,
+        100
+      ],
+      "expected": 39
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        33,
+        100
+      ],
+      "expected": 32
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        50,
+        100
+      ],
+      "expected": 75
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        50,
+        100
+      ],
+      "expected": 60
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        50,
+        100
+      ],
+      "expected": 50
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        99,
+        100
+      ],
+      "expected": 148
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        99,
+        100
+      ],
+      "expected": 118
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        99,
+        100
+      ],
+      "expected": 99
+    },
+    {
+      "helper": "user_hp",
+      "name": "Eruption",
+      "args": [
+        150,
+        100,
+        100
+      ],
+      "expected": 150
+    },
+    {
+      "helper": "target_hp",
+      "name": "Crush Grip",
+      "args": [
+        120,
+        100,
+        100
+      ],
+      "expected": 120
+    },
+    {
+      "helper": "target_hp",
+      "name": "Hard Press",
+      "args": [
+        100,
+        100,
+        100
+      ],
+      "expected": 100
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        0,
+        100
+      ],
+      "expected": 40
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        0,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        100,
+        0
+      ],
+      "expected": 40
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        100,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        0,
+        0
+      ],
+      "expected": 40
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        49,
+        100
+      ],
+      "expected": 40
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        49,
+        100
+      ],
+      "expected": 52
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        99,
+        100
+      ],
+      "expected": 40
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        99,
+        100
+      ],
+      "expected": 26
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        100,
+        100
+      ],
+      "expected": 60
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        100,
+        100
+      ],
+      "expected": 26
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        199,
+        100
+      ],
+      "expected": 60
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        199,
+        100
+      ],
+      "expected": 13
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        200,
+        100
+      ],
+      "expected": 80
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        200,
+        100
+      ],
+      "expected": 13
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        299,
+        100
+      ],
+      "expected": 80
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        299,
+        100
+      ],
+      "expected": 9
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        300,
+        100
+      ],
+      "expected": 120
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        300,
+        100
+      ],
+      "expected": 9
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        399,
+        100
+      ],
+      "expected": 120
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        399,
+        100
+      ],
+      "expected": 7
+    },
+    {
+      "helper": "electro",
+      "name": "Electro Ball",
+      "args": [
+        400,
+        100
+      ],
+      "expected": 150
+    },
+    {
+      "helper": "gyro",
+      "name": "Gyro Ball",
+      "args": [
+        400,
+        100
+      ],
+      "expected": 7
+    }
+  ]
+}

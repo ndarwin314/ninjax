@@ -11,10 +11,24 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, of which **409** have reviewed represented
-singles effects and **276** remain unavailable or unreviewed. In the pinned Gen 9
-random-battle inventory, **250 of 348** moves are supported and **98** remain
+The catalogue contains **685 moves**, of which **425** have reviewed represented
+singles effects and **260** remain unavailable or unreviewed. In the pinned Gen 9
+random-battle inventory, **257 of 348** moves are supported and **91** remain
 gaps. These are implementation counts, not exhaustive interaction-parity counts.
+
+Rising Voltage is now enabled for singles: Electric Terrain doubles intrinsic
+power when the target is grounded, independently of the user's ordinary terrain
+bonus. Gravity, Levitate, Flying typing and Air Balloon participate in grounding.
+The intrinsic doubling precedes Technician; Expanding Force's separate modifier
+lives in the terrain modifier helper after Technician's eligibility check.
+Dry Skin's Fire vulnerability is grouped with weather-related ability power
+effects but applies in every weather. Solar Power is unchanged by this batch.
+Represented BasePower effects now chain integer modifiers in Showdown priority
+order, with half-up chain rounding and one half-down application to base power.
+Knock Off and type-conversion ability boosts participate in that chain instead
+of rounding power during move-property resolution. Focused comparisons use
+actual Showdown event results in `fixtures/showdown/power-modifiers.json`;
+this does not establish full damage or unrepresented-effect parity.
 
 The explicit support inventory is
 [`supported-moves.json`](../../ninjax/data/supported-moves.json), read through
@@ -120,8 +134,7 @@ Attack and Dire Claw require custom status-selection rules beyond those lists.
 Similarly, `thawsTarget` is present in the catalogue but is not projected into
 the current Fire-type-only target-thaw path.
 
-Facade, Hex, Eruption, Electro Ball and Freeze-Dry still need contextual damage
-rules; Wish and Future Sight still need pending-effect state; Solar Beam still
+Freeze-Dry and Flying Press still need shared effectiveness rules; Wish and Future Sight still need pending-effect state; Solar Beam still
 needs its charge/weather rules; Seismic Toss still needs fixed-damage dispatch.
 None becomes implemented merely through the new condition/switch/stat fields.
 Transformations, richer battle history and doubles target resolution remain
@@ -131,6 +144,203 @@ The metadata-wiring batch is implemented. Next candidates are status pivots and
 damaging forced switches, with the composition requirements listed above. The
 support inventory and generated coverage report include the seventeen additions.
 
+## Conditional damage/type rules: pipeline placement
+
+This is an implementation plan, not newly enabled coverage. The placements
+below were checked against the local Showdown reference's `data/moves.ts`,
+`data/conditions.ts`, `sim/pokemon.ts` and `sim/battle-actions.ts` at the pinned
+revision `23b41aa29e2ff5ff80e03f57b257b595a5852047`.
+
+### Execution stages and current owners
+
+1. **Resolve transient move properties before accuracy and hit routing.**
+   `moves.properties.effective_move` / `_override_type` own type changes;
+   category-dependent moves also need transient category, offensive-stat,
+   defensive-stat and contact updates before their consumers run. Do not mutate
+   the stored move slot. Resolve keyed category ties once during execution,
+   rather than drawing randomness in a property helper that can be called for
+   previews or bookkeeping.
+2. **Resolve move-aware type effectiveness.** `side.queries.move_immune_from_fields`
+   currently performs early immunity checks; `calculations.damage.hit_type_effectiveness`
+   later provides raw matchup and damage effectiveness. Both must use consistent
+   move-specific rules. The resulting matchup also feeds conditional power,
+   Expert Belt and reactive item checks.
+3. **Compute intrinsic base power at the appropriate hit-time snapshot.**
+   Extend `PowerRule` / `resolve_variable_base_power` with pure formulas; invoke
+   new HP/status/speed rules from `compute_base_power` with live operands.
+   Existing property-time rules already alter `move.base_power`, so avoid
+   resolving them again at hit time. This split should be explicit until those
+   existing callers are migrated. Rising Voltage already demonstrates a
+   hit-time intrinsic callback in `resolve_terrain_base_power`.
+4. **Chain BasePower event modifiers.** `chain_move_power_modifiers` owns the
+   priority-0 move factors. Keep them after Technician, abilities, items and
+   ordinary terrain effects, retaining integer chain rounding and one final
+   application to intrinsic power.
+5. **Select and modify damage stats.** `resolve_damaging_hit` currently selects
+   stage-adjusted stats, then calls `modify_stats` and `compute_base_damage`.
+   Category selection must already be complete; a move's category comparison
+   need not use the same ability/item-modified stats as its final damage.
+6. **Apply damage-stage exceptions.** `compute_damage_multipliers` owns weather,
+   STAB, effectiveness and burn stages. An exception at one of these stages
+   must preserve that stage's rounding rather than emulate it with extra power.
+
+### Implemented conditional-power batch
+
+Fifteen additional moves are enabled: Facade, Venoshock, Barb Barrage, Brine,
+Psyblade, Collision Course, Hex, Infernal Parade, Eruption, Water Spout,
+Dragon Energy, Crush Grip, Hard Press, Electro Ball and Gyro Ball.
+
+The priority-0 factors flow through `chain_conditional_move_power_modifiers`
+and `chain_field_matchup_move_modifiers`. `resolve_hit_base_power` calls the
+status, user-HP, target-HP and speed helpers before Technician. Effective Speeds
+are gathered through `queries.effective_speed` at hit time; these include stages,
+items, paralysis, weather, abilities and Tailwind independently of critical hits
+and Unaware. Facade also skips the burn damage penalty. Existing property-time
+power rules are not reapplied. The remaining table entries describe follow-up
+work; functions in this batch are implemented even where the original proposal
+below labels them new.
+
+Validation lives in `test_variable_power_validation.py`,
+`test_power_rules.py` and `test_conditional_power.py`, with offline fixtures
+captured from the pinned Showdown callbacks and BasePower events. Freeze-Dry,
+Flying Press, Hydro Steam, category-changing moves and transformations remain
+outside this batch.
+
+### Move-to-stage map
+
+The function names below record the implementation plan. The conditional-power
+helpers described in the batch above are now implemented; other **new** helpers
+remain proposals. **Existing** functions are integration points. Numeric
+helpers take scalar/array facts and return arrays; state access stays at the
+execution boundary. Extend rule metadata only when implementing its consumers.
+
+| Rule family | Moves | Specific owner and call path |
+| --- | --- | --- |
+| Intrinsic status-dependent power | Hex, Infernal Parade | **New** `damage.status_base_power(base_power, target_status, target_ability)` returns intrinsic power, including effective Comatose. **New** `damage.resolve_hit_base_power(...)`, called by **existing** `compute_base_power`, dispatches this before the modifier chain. |
+| Intrinsic user-HP power | Eruption, Water Spout, Dragon Energy; Flail, Reversal | **New** `damage.proportional_hp_base_power(base_power, current_hp, max_hp)` for the first family, and `damage.low_hp_base_power(current_hp, max_hp)` for the discrete Flail/Reversal table. Called by `resolve_hit_base_power` with the live user's HP. Preserve integer truncation, minimum power and threshold boundaries. |
+| Intrinsic target-HP power | Crush Grip, Hard Press | **New** `damage.target_hp_base_power(scale, current_hp, max_hp)` implements the shared nested fixed-point formula; rule dispatch supplies scale 120 or 100 and target HP. It returns intrinsic power to `resolve_hit_base_power`, not a modifier. |
+| Intrinsic speed-ratio power | Electro Ball, Gyro Ball | **New** `damage.electro_ball_base_power(user_speed, target_speed)` and `damage.gyro_ball_base_power(user_speed, target_speed)`, dispatched by `resolve_hit_base_power`. **New** `side.queries.effective_speed(state, player)` gathers independently stage-adjusted Speed and delegates to **existing** `modify_speed`; call it at the hit boundary for both sides. Do not use action order or crit/Unaware-adjusted damage stats. |
+| Priority-0 conditional power factors | Facade; Venoshock, Barb Barrage; Brine | **New** `damage.chain_conditional_move_power_modifiers(modifier, rule, user_status, target_status, target_hp, target_max_hp)` returns the updated integer modifier. **Existing** `chain_move_power_modifiers` calls it at priority 0. Eligibility covers the applicable user status, poison/toxic target status, or half-HP target condition; no intermediate application to power. |
+| Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **New** `damage.chain_field_matchup_move_modifiers(modifier, rule, terrain_type, effectiveness)` handles Electric Terrain's presence and the super-effective factor. **Existing** `chain_move_power_modifiers` delegates to it alongside its current move factors. Psyblade has no user-grounding requirement; Collision Course shares Electro Drift's resolved matchup input. |
+| Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
+| Item/form-dependent type override | Judgment, Raging Bull, Aura Wheel | **New** `properties.item_form_move_type(type_rule, default_type, effective_item, species, form)` returns only a transient type; **existing** `_override_type` calls it with host-defined plate/form mappings. **New** `properties.move_species_eligible(move_id, species, form)` supplies Aura Wheel's execution-time failure check to **existing** `execution.dispatch_selected_move`. Raging Bull's screen removal belongs to **new** `routing.apply_pre_damage_move_effects(state, player, move)`, delegating to **new** `side.field_conditions.clear_target_screens(state, target)`; it is not a typing side effect. |
+| Special effectiveness | Freeze-Dry, Flying Press | **New** `type_effectiveness.move_type_effectiveness_factors(move_type, defender_types, effectiveness_rule)` returns one factor per defensive type. It replaces Water's factor for Freeze-Dry or multiplies the resolved primary type's factors by Flying's factors for Flying Press. **Existing** `queries.move_immune_from_fields` and `damage.hit_type_effectiveness` both consume it; the latter retains responsibility for raw/damage matchup outputs and represented ability/Gravity handling. |
+| Weather damage exception | Hydro Steam | Extract **new** `damage.apply_weather_damage_modifier(damage, move_id, move_type, effective_weather)` from **existing** `compute_damage_multipliers`. It returns damage after exactly the weather stage's rounding, replacing the usual sun/Water reduction with Hydro Steam's 1.5 bonus. Call it once, at the current weather stage. |
+| Category selection | Photon Geyser, Shell Side Arm | **New** `properties.resolve_move_category(key, move, level, user_atk, user_spa, target_def, target_spd)` returns `(key, resolved_move)`. Delegate to **new** `properties.photon_geyser_category(atk, spa)` and `properties.shell_side_arm_category(key, level, atk, spa, defense, sp_defense)`; the latter returns `(key, category)` and draws only for a tie. Set category, stat selectors and conditional contact together via **new** `properties.with_damage_category(move, category, physical_contact)`. Gather inputs with **new** `queries.category_stat_fields(state, player)`, preserving stage adjustments while excluding ordinary item/ability stat modifiers. |
+| Transformation-dependent type/category | Tera Blast, Tera Starstorm | **New** `properties.transformed_move_type(type_rule, default_type, tera_type, is_terastallized, form)` integrates through `_override_type`. Extend `resolve_move_category` for Tera Blast and use **new** `properties.transformation_move_properties(move, tera_type, is_terastallized, form)` for power, target and self-effect changes. Implement these only with the transformation lifecycle and eligibility checks; the existing type/category fields do not unlock complete moves. |
+
+### Proposed helper contracts and orchestration
+
+Keep the hit-time power boundary explicit:
+
+```text
+resolve_damaging_hit
+  gathers effective speeds only for speed-dependent rules
+  -> compute_base_power(..., user_speed=..., target_speed=...)
+     -> resolve_hit_base_power(base_power, power_rule, user_hp, user_max_hp,
+                               target_hp, target_max_hp, target_status,
+                               target_ability, user_speed, target_speed,
+                               terrain_type, grounded_target)
+     -> ordered integer modifier chain
+     -> one final application to intrinsic power
+```
+
+`resolve_hit_base_power` returns a power array and dispatches to the small
+formula helpers above. `compute_base_power` already receives the effective
+Pokémon snapshots needed for HP/status rules, so its only new external numeric
+inputs for this batch are the two speeds. The boundary may initially gather
+both speeds in a shared branch; keep any guard JAX-compatible and measure
+whether conditional gathering actually saves work. None of these helpers
+consumes PRNG keys. Extend `PowerRule` to identify each intrinsic formula and
+priority-0 modifier rule explicitly.
+
+Retain **existing** `resolve_variable_base_power` for the rules currently
+resolved in `move_overrides` until a separate migration. `resolve_hit_base_power`
+must leave those already-resolved rules unchanged, including multi-hit powers
+supplied by the hit plan. Move the current Rising Voltage call into the hit-time
+dispatch rather than calling `resolve_terrain_base_power` a second time.
+Terrain Pulse is different: its type and intrinsic doubling are ModifyType/
+ModifyMove callbacks and must be resolved together during property preparation,
+not recalculated from a later terrain snapshot in the hit-time resolver.
+
+For keyed category selection, introduce **new**
+`routing.prepare_hit_move(key, state, player, move) -> (key, resolved_move)`.
+It calls **existing** `effective_move`, gathers category-comparison inputs, and
+calls `properties.resolve_move_category`. Both **existing** `_apply_move_effects`
+and `_resolve_and_hit` use this preparation entry point on their alternative
+execution paths. Preparation occurs once per executed move, after its target is
+known and before accuracy/hit routing; multi-hit execution reuses the resolved
+move. `resolve_damaging_hit` accepts that resolved move and never rerolls category.
+Do not import `execution` from `routing`, which would reverse the current
+module dependency. Pure bookkeeping/priority calls to `effective_move` must
+remain free of random draws.
+
+`category_stat_fields` should use the ordinary stored stat stages without the
+critical-hit/Unaware masks from `raw_boosted_stats`, and exclude ordinary
+stat-modifier events from the comparison. Photon Geyser keeps Special on a tie;
+Shell Side Arm uses its integer physical/special estimates and an explicit keyed
+tie. The actual damage calculation still applies its normal ability/item and
+critical-hit rules after category selection.
+
+For effectiveness, add `Move.effectiveness_rule` with a host-assigned enum.
+The shared factor helper accepts that rule alongside the resolved type; it does
+not change the move's type for STAB, absorption or type-based abilities. Extend
+`hit_type_effectiveness` with the rule operand and pass it to the fallback in
+`compute_damage_multipliers`, as well as the ordinary hit path. Preserve the
+existing distinction between chart factors and ability/grounding effects; audit
+both early immunity and downstream raw-effectiveness consumers in the same
+change. Do not maintain separate Freeze-Dry/Flying Press lookup logic in routing
+and damage.
+
+Facade has one additional owner: extract **new**
+`damage.apply_burn_damage_modifier(damage, move_id, category, user_status,
+user_ability)` from the burn stage in **existing** `compute_damage_multipliers`.
+It returns damage after the current burn-stage rounding and skips that penalty
+for Facade in the Scarlet/Violet ruleset. Keep the existing position relative to
+weather, critical damage, random roll, STAB, effectiveness and later modifiers.
+Its priority-0 power boost still belongs to
+`chain_conditional_move_power_modifiers`. Showdown's power callback excludes
+sleep; use the checked callback rather than inferring eligibility from prose.
+
+Photon Geyser also needs its ability-ignoring behavior audited before enabling
+the complete move. Shell Side Arm's random category choice must not be rerolled
+when accuracy, hit routing or damage reads the resolved move. Plate support,
+form eligibility, Raging Bull's screen removal and transformation side effects
+must be tested alongside their type changes before enabling those moves.
+
+Raging Bull and Brick Break share Showdown's `onTryHit` screen removal.
+Introduce their shared `apply_pre_damage_move_effects` hook in
+`_prepare_normal_hit` at the corresponding TryHit stage; migrate Brick Break's
+current late removal out of `resolve_damaging_hit` rather than duplicating it.
+Verify its position relative to protection, accuracy and immunity against full
+Showdown attempts before choosing the exact insertion point. A numeric damage
+helper should read the resulting screen state, not own this state mutation.
+
+### Data boundaries and next implementation batches
+
+Keep `PowerRule` for power computations. Use explicit metadata/rule selectors
+for effectiveness and category changes instead of encoding them as fake move
+types or power multipliers. Host construction should assign rule IDs; traced
+helpers should consume arrays and the minimal required inputs. A compact
+execution-local context can carry effective speeds or selected category when
+the existing Pokémon snapshot does not contain them. No generic full-state
+parameter is needed for a pure numeric formula.
+
+The priority-0 factors, Facade burn exception, HP-based intrinsic formulas and
+speed ratios are implemented in the batch above. Next are shared effectiveness
+rules and property/category changes.
+Existing state supplies most numeric inputs; party/history-based powers such as
+Last Respects and Rage Fist remain in their separate history workstream.
+
+Validation should compare the relevant stage and full damage against Showdown:
+Technician threshold probes for intrinsic versus modifier doubling; odd powers
+combined with items/auras/terrain; HP and speed boundaries; Comatose and status
+cases; dual-type effectiveness and early immunity consistency; Hydro Steam with
+sun/rain and weather suppression; and category ties, stat stages, modifiers and
+contact behavior. Use explicit keys and test JIT; reserve vmap/scan acceptance
+for the batched checkpoint suite. Coverage stays unchanged until a complete move
+has its mechanics, focused tests and support-inventory entry.
+
 ### Remaining architecture families
 
 The examples below are unavailable or partial; the report is the full inventory.
@@ -139,7 +349,7 @@ Some moves need several of these capabilities.
 | Missing support | Example moves | Required extension |
 | --- | --- | --- |
 | Wiring existing primitives | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
-| Conditional damage/type rules | Facade, Hex, Eruption, Electro Ball, Freeze-Dry, Flying Press, Hydro Steam | Resolve contextual power, category, typing and effectiveness before damage. |
+| Conditional damage/type rules | Freeze-Dry, Flying Press, Hydro Steam, Terrain Pulse, Photon Geyser, Shell Side Arm | Resolve contextual power, category, typing and effectiveness before damage. |
 | Multiple/custom secondaries | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
 | Residual conditions and trapping | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
 | Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |

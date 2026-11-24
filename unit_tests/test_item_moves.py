@@ -32,10 +32,10 @@ def test_knock_off_power_and_removal(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'Knock Off')
     state = update_active(state, 1, state.active[1].replace(item=jnp.array([I.LEFTOVERS]), current_hp=jnp.array([1])))
-    assert effective_move(state, 0, make_move('Knock Off')).base_power[0] == 97
+    assert effective_move(state, 0, make_move('Knock Off')).base_power[0] == 65
     _, out = move_hits(key, state, 0, 0)
     assert out.active.current_hp[1, 0] == 0 and out.active.item[1, 0] == I.NONE
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.STICKY_HOLD]), current_hp=jnp.array([200])))
-    assert effective_move(state, 0, make_move('Knock Off')).base_power[0] == 97
+    assert effective_move(state, 0, make_move('Knock Off')).base_power[0] == 65
     _, out = move_hits(key, state, 0, 0)
     assert out.active.item[1, 0] == I.LEFTOVERS

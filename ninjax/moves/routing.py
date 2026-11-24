@@ -17,7 +17,7 @@ from ninjax.calculations.logic import quad_or, triple_or
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
 from ninjax.enums.moves import MoveFlags, MoveType, ProtectionKind
-from ninjax.enums.pokemon import StatEnum, Type
+from ninjax.enums.pokemon import StatEnum, Type, Status
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
@@ -27,7 +27,9 @@ from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.queries import contact_reactions_allowed, is_floating_fields, move_immune_from_fields
+from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
+from ninjax.side.status_effects import set_status
 from ninjax.side.updates import add_boosts
 
 
@@ -131,8 +133,7 @@ def _prepare_accuracy(key, state, attacker_index, move):
 
     # Gen 9 protection resolves before accuracy; an inaccurate contact move
     # still strikes Spiky Shield, and Protect blocks before a miss is rolled.
-    bypass = (state.ability[attacker_index, 0] == AbilityEnum.UNSEEN_FIST) & move.contact[0]
-    protected = state.volatile_status.protected[1-attacker_index, 0] & ~move.target_self[0] & move.protectable[0] & ~bypass
+    protected = _blocked_helper(state, move, attacker_index)
 
     hit = (jnp.less_equal(r, accuracy)[0] | protected) & move.implemented[0]
     return jax.lax.cond(
@@ -180,8 +181,8 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
     switches commit afterward, before pivot bookkeeping and attempt finalization.
     """
 
-    state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
-        _prepare_struggle_hit, _prepare_normal_hit, state, attacker_index, move)
+    key, state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
+        _prepare_struggle_hit, _prepare_normal_hit, key, state, attacker_index, move)
     # Only status drags routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
     forced = (branch == 1) & ((move.identifier[0] == 18) | (move.identifier[0] == 46))
@@ -211,21 +212,64 @@ def _struggle_move(state, player, reference):
     return jax.tree.map(_match_move_leaf_dtype, move, reference)
 
 
-def _prepare_struggle_hit(state, player, move):
+def _prepare_struggle_hit(key, state, player, move):
     """Send synthetic Struggle directly to the shared damage branch."""
     ability = state.ability[1-player]
-    return state, move, jnp.int32(0), jnp.zeros_like(ability), 1 + (ability == AbilityEnum.WELL_BAKED_BODY)
+    return key, state, move, jnp.int32(0), jnp.zeros_like(ability), 1 + (ability == AbilityEnum.WELL_BAKED_BODY)
 
 
-def _spiky_shield_retaliation(s, *, attacker_index):
+def _spiky_shield_retaliation(k, s, *, attacker_index):
     """Attribute Spiky Shield's indirect damage to its defending user."""
     source = s.event_source
     s = s.replace(event_source=jnp.asarray(1-attacker_index, jnp.int32))
     s = take_damage_percent(s, attacker_index, 1/8, cause=Cause.CONTACT)
-    return s.replace(event_source=source)
+    return k, s.replace(event_source=source)
 
 
-def _prepare_normal_hit(state, attacker_index, move):
+def _baneful_bunker_poison(k, s, *, attacker_index):
+    """Attribute Baneful Bunker's Poison affliction to its defending user."""
+    source = s.event_source
+    s = s.replace(event_source=jnp.asarray(1 - attacker_index, jnp.int32))
+    k, s = set_status(k, s, attacker_index, Status.POISON)
+    return k, s.replace(event_source=source)
+
+
+def _burning_bulwark_burn(k, s, *, attacker_index):
+    """Attribute Burning Bulwark's Burn affliction to its defending user."""
+    source = s.event_source
+    s = s.replace(event_source=jnp.asarray(1 - attacker_index, jnp.int32))
+    k, s = set_status(k, s, attacker_index, Status.BURN)
+    return k, s.replace(event_source=source)
+
+
+def _silk_trap_drop(k, s, *, attacker_index):
+    """Attribute Silk Trap's speed drop to its defending user."""
+    source = s.event_source
+    s = s.replace(event_source=jnp.asarray(1 - attacker_index, jnp.int32))
+    s = stat_changes(s, attacker_index, jnp.array([StatEnum.SPEED]), jnp.array([-1]), True)
+    return k, s.replace(event_source=source)
+
+
+def _kings_shield_drop(k, s, *, attacker_index):
+    """Attribute Silk Trap's speed drop to its defending user."""
+    source = s.event_source
+    s = s.replace(event_source=jnp.asarray(1 - attacker_index, jnp.int32))
+    s = stat_changes(s, attacker_index, jnp.array([StatEnum.ATTACK]), jnp.array([-1]), True)
+    return k, s.replace(event_source=source)
+
+
+def _blocked_helper(state, move: Move, attacker_index):
+    """Share scalar protection eligibility between accuracy and hit routing."""
+    status = move.move_type[0] == MoveType.STATUS
+    protection_kind = state.volatile_status.protection_kind[1-attacker_index, 0]
+    bypass = (state.ability[attacker_index, 0] == AbilityEnum.UNSEEN_FIST) & move.contact[0]
+    bypass |= status & ((protection_kind==ProtectionKind.SILK_TRAP) |
+                        (protection_kind==ProtectionKind.BURNING_BULWARK) |
+                        (protection_kind==ProtectionKind.KINGS_SHIELD))
+    blocked = state.volatile_status.protected[1 - attacker_index, 0] & ~move.target_self[0] & move.protectable[0] & ~bypass
+    return blocked
+
+def _prepare_normal_hit(key, state, attacker_index, move):
     """Resolve normal hit routing before the common damage/status executor."""
     # decide branch to execute based on ability immunities
     defender_idx = 1 - attacker_index
@@ -281,16 +325,36 @@ def _prepare_normal_hit(state, attacker_index, move):
     priority_blocked |= prankster_dark
     branch_index = jnp.where(priority_blocked, 5, branch_index)
     # Protect blocks opposing targeted moves, but not field-wide hazards.
-    bypass = (state.ability[attacker_index, 0] == AbilityEnum.UNSEEN_FIST) & move.contact[0]
-    blocked = state.volatile_status.protected[1-attacker_index, 0] & ~move.target_self[0] & move.protectable[0] & ~bypass
-    branch_index = jnp.where(blocked, 5, branch_index)
-    # Spiky Shield damages a living contact attacker only when it actually
-    # blocks; Long Reach and Magic Guard prevent this retaliation.
-    spiky = blocked & (state.volatile_status.protection_kind[1-attacker_index, 0] == ProtectionKind.SPIKY_SHIELD)
 
-    spiky &= move.contact[0] & contact_reactions_allowed(state.ability[attacker_index, 0], state.active_field('item', attacker_index)[0])
-    spiky &= (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD) & (state.active_field('current_hp', attacker_index)[0] > 0)
-    state = jax.lax.cond(spiky, partial(_spiky_shield_retaliation, attacker_index=attacker_index), _identity, state)
+    blocked = _blocked_helper(state, move, attacker_index)
+    branch_index = jnp.where(blocked, 5, branch_index)
+
+    protection_kind = state.volatile_status.protection_kind[1-attacker_index, 0]
+    magic_guard = (state.ability[attacker_index, 0] != AbilityEnum.MAGIC_GUARD)
+    attacker_alive = (state.active_field('current_hp', attacker_index)[0] > 0)
+    blocked_contact = (blocked & move.contact[0] &
+                       contact_reactions_allowed(state.ability[attacker_index, 0], state.active_field('item', attacker_index)[0]) &
+                       attacker_alive)
+
+    spiky = blocked_contact & (protection_kind == ProtectionKind.SPIKY_SHIELD) & magic_guard
+    baneful = blocked_contact & (protection_kind == ProtectionKind.BANEFUL_BUNKER)
+    bulwark = blocked_contact & (protection_kind == ProtectionKind.BURNING_BULWARK)
+    silk = blocked_contact & (protection_kind == ProtectionKind.SILK_TRAP)
+    king = blocked_contact & (protection_kind == ProtectionKind.KINGS_SHIELD)
+
+    branch = jnp.select((spiky, baneful, bulwark, silk, king), (1, 2, 3, 4, 5), default=0)
+
+    key, state = jax.lax.switch(
+        branch,
+        (
+            _unchanged_key_state,
+            partial(_spiky_shield_retaliation, attacker_index=attacker_index),
+            partial(_baneful_bunker_poison, attacker_index=attacker_index),
+            partial(_burning_bulwark_burn, attacker_index=attacker_index),
+            partial(_silk_trap_drop, attacker_index=attacker_index),
+            partial(_kings_shield_drop, attacker_index=attacker_index),
+        )
+        , key, state)
     # Side and field moves do not target the Pokémon behind its Substitute.
     sub_blocked = substitute_intercepts(state.volatile_status.substitute_hp[1-(attacker_index), 0], state.ability[attacker_index, 0],
         move.target_self[0], move.sound[0], move.bypass_substitute[0]) & (move.move_type[0] == MoveType.STATUS) & (move.hazard_effect[0] == 0)
@@ -314,7 +378,7 @@ def _prepare_normal_hit(state, attacker_index, move):
     state = record_hit(state, 0, target, outcome, recipient)
     boost_value = 1 + (ability==AbilityEnum.WELL_BAKED_BODY)
 
-    return state, move, branch_index[0], is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE + is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED, boost_value
+    return key, state, move, branch_index[0], is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE + is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED, boost_value
 
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:

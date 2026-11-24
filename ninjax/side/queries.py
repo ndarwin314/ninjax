@@ -1,6 +1,8 @@
 """Read-only field, immunity, item and stat queries; no state writes."""
 import jax.numpy as jnp
 
+from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP
+
 from ninjax.calculations.logic import triple_or
 from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
 from ninjax.enums.abilities import AbilityEnum as A, AbilityEnum
@@ -133,6 +135,15 @@ def can_remove_item(state, holder, source):
     item = state.active_field('item', holder)[0]
     sticky = (source != holder) & (state.active_field('current_hp', holder)[0] > 0) & (state.ability[holder, 0] == A.STICKY_HOLD)
     return (item != I.NONE) & item_transfer_allowed(state.active_field('species', holder)[0], state.active_field('form', holder)[0], item) & ~sticky
+
+
+def effective_speed(state, player, weather):
+    """Read battle Speed for power formulas, independently of crits and Unaware."""
+    stage = state.boosts.normal_boosts[player, S.SPEED]
+    speed = jnp.floor(state.active_stats(player)[S.SPEED] * STAT_MULTIPLIER_LOOKUP[6 + stage]).astype(jnp.int32)
+    return modify_speed(speed, state.active_field('item', player)[0], state.ability[player, 0],
+        state.active_field('status', player)[0], weather, state.terrain.terrain,
+        state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
 
 
 def modify_stats(state, player, stats, weather=None):
