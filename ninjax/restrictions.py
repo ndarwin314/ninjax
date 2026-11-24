@@ -15,6 +15,11 @@ ENCORE_TURNS = 3
 TAUNT_TURNS = 3
 
 
+def gravity_blocks_move(identifier, gravity_duration):
+    """Block represented airborne moves and High Jump Kick under Gravity."""
+    return (gravity_duration > 0) & ((identifier == 136) | (identifier == 19) | (identifier == 340))
+
+
 def allowed_moves(move_ids, move_types, *, disabled_move_id, disable_turns,
                   taunt_turns, encore_move_id, encore_turns, gravity_duration):
     """Return restriction eligibility (2, 4) from active move/volatile arrays.
@@ -24,7 +29,7 @@ def allowed_moves(move_ids, move_types, *, disabled_move_id, disable_turns,
     """
     return (~((disable_turns > 0) & (move_ids == disabled_move_id)) &
             ~((taunt_turns > 0) & (move_types == MoveType.STATUS)) &
-            ~((gravity_duration > 0) & (move_ids == 136)) &
+            ~gravity_blocks_move(move_ids, gravity_duration) &
             ((encore_turns <= 0) | (move_ids == encore_move_id)))
 
 
@@ -43,7 +48,7 @@ def resolve_move(move_ids, move_types, current_pp, index, *, disabled_move_id,
     identifier = move_ids[index]
     blocked = ((disable_turns > 0) & (identifier == disabled_move_id)) | (
         (taunt_turns > 0) & (move_types[index] == MoveType.STATUS))
-    blocked |= (gravity_duration > 0) & (identifier == 136)
+    blocked |= gravity_blocks_move(identifier, gravity_duration)
     return index, blocked
 
 

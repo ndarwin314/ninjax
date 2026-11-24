@@ -102,7 +102,8 @@ def compute_base_power(
         defender: Pokemon,
         move: Move,
         terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None,
-        user_speed=1, target_speed=1, positive_stages=0, previous_failed=False) -> chex.Array:
+        user_speed=1, target_speed=1, positive_stages=0, previous_failed=False,
+        target_charging_move=0) -> chex.Array:
     """Resolve live intrinsic power, then apply ordered power modifiers.
 
     BasePower event factors are chained as 4096-based integers in descending
@@ -137,7 +138,12 @@ def compute_base_power(
     # Punk Rock priority 7 precedes terrain priority 6 and move priority 0.
     modifier = chain_modifier(modifier, 5325, (attacker.ability == AbilityEnum.PUNK_ROCK) & move.sound)
     modifier = chain_terrain_power_modifiers(modifier, move, terrain.terrain, grounded_user, grounded_target)
+    # Solar moves are halved by rain, sand or snow at the BasePower stage.
+    solar = (move.identifier == 76) | (move.identifier == 669)
+    modifier = chain_modifier(modifier, 2048, solar & ((weather == WeatherEnum.RAIN) | (weather == WeatherEnum.SANDSTORM) | (weather == WeatherEnum.SNOW)))
     modifier = chain_move_power_modifiers(modifier, move, terrain.terrain, grounded_user, raw_effectiveness, defender, attacker.status)
+    # Bounce doubles Gust/Twister at BasePower; Fly does so later at damage.
+    modifier = chain_modifier(modifier, 8192, (target_charging_move == 340) & ((move.identifier == 16) | (move.identifier == 239)))
     return jnp.maximum(1, apply_modifier(power, modifier))
 
 
@@ -336,7 +342,7 @@ def defender_damage_modifier(ability, move_type, category, contact, sound, effec
 
 
 def final_damage_modifier(user_ability, target_ability, item, move, effectiveness,
-                          is_crit, full_hp, screen, user_speed, target_speed):
+                          is_crit, full_hp, screen, user_speed, target_speed, semi_damage_boost=False):
     """Chain singles ModifyDamage effects by Speed, then effect type.
 
     Represented callbacks have priority zero. Faster holders execute first;
@@ -347,6 +353,8 @@ def final_damage_modifier(user_ability, target_ability, item, move, effectivenes
     user = attacker_damage_modifier(user_ability, effectiveness, is_crit)
     target = defender_damage_modifier(target_ability, move.type, move.move_type,
         move.contact, move.sound, effectiveness, full_hp)
+    # A target's Fly/Dig/Dive callback follows its ability at the same speed.
+    target = chain_modifier(target, 8192, semi_damage_boost)
     held = jnp.where(item == ItemEnum.LIFE_ORB, 5324,
         jnp.where((item == ItemEnum.EXPERT_BELT) & (effectiveness > 1), 4915, 4096))
     target_first = target_speed > user_speed
@@ -366,7 +374,7 @@ def final_damage_modifier(user_ability, target_ability, item, move, effectivenes
 def compute_damage_multipliers(attacker, defender, weather, move, base_damage,
                                is_crit, damage_roll, gravity_active=False, *,
                                effectiveness=None, screen=False,
-                               user_speed=1, target_speed=1) -> Array:
+                               user_speed=1, target_speed=1, semi_damage_boost=False) -> Array:
     """Apply weather, crit, random, STAB, types, burn and final modifiers.
 
     Critical hits, random rolls and type resistance truncate independently.
@@ -387,7 +395,7 @@ def compute_damage_multipliers(attacker, defender, weather, move, base_damage,
         move.move_type, move.identifier)
     modifier = final_damage_modifier(attacker.ability, defender.ability, attacker.item,
         move, effectiveness, is_crit, defender.current_hp >= defender.max_hp,
-        screen, user_speed, target_speed)
+        screen, user_speed, target_speed, semi_damage_boost)
     damage = apply_modifier(damage, modifier)
     return jnp.where(effectiveness > 0, jnp.maximum(1, damage) & 65535, 0)
 

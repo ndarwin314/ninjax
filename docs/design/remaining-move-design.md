@@ -11,10 +11,9 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, of which **425** have reviewed represented
-singles effects and **260** remain unavailable or unreviewed. In the pinned Gen 9
-random-battle inventory, **257 of 348** moves are supported and **91** remain
-gaps. These are implementation counts, not exhaustive interaction-parity counts.
+The catalogue contains **685 moves**, including **442** with represented singles
+effects. The pinned random-battle inventory has **263 of 348** moves supported.
+These are implementation counts, not exhaustive interaction-parity counts.
 
 Rising Voltage is now enabled for singles: Electric Terrain doubles intrinsic
 power when the target is grounded, independently of the user's ordinary terrain
@@ -102,21 +101,25 @@ host and pass numeric, fixed-shape metadata into traced execution.
 
 | Moves | What the fields provide | Work still required |
 | --- | --- | --- |
-| Teleport, Chilly Reception | `selfSwitch: true`; Chilly Reception also has `weather: snowscape` | Reuse the existing pivot request with status/field targeting and correct success rules. Chilly Reception must set snow before switching. Verify replacement availability and queued-action timing; a status pivot cannot simply use damage-success rules. |
-| Parting Shot | `selfSwitch: true` and sound/bypass flags | Its current record has no `boosts` vector for the offensive drops. Add those semantics and compose drops, reflection/immunity handling and switching with move-specific success rules. |
+| Parting Shot | `selfSwitch: true`, offensive drops and sound/bypass flags | Compose drops, reflection/immunity handling and switching with move-specific success rules. |
 | Dragon Tail, Circle Throw | `forceSwitch: true` | Add a damaging-hit switch continuation, gated by the actual `HitResult` recipient and survival. Substitute interception must not drag the target; do not reuse Whirlwind's status-only gate unchanged. |
-| Baton Pass, Shed Tail | `selfSwitch: copyvolatile` or `shedtail`; Shed Tail also names `substitute` | Typed transfer policies and departure/entry lifecycle. Shed Tail additionally needs its own HP cost and transfer timing; naming Substitute does not implement those rules. |
-| Revival Blessing | `selfSwitch: true` | This marker is insufficient to describe revival. Implement fainted-party-member selection and HP restoration; do not treat it as an ordinary active-Pokémon pivot. |
+| Revival Blessing | Revival effect | Implement fainted-party-member selection and HP restoration; this is not an ordinary active-Pokémon pivot. |
 | Mist, Safeguard, Quick Guard, Wide Guard | Named `sideCondition` values | Side-condition state/timers or turn-scoped guards and their consumers in stat, status and move routing. Reflect's existing timer does not provide these effects. |
 | Baneful Bunker, Burning Bulwark, Silk Trap, Endure | Named protection/survival volatiles | Extend protection kinds and retaliation or damage-survival rules. Detect can share ordinary Protect; these variants cannot. |
 | Bind, Fire Spin, Infestation, Magma Storm, Sand Tomb, Thunder Cage, Whirlpool, Wrap | `volatileStatus: partiallytrapped` | Source-aware trapping state, duration, residual damage, switch restrictions and cleanup. |
 | Aqua Ring, Attract, Charge, Curse, Defense Curl, Dragon Cheer, Focus Energy, Gastro Acid, Imprison, Ingrain, Leech Seed, Magnet Rise, Minimize, No Retreat, Power Trick, Smack Down, Stockpile, Tar Shot, Torment, Yawn | Their condition identity | Move-specific condition payloads, application rules, consumers and expiry. The condition string identifies the required handler; it does not supply its lifecycle. |
 
 `selfSwitch` must retain its distinction between boolean `true`, `copyvolatile`
-and `shedtail`; reducing all three to a boolean loses transfer semantics. The
-Revival Blessing record also demonstrates why even boolean `true` requires
-move-specific interpretation. Likewise, compound moves must execute every
+and `shedtail`; reducing all three to a boolean loses transfer semantics.
+Compound moves must execute every
 required effect before claiming support.
+
+Teleport and Chilly Reception use the replacement continuation; Chilly Reception
+sets snow first. Baton Pass transfers represented passable conditions and stat
+stages, while Shed Tail pays half maximum HP and transfers only its Substitute.
+The transfer is applied before entry hazards and abilities. The policy currently
+covers Substitute, confusion, Taunt and Perish Song; new passable conditions
+must be added to the transfer helper as their mechanics are implemented.
 
 ### Gaps the field expansion does not resolve
 
@@ -134,8 +137,7 @@ Attack and Dire Claw require custom status-selection rules beyond those lists.
 Similarly, `thawsTarget` is present in the catalogue but is not projected into
 the current Fire-type-only target-thaw path.
 
-Freeze-Dry and Flying Press still need shared effectiveness rules; Wish and Future Sight still need pending-effect state; Solar Beam still
-needs its charge/weather rules; Seismic Toss still needs fixed-damage dispatch.
+Freeze-Dry and Flying Press still need shared effectiveness rules; Wish and Future Sight still need pending-effect state; Seismic Toss still needs fixed-damage dispatch.
 None becomes implemented merely through the new condition/switch/stat fields.
 Transformations, richer battle history and doubles target resolution remain
 architectural work as described below.
@@ -231,7 +233,8 @@ execution boundary. Extend rule metadata only when implementing its consumers.
 | Priority-0 conditional power factors | Facade; Venoshock, Barb Barrage; Brine | **New** `damage.chain_conditional_move_power_modifiers(modifier, rule, user_status, target_status, target_hp, target_max_hp)` returns the updated integer modifier. **Existing** `chain_move_power_modifiers` calls it at priority 0. Eligibility covers the applicable user status, poison/toxic target status, or half-HP target condition; no intermediate application to power. |
 | Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **New** `damage.chain_field_matchup_move_modifiers(modifier, rule, terrain_type, effectiveness)` handles Electric Terrain's presence and the super-effective factor. **Existing** `chain_move_power_modifiers` delegates to it alongside its current move factors. Psyblade has no user-grounding requirement; Collision Course shares Electro Drift's resolved matchup input. |
 | Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
-| Item/form-dependent type override | Judgment, Raging Bull, Aura Wheel | **New** `properties.item_form_move_type(type_rule, default_type, effective_item, species, form)` returns only a transient type; **existing** `_override_type` calls it with host-defined plate/form mappings. **New** `properties.move_species_eligible(move_id, species, form)` supplies Aura Wheel's execution-time failure check to **existing** `execution.dispatch_selected_move`. Raging Bull's screen removal belongs to **new** `routing.apply_pre_damage_move_effects(state, player, move)`, delegating to **new** `side.field_conditions.clear_target_screens(state, target)`; it is not a typing side effect. |
+| Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break and is enabled for singles. Aura Wheel has typing for the supplied form. Its species eligibility and Hunger Switch lifecycle remain open. |
+| Item-dependent type override | Judgment | Resolve the transient type from supported Plate metadata during move property resolution. Plate support is still required. |
 | Special effectiveness | Freeze-Dry, Flying Press | **New** `type_effectiveness.move_type_effectiveness_factors(move_type, defender_types, effectiveness_rule)` returns one factor per defensive type. It replaces Water's factor for Freeze-Dry or multiplies the resolved primary type's factors by Flying's factors for Flying Press. **Existing** `queries.move_immune_from_fields` and `damage.hit_type_effectiveness` both consume it; the latter retains responsibility for raw/damage matchup outputs and represented ability/Gravity handling. |
 | Weather damage exception | Hydro Steam | Extend **existing** `damage.apply_weather_damage(damage, move_type, weather)` with a move-rule input. Replace the usual sun/Water reduction with Hydro Steam's 1.5 bonus, retaining weather-stage rounding and one call from `compute_damage_multipliers`. |
 | Category selection | Photon Geyser, Shell Side Arm | **New** `properties.resolve_move_category(key, move, level, user_atk, user_spa, target_def, target_spd)` returns `(key, resolved_move)`. Delegate to **new** `properties.photon_geyser_category(atk, spa)` and `properties.shell_side_arm_category(key, level, atk, spa, defense, sp_defense)`; the latter returns `(key, category)` and draws only for a tie. Set category, stat selectors and conditional contact together via **new** `properties.with_damage_category(move, category, physical_contact)`. Gather inputs with **new** `queries.category_stat_fields(state, player)`, preserving stage adjustments while excluding ordinary item/ability stat modifiers. |
@@ -315,16 +318,13 @@ sleep; use the checked callback rather than inferring eligibility from prose.
 Photon Geyser also needs its ability-ignoring behavior audited before enabling
 the complete move. Shell Side Arm's random category choice must not be rerolled
 when accuracy, hit routing or damage reads the resolved move. Plate support,
-form eligibility, Raging Bull's screen removal and transformation side effects
-must be tested alongside their type changes before enabling those moves.
+Aura Wheel's species and form lifecycle, and transformation side effects remain
+separate requirements.
 
-Raging Bull and Brick Break share Showdown's `onTryHit` screen removal.
-Introduce their shared `apply_pre_damage_move_effects` hook in
-`_prepare_normal_hit` at the corresponding TryHit stage; migrate Brick Break's
-current late removal out of `resolve_damaging_hit` rather than duplicating it.
-Verify its position relative to protection, accuracy and immunity against full
-Showdown attempts before choosing the exact insertion point. A numeric damage
-helper should read the resulting screen state, not own this state mutation.
+Raging Bull and Brick Break share the `apply_pre_damage_move_effects` hook.
+The pinned Showdown callbacks run after the accuracy, protection and immunity
+gates and before Substitute interception. Hit resolution reads the resulting
+screen state when calculating damage.
 
 ### Data boundaries and next implementation batches
 
@@ -364,7 +364,7 @@ Some moves need several of these capabilities.
 | Residual conditions and trapping | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
 | Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
 | Restrictions and prerequisites | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
-| Charge/recharge/locked sequences | Solar Beam, Meteor Beam, Giga Impact, Outrage, Rollout | Generalize Electro Shot/Hyper Beam continuations and interruption rules. |
+| Charge/recharge/locked sequences | Sky Drop, Giga Impact, Outrage, Rollout | Extend shared continuations for carrying a target and other locked sequences. |
 | Preparation and semi-invulnerability | Fly, Dig, Dive, Phantom Force, Focus Punch, Beak Blast | Preparation timing, targetability and pre-execution reactions. |
 | Damage/action/team history | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
 | Protection and survival | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Additional protection variants, retaliation, bypass and HP survival rules. Detect now shares ordinary Protect. |
@@ -386,7 +386,7 @@ the existing Matcha Gotcha implementation does not establish target-thaw parity.
 
 Actions now use `BattleAction(index, move_type)` with `ActionType.ATTACK`,
 `SWITCH`, `CONTINUED`, and `NO_OP`. Queued actions retain this PyTree. The
-continued kind forces an Electro Shot release or a Hyper Beam recharge turn;
+continued kind forces a charging move's release or a Hyper Beam recharge turn;
 inactive no-op remains separate. Attack index 4 represents
 forced Struggle. Legacy integer inputs and the existing flat legal-action mask
 are retained as compatibility adapters.
@@ -437,6 +437,22 @@ The buffer is internal and is replaced by the next executed move, rather than
 being an observation or a complete turn history.
 
 ## Latest shared execution support
+
+Solar Beam, Solar Blade, Meteor Beam, Sky Attack, Freeze Shock and Ice Burn
+share Electro Shot's charge and forced-release continuation. Sun skips the
+solar charge; rain skips Electro Shot's. Meteor Beam and Electro Shot raise
+Special Attack before charging or attacking. Power Herb skips a charge when
+weather has not already done so. Rain, sand and snow halve solar power at hit
+time. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the same
+continuation with their respective semi-invulnerable locations.
+The switch-cleared semi-invulnerability enum distinguishes airborne, underground,
+underwater and vanished users. Incoming attacks use location-specific hit
+exceptions, and No Guard bypasses the location check. Phantom Force and Shadow
+Force remove represented protection on a reaching hit. The represented
+vulnerable-move damage modifiers, Dig/Dive sandstorm shelter, and Fly/Bounce
+Gravity restriction are implemented. Poison-type Toxic bypasses the location
+and accuracy checks. Additional interactions such as Cramorant's Gulp Missile
+and Sky Drop's carried target remain outside this coverage.
 
 Beat Up constructs a fixed-shape hit plan from participating party members in
 team order. The user contributes even when statused; other contributors must

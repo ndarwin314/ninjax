@@ -259,7 +259,7 @@ CURATED_ITEMS = {
     'Chesto Berry': 'CHESTO_BERRY', 'Lum Berry': 'LUM_BERRY',
     'Flame Orb': 'FLAME_ORB', 'Toxic Orb': 'TOXIC_ORB', 'White Herb': 'WHITE_HERB',
     'Air Balloon': 'AIR_BALLOON', 'Hearthflame Mask': 'HEARTHFLAME_MASK',
-    'Cornerstone Mask': 'CORNERSTONE_MASK',
+    'Cornerstone Mask': 'CORNERSTONE_MASK', 'Power Herb': 'POWER_HERB',
 }
 
 

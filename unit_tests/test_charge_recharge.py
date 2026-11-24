@@ -8,9 +8,11 @@ from ninjax.battle.environment import Battle
 from ninjax.battle.types import ActionType, BattleAction
 from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.field import Weather, WeatherEnum as W
-from ninjax.enums.moves import MoveResult
+from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveResult, SemiInvulnerability
 from ninjax.enums.pokemon import Status
-from ninjax.moves.execution import dispatch_selected_move
+from ninjax.moves.execution import dispatch_selected_move, prepare_charge_move
+from ninjax.calculations.damage import compute_base_power
 from ninjax.moves.multi_hit import resolve_multi_hit
 from ninjax.moves.routing import move_hits
 from ninjax.records.hits import HitOutcome
@@ -23,6 +25,77 @@ from unit_tests.test_curated_moves import equip_move
 def continued():
     """Build a scalar forced action for a single active player."""
     return BattleAction(jnp.int32(0), jnp.int32(ActionType.CONTINUED))
+
+
+@pytest.mark.parametrize('name,weather,herb,ready,boost', [
+    ('Solar Beam', W.SUN, True, True, 0),
+    ('Solar Blade', W.NONE, True, True, 0),
+    ('Solar Beam', W.RAIN, False, False, 0),
+    ('Meteor Beam', W.NONE, False, False, 1),
+    ('Electro Shot', W.RAIN, False, True, 1),
+    ('Freeze Shock', W.NONE, True, True, 0),
+])
+def test_charge_preparation(neutral_type, name, weather, herb, ready, boost):
+    """Weather, herb and initial boosts compose before a charge is stored."""
+    key, state = neutral_type
+    state = equip_move(state, name).replace(weather=Weather(weather, 5))
+    state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.POWER_HERB if herb else I.NONE])))
+    _, out, actual_ready = jax.jit(prepare_charge_move)(key, state, 0, 0)
+    assert bool(actual_ready) == ready
+    assert out.boosts.normal_boosts[0, 3] == boost
+    assert (out.active.item[0, 0] == I.POWER_HERB) == (herb and name == 'Solar Beam' and weather == W.SUN)
+    assert (out.volatile_status.charging_move_id[0, 0] != 0) == (not ready)
+
+
+@pytest.mark.parametrize('name', ['Solar Beam', 'Solar Blade', 'Meteor Beam', 'Sky Attack', 'Freeze Shock', 'Ice Burn'])
+def test_shared_charge_release(neutral_type, name):
+    """Each represented charging attack spends PP once and releases next turn."""
+    key, state = neutral_type
+    state = equip_move(state, name)
+    key, charged = step_move(key, state, 0, 0, False)
+    assert charged.volatile_status.charging_move_id[0, 0] == make_move(name).identifier[0]
+    assert charged.active.moves.current_pp[0, 0, 0] == state.active.moves.current_pp[0, 0, 0] - 1
+    assert charged.active.current_hp[1, 0] == state.active.current_hp[1, 0]
+    v = charged.volatile_status
+    charged = charged.replace(volatile_status=v.replace(semi_invulnerability=
+        v.semi_invulnerability.at[0, 0].set(SemiInvulnerability.AIRBORNE)))
+    _, released = step_action(key, charged, continued(), 0)
+    assert released.volatile_status.charging_move_id[0, 0] == 0
+    assert released.volatile_status.semi_invulnerability[0, 0] == SemiInvulnerability.NONE
+    assert released.active.moves.current_pp[0, 0, 0] == charged.active.moves.current_pp[0, 0, 0]
+    if name == 'Meteor Beam':
+        assert released.boosts.normal_boosts[0, 3] == 1
+
+
+@pytest.mark.parametrize('name', ['Solar Beam', 'Solar Blade', 'Electro Shot', 'Meteor Beam'])
+def test_power_herb_skips_charge(neutral_type, name):
+    """Power Herb is consumed once when a charge would otherwise be needed."""
+    key, state = neutral_type
+    state = equip_move(state, name)
+    state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.POWER_HERB])))
+    _, out = step_move(key, state, 0, 0, False)
+    assert out.active.item[0, 0] == I.NONE
+    assert out.volatile_status.charging_move_id[0, 0] == 0
+    if name in ('Meteor Beam', 'Electro Shot'):
+        assert out.boosts.normal_boosts[0, 3] == 1
+
+
+@pytest.mark.parametrize('weather,expected', [(W.NONE, 120), (W.SUN, 120), (W.RAIN, 60), (W.SANDSTORM, 60), (W.SNOW, 60)])
+def test_solar_weather_power(neutral_type, weather, expected):
+    """Weakening weather modifies solar power at the hit-time power stage."""
+    _, state = neutral_type
+    move = make_move('Solar Beam')
+    assert compute_base_power(state.active[0], state.active[1], move, state.terrain, weather)[0] == expected
+
+
+def test_sun_preserves_power_herb(neutral_type):
+    """Sun makes Solar Beam immediate without consuming the held herb."""
+    key, state = neutral_type
+    state = equip_move(state, 'Solar Beam').replace(weather=Weather(W.SUN, 5))
+    state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.POWER_HERB])))
+    _, out = step_move(key, state, 0, 0, False)
+    assert out.active.item[0, 0] == I.POWER_HERB
+    assert out.volatile_status.charging_move_id[0, 0] == 0
 
 
 def test_electro_shot_charge_and_last_pp(neutral_type):

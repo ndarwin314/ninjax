@@ -13,7 +13,7 @@ from ninjax.enums.moves import MoveResult
 from ninjax.moves.execution import move_interrupted, move_used
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults
-from ninjax.restrictions import resolve_move
+from ninjax.restrictions import gravity_blocks_move, resolve_move
 from ninjax.side.faint_effects import clear_destiny_bond, resolve_faints
 from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
@@ -94,6 +94,11 @@ def step_move(
         is_interrupted.reshape(()), move_interrupted,
         partial(_execute_prepared_move, continued=continued, struggle=struggle),
         key, state, player_idx, index)
+    # The release may hit, miss or be interrupted; in every case the user
+    # becomes targetable again once that action has ended.
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(semi_invulnerability=
+        v.semi_invulnerability.at[player_idx, 0].set(jnp.where(continued, 0, v.semi_invulnerability[player_idx, 0]))))
     # Protect and Spiky Shield return NOT_FAIL in Gen 9; other blocks can fail.
     result = state.hit_results[0].outcome
     failed = is_interrupted | (result == HitOutcome.MISS) | (result == HitOutcome.IMMUNE) | (result == HitOutcome.FAILED) | (result == HitOutcome.BLOCKED)
@@ -155,7 +160,7 @@ def _prepare_charge_release(key, state, player, unused_index):
             protect_chain=v.protect_chain.at[player, 0].set(0),
             encore_overridden=v.encore_overridden.at[player, 0].set(False)))
     state = emit(state, EventKind.CONDITION, player, detail=14, before=identifier, after=0)
-    blocked = ~jnp.any(matches) | ((v.disable_turns[player, 0] > 0) & (v.disabled_move_id[player, 0] == identifier))
+    blocked = ~jnp.any(matches) | ((v.disable_turns[player, 0] > 0) & (v.disabled_move_id[player, 0] == identifier)) | gravity_blocks_move(identifier, state.gravity_duration)
     return key, state, index, blocked
 
 
@@ -170,7 +175,9 @@ def step_switch(
     # TODO: add an opponent switched field somewhere for stakeout + analytic
     """Advance the action key and execute the selected switch with a separate key."""
     key, switch_key = random.split(key)
-    return key, resolve_faints(swap_out(switch_key, state, player_index, index))
+    transfer = state.switch_transfer[player_index]
+    state = state.replace(switch_transfer=state.switch_transfer.at[player_index].set(0))
+    return key, resolve_faints(swap_out(switch_key, state, player_index, index, transfer))
 
 
 def step_action(

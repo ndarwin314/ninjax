@@ -111,18 +111,27 @@ def move_accuracy(state, attacker_index, move, absorption=None):
     return move_accuracy_from_fields(move, *accuracy_fields(state, attacker_index), absorption=absorption)
 
 
+def is_poison_type_user(state, attacker_index):
+    """Resolve the user's current Poison typing, including ordinary Tera."""
+    types = state.effective_types(attacker_index)
+    tera = state.active_field('is_terastallized', attacker_index)[0]
+    tera_type = state.active_field('tera_type', attacker_index)[0]
+    return jnp.where(tera & (tera_type != Type.NONE), tera_type == Type.POISON, jnp.any(types == Type.POISON))
+
+
 def accuracy_fields(state, attacker_index):
     """Read the current values needed to check a move's accuracy."""
     abilities = state.ability
     target = 1 - attacker_index
+    poison_user = is_poison_type_user(state, attacker_index)
     return (abilities[attacker_index], abilities[target], state.active_field('item', attacker_index),
             state.weather.weather, abilities, state.active_field('current_hp'),
             state.boosts.acc_boosts[attacker_index, 0], state.boosts.acc_boosts[target, 1],
-            state.volatile_status.confusion_turns[target])
+            state.volatile_status.confusion_turns[target], poison_user)
 
 
 def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, field_weather,
-                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns, *, absorption=None):
+                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns, poison_user=False, *, absorption=None):
     """Calculate accuracy from the current move and relevant battle fields."""
     weather = effective_weather(field_weather, abilities, hp)
     is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
@@ -154,7 +163,8 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
     # Blizzard in snow and Hurricane in rain bypass accuracy/evasion checks.
     weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | ((move.identifier == 542) & (weather == WeatherEnum.RAIN))
     accuracy = jnp.where((defender_ability == AbilityEnum.TANGLED_FEET) & (confusion_turns > 0), accuracy * .5, accuracy)
-    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always | absorption.active, 1., accuracy)
+    toxic_always = (move.identifier == 92) & poison_user
+    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always | absorption.active | toxic_always, 1., accuracy)
 
     return accuracy
 
@@ -181,18 +191,36 @@ def move_overrides(state, player, move):
     return move.replace(base_power=power, type=move_type, priority=priority)
 
 
+# Match on form identity so temporary type changes never change these moves.
+FORM_MOVE_TYPES = (
+    (904, FormEnum.OGERPON_WELLSPRING, Type.WATER),
+    (904, FormEnum.OGERPON_HEARTHFLAME, Type.FIRE),
+    (904, FormEnum.OGERPON_CORNERSTONE, Type.ROCK),
+    (873, FormEnum.TAUROS_PALDEA_COMBAT, Type.FIGHTING),
+    (873, FormEnum.TAUROS_PALDEA_BLAZE, Type.FIRE),
+    (873, FormEnum.TAUROS_PALDEA_AQUA, Type.WATER),
+    (783, FormEnum.MORPEKO_HANGRY, Type.DARK),
+)
+
+
+def form_move_type(identifier, default_type, form):
+    """Apply form callbacks to the transient type shared by planning and hits."""
+    # Aura Wheel explicitly sets Electric outside Hangry Mode, even after Normalize.
+    move_type = jnp.where(identifier == 783, Type.ELECTRIC, default_type)
+    for move_id, required_form, resolved_type in FORM_MOVE_TYPES:
+        move_type = jnp.where((identifier == move_id) & (form == required_form),
+                              resolved_type, move_type)
+    return move_type
+
+
 def _override_type(state, player, ident, move_type, weather, types):
-    """Resolve Weather Ball, Ivy Cudgel and Revelation Dance typing."""
+    """Resolve weather, form and current-type callbacks."""
     weather_ball = (ident == 311) & (weather != W.NONE)
     move_type = jnp.where(weather_ball & (weather == W.SUN), Type.FIRE, move_type)
     move_type = jnp.where(weather_ball & (weather == W.RAIN), Type.WATER, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SANDSTORM), Type.ROCK, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SNOW), Type.ICE, move_type)
-    form = state.active_field('form', player)
-    ivy_type = jnp.where(form == FormEnum.OGERPON_WELLSPRING, Type.WATER,
-               jnp.where(form == FormEnum.OGERPON_HEARTHFLAME, Type.FIRE,
-               jnp.where(form == FormEnum.OGERPON_CORNERSTONE, Type.ROCK, move_type)))
-    move_type = jnp.where(ident == 904, ivy_type, move_type)
+    move_type = form_move_type(ident, move_type, state.active_field('form', player))
     # Revelation Dance uses the first current type; ordinary Tera overrides it.
     first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], Type.NORMAL))
     tera_type = state.active_field('tera_type', player)[0]

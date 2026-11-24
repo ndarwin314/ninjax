@@ -14,7 +14,8 @@ import jax.random as random
 from ninjax.ability_effects import prepare_type_change
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import WeatherEnum
-from ninjax.enums.moves import MoveType
+from ninjax.enums.items import ItemEnum
+from ninjax.enums.moves import MoveType, SemiInvulnerability
 from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import _struggle_recoil, finish_attempt
 from ninjax.moves.properties import effective_move
@@ -22,6 +23,7 @@ from ninjax.moves.routing import _apply_move_effects, move_misses
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults, record_hit
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
+from ninjax.side.item_effects import consume
 from ninjax.side.queries import effective_weather, is_choice_item
 from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts, update_active_fields
@@ -92,6 +94,12 @@ def move_used(key, state: BattleState, attacker_index, move_index, continued=Fal
     move = state.active_moves(attacker_index, move_index)
     key, state = _execute_selected_or_called_move(key, state, attacker_index, move_index,
         ~jnp.asarray(struggle) & ~jnp.asarray(continued) & (move.identifier[0] == 214) & move.implemented[0], continued)
+    # Release keeps concealment during its own execution, then ends it even
+    # when called directly instead of through the battle action scheduler.
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(semi_invulnerability=
+        v.semi_invulnerability.at[attacker_index, 0].set(jnp.where(
+            continued, SemiInvulnerability.NONE, v.semi_invulnerability[attacker_index, 0]))))
     return key, jax.lax.cond(struggle, partial(_struggle_recoil, player=attacker_index), _identity, state)
 
 
@@ -228,7 +236,7 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
     struggle = state.event_move == -1
     move = state.active_moves(attacker_index, move_index)
     explosion = (move.identifier[0] == 153) & move.implemented[0]
-    electro_shot = (move.identifier[0] == 905) & move.implemented[0]
+    charge_move = jnp.isin(move.identifier[0], jnp.array([19, 76, 91, 143, 291, 340, 467, 553, 554, 566, 669, 800, 905])) & move.implemented[0]
 
     v = state.volatile_status
     target = 1-attacker_index
@@ -241,12 +249,12 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
     # Releases and Struggle bypass initial failure/charge checks. Preserve
     # that priority before selecting Explosion or Electro Shot preparation.
     branch = jnp.select(
-        (continued | struggle, fake_fails | sucker_fails, explosion, electro_shot),
+        (continued | struggle, fake_fails | sucker_fails, explosion, charge_move),
         (0, 1, 2, 3), default=0)
     key, state, ready = jax.lax.switch(
         branch,
         (_ready_selected_move, partial(_fail_selected_move, move=move),
-         _prepare_explosion, _prepare_electro_shot),
+         _prepare_explosion, prepare_charge_move),
         key,
         state,
         attacker_index,
@@ -366,28 +374,43 @@ def execute_sleep_talk(key, state, player, move_index):
     return _execute_selected_or_called_move(key, state, player, move_index, jnp.bool_(True))
 
 
-def _charge_electro_shot(k, s, *, player):
+def _charge_selected_move(k, s, *, player, identifier):
     """Remember the move and original target without attempting a hit."""
     v = s.volatile_status
+    location = jnp.select(((identifier == 19) | (identifier == 340), identifier == 91,
+                           identifier == 291, (identifier == 467) | (identifier == 566)),
+                          (SemiInvulnerability.AIRBORNE, SemiInvulnerability.UNDERGROUND,
+                           SemiInvulnerability.UNDERWATER, SemiInvulnerability.VANISHED),
+                          default=SemiInvulnerability.NONE)
     s = s.replace(volatile_status=v.replace(
-        charging_move_id=v.charging_move_id.at[player, 0].set(905),
+        charging_move_id=v.charging_move_id.at[player, 0].set(identifier),
+        semi_invulnerability=v.semi_invulnerability.at[player, 0].set(location),
         charge_target_side=v.charge_target_side.at[player, 0].set(1-player),
         charge_target_position=v.charge_target_position.at[player, 0].set(0)))
-    return k, emit(s, EventKind.CONDITION, player, detail=14, before=0, after=905)
+    return k, emit(s, EventKind.CONDITION, player, detail=14, before=0, after=identifier)
 
 
-def _prepare_electro_shot(key, state, player, index):
-    """Boost SpA and return whether rain permits an immediate hit attempt."""
+def prepare_charge_move(key, state, player, index):
+    """Apply first-turn effects, then charge or attack immediately.
 
-    state = add_boosts(state, player, StatEnum.SPECIAL_ATTACK, 1)
-    ready = effective_weather(state.weather.weather, state.ability, state.active.current_hp) == WeatherEnum.RAIN
-    key, state = jax.lax.cond(ready, _unchanged_key_state, partial(_charge_electro_shot, player=player), key, state)
+    Weather shortcuts precede Power Herb so favorable weather preserves it.
+    The forced continuation skips this helper and therefore never repeats boosts.
+    """
+    identifier = state.active_moves(player, index).identifier[0]
+    boost = (identifier == 905) | (identifier == 800)
+    state = jax.lax.cond(boost, partial(add_boosts, side_idx=player, idx=StatEnum.SPECIAL_ATTACK, val=1), _identity, state)
+    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
+    weather_ready = ((identifier == 905) & (weather == WeatherEnum.RAIN)) | (((identifier == 76) | (identifier == 669)) & (weather == WeatherEnum.SUN))
+    herb = (state.active.item[player, 0] == ItemEnum.POWER_HERB) & ~weather_ready
+    state = consume(state, player, herb)
+    ready = weather_ready | herb
+    key, state = jax.lax.cond(ready, _unchanged_key_state, partial(_charge_selected_move, player=player, identifier=identifier), key, state)
     return key, state, ready
 
 
 def start_electro_shot(key, state, player, index):
     """Charge or immediately execute Electro Shot without another PP payment."""
-    key, state, ready = _prepare_electro_shot(key, state, player, index)
+    key, state, ready = prepare_charge_move(key, state, player, index)
     return jax.lax.cond(ready, _apply_move_effects, _unchanged_selected_move,
                         key, state, player, index)
 

@@ -1,13 +1,17 @@
-"""Runtime move types for Ivy Cudgel and Revelation Dance."""
+"""Runtime move types and routing for dynamic move properties."""
+import jax
 import jax.numpy as jnp
 import pytest
 
 from ninjax.battle.environment import Battle
 from ninjax.battle.types import BattleParams, InformationMode
+from ninjax.calculations.damage import compute_base_power
 from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.pokemon import FormEnum as F, Type
 from ninjax.moves.execution import move_used
 from ninjax.moves.properties import effective_move
+from ninjax.moves.routing import move_not_drawn_in
+from ninjax.records.hits import HitOutcome, HitRecipient
 from ninjax.side.updates import update_active
 from ninjax.teams.construction import make_move
 from ninjax.teams.curated import load_sets, make_sandbox_pool
@@ -25,6 +29,74 @@ def test_ivy_cudgel_uses_form_not_current_types(neutral_type, form, expected):
     move = make_move('Ivy Cudgel')
     assert effective_move(state, 0, move).type[0] == expected
     assert move.type[0] == Type.GRASS and move.crit_stage[0] == 1
+
+
+@pytest.fixture(scope='module')
+def resolve_form_move():
+    """Share one JIT executable across all traced form and move IDs."""
+    return jax.jit(effective_move)
+
+
+@pytest.mark.parametrize('name,form,expected', [
+    ('Raging Bull', F.DEFAULT, Type.NORMAL),
+    ('Raging Bull', F.TAUROS_PALDEA_COMBAT, Type.FIGHTING),
+    ('Raging Bull', F.TAUROS_PALDEA_BLAZE, Type.FIRE),
+    ('Raging Bull', F.TAUROS_PALDEA_AQUA, Type.WATER),
+    ('Aura Wheel', F.DEFAULT, Type.ELECTRIC),
+    ('Aura Wheel', F.MORPEKO_HANGRY, Type.DARK),
+    ('Aura Wheel', F.TAUROS_PALDEA_AQUA, Type.ELECTRIC),
+])
+def test_form_move_types(neutral_type, resolve_form_move, name, form, expected):
+    """Resolve form moves from identity, independent of the user's current type."""
+    _, state = neutral_type
+    mon = state.active[0].replace(form=jnp.array([form]), type_list=jnp.array([Type.GRASS, Type.NONE]))
+    move = make_move(name)
+    out = resolve_form_move(update_active(state, 0, mon), 0, move)
+    assert out.type[0] == expected
+    assert move.type[0] == (Type.NORMAL if name == 'Raging Bull' else Type.ELECTRIC)
+
+
+@pytest.fixture(scope='module')
+def route_form_move():
+    """Compile the regular accuracy and hit path once for all screen cases."""
+    return jax.jit(move_not_drawn_in)
+
+
+@pytest.mark.parametrize('case,outcome', [
+    ('substitute', HitOutcome.HIT),
+    ('protected', HitOutcome.PROTECTED),
+    ('immune', HitOutcome.IMMUNE),
+    ('miss', HitOutcome.MISS),
+])
+def test_raging_bull_screen_break_follows_hit_gates(neutral_type, route_form_move, case, outcome):
+    """A form-resolved hit breaks screens before Substitute, after hit gates."""
+    key, state = neutral_type
+    state = equip_move(state, 'Raging Bull')
+    user = state.active[0].replace(form=jnp.array([F.TAUROS_PALDEA_COMBAT]))
+    state = update_active(state, 0, user)
+    state = state.replace(reflect=state.reflect.at[1, 0].set(4),
+                          light_screen=state.light_screen.at[1, 0].set(4),
+                          aurora_veil=state.aurora_veil.at[1, 0].set(4))
+    if case == 'substitute':
+        v = state.volatile_status
+        state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(10)))
+    elif case == 'protected':
+        v = state.volatile_status
+        state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    elif case == 'immune':
+        defender = state.active[1].replace(type_list=jnp.array([Type.GHOST, Type.NONE]))
+        state = update_active(state, 1, defender)
+    else:
+        moves = state.team.moves
+        state = state.replace(team=state.team.replace(moves=moves.replace(
+            accuracy=moves.accuracy.at[0, 0, 0, 0].set(0.))))
+    _, out = route_form_move(key, state, 0, 0, 0)
+    assert out.hit_results[0].outcome == outcome
+    expected = 0 if case == 'substitute' else 4
+    assert out.reflect[1, 0] == out.light_screen[1, 0] == out.aurora_veil[1, 0] == expected
+    if case == 'substitute':
+        assert out.hit_results[0].recipient == HitRecipient.SUBSTITUTE
+        assert out.active.current_hp[1, 0] == state.active.current_hp[1, 0]
 
 
 def test_revelation_dance_uses_current_and_tera_type(neutral_type):
@@ -48,11 +120,13 @@ def test_dynamic_types_follow_normalize_order(neutral_type):
     state = update_active(state, 0, mon)
     ivy = effective_move(state, 0, make_move('Ivy Cudgel'))
     dance = effective_move(state, 0, make_move('Revelation Dance'))
-    assert ivy.type[0] == Type.WATER and ivy.base_power[0] == 120
+    assert ivy.type[0] == Type.WATER and ivy.base_power[0] == 100
+    assert compute_base_power(state.active[0], state.active[1], ivy, state.terrain)[0] == 120
     assert dance.type[0] == Type.FIRE and dance.base_power[0] == 90
     state = update_active(state, 0, mon.replace(form=jnp.array([F.DEFAULT])))
     copied = effective_move(state, 0, make_move('Ivy Cudgel'))
-    assert copied.type[0] == Type.NORMAL and copied.base_power[0] == 120
+    assert copied.type[0] == Type.NORMAL and copied.base_power[0] == 100
+    assert compute_base_power(state.active[0], state.active[1], copied, state.terrain)[0] == 120
     state = update_active(state, 0, mon.replace(ability=jnp.array([A.PIXILATE]),
         type_list=jnp.array([Type.NORMAL, Type.NONE])))
     dance = effective_move(state, 0, make_move('Revelation Dance'))

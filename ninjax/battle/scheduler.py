@@ -83,7 +83,9 @@ def _execute_queued_action(current):
     has_bench = jnp.any(current.selected[player] & (battle.team.current_hp[player, :, 0] > 0) &
                        (jnp.arange(6) != battle.active_index[player, 0]))
     pivot = (battle.winner < 0) & battle.switch_requested[player] & (battle.active_field('current_hp', player)[0] > 0) & has_bench
-    battle = battle.replace(switch_requested=jnp.zeros(2, bool))
+    battle = battle.replace(switch_requested=jnp.zeros(2, bool),
+                            switch_transfer=battle.switch_transfer.at[player].set(
+                                jnp.where(pivot, battle.switch_transfer[player], 0)))
     requested = jnp.zeros(2, bool).at[player].set(pivot)
     return current.replace(key=key, battle=battle, revealed_moves=known, cursor=current.cursor + 1,
         phase=jnp.where(pivot, Phase.REPLACEMENT, Phase.TURN), acting_player_mask=requested)

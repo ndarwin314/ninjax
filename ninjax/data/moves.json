@@ -11530,6 +11530,10 @@
     },
     "critRatio": 1,
     "target": "normal",
+    "boosts": {
+      "atk": -1,
+      "spa": -1
+    },
     "hasSheerForceBoost": false,
     "selfSwitch": true,
     "ignoreOffensive": false,
@@ -13451,7 +13455,6 @@
     "critRatio": 1,
     "target": "self",
     "hasSheerForceBoost": false,
-    "selfSwitch": true,
     "ignoreOffensive": false,
     "ignoreDefensive": false,
     "ignoreNegativeOffensive": false,

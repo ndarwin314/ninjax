@@ -11,6 +11,7 @@ import jax.random as random
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum, WeatherEnum
 from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import SemiInvulnerability
 from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.records.events import Cause
 from ninjax.restrictions import tick
@@ -68,6 +69,10 @@ def _residual_fraction(state, player, phase):
     mon = state.effective_active[player]
     ability, status = mon.ability[0], mon.status[0]
     weather = _weather_fraction(state, mon)
+    # Dig and Dive shelter the user from sandstorm, but not other weather effects.
+    hidden = state.volatile_status.semi_invulnerability[player, 0]
+    sand = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp')) == WeatherEnum.SANDSTORM
+    weather = jnp.where(sand & ((hidden == SemiInvulnerability.UNDERGROUND) | (hidden == SemiInvulnerability.UNDERWATER)), 0., weather)
     grassy = ((state.terrain.terrain == TerrainEnum.GRASSY) &
               (~is_floating(mon)[0] | (state.gravity_duration > 0)))
     poison = jnp.where(status == Status.POISON, 1 / 8,

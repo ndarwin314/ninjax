@@ -45,3 +45,4 @@ class ItemEnum(JaxEnum):
     TOXIC_ORB = auto()
     WHITE_HERB = auto()
     AIR_BALLOON = auto()
+    POWER_HERB = auto()

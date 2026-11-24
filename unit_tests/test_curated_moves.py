@@ -118,7 +118,7 @@ def test_brick_break_and_hazard_callbacks(neutral_type):
     """Brick Break clears screens and Rapid Spin clears the user's hazards."""
     key, state = neutral_type
     state = state.replace(reflect=state.reflect.at[1, 0].set(5), light_screen=state.light_screen.at[1, 0].set(5))
-    _, out, _, _ = resolve_damaging_hit(key, state, 0, make_move('Brick Break'))
+    _, out = move_hits(key, equip_move(state, 'Brick Break'), 0, 0)
     assert out.reflect[1, 0] == out.light_screen[1, 0] == 0
     state = state.replace(spikes=state.spikes.at[0, 0].set(3))
     _, out, _, _ = resolve_damaging_hit(key, state, 0, make_move('Rapid Spin'))

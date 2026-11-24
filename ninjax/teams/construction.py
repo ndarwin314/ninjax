@@ -53,6 +53,13 @@ FORM_IDS = {name + suffix: value for name, value in {
     'ogerponcornerstone': FormEnum.OGERPON_CORNERSTONE,
 }.items() for suffix in ('', 'tera')}
 
+FORM_IDS.update({
+    'taurospaldeacombat': FormEnum.TAUROS_PALDEA_COMBAT,
+    'taurospaldeablaze': FormEnum.TAUROS_PALDEA_BLAZE,
+    'taurospaldeaaqua': FormEnum.TAUROS_PALDEA_AQUA,
+    'morpekohangry': FormEnum.MORPEKO_HANGRY,
+})
+
 
 def make_move(name):
     """Project metadata, enabling PP only for reviewed singles implementations.
@@ -139,7 +146,7 @@ def make_move(name):
         effects['escalating_power'] = jnp.array([True])
     if name == 'Surging Strikes':
         effects['always_crit'] = jnp.array([True])
-    if name in ('U-turn', 'Volt Switch', 'Flip Turn'):
+    if name in ('U-turn', 'Volt Switch', 'Flip Turn', 'Teleport', 'Chilly Reception', 'Baton Pass', 'Shed Tail'):
         effects['switch_out'] = jnp.array([True])
     if name in ('Swords Dance', 'Nasty Plot'):
         effects.update(target_self=jnp.array([True]), boost_stat=jnp.array([StatEnum.ATTACK if name == 'Swords Dance' else StatEnum.SPECIAL_ATTACK]), boost_stages=jnp.array([2]))

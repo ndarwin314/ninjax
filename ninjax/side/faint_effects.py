@@ -21,6 +21,7 @@ def _end_fainted_effects(state, *, target):
         paradox_booster=v.paradox_booster.at[target, 0].set(False),
         flash_fire=v.flash_fire.at[target, 0].set(False),
         charging_move_id=v.charging_move_id.at[target, 0].set(0),
+        semi_invulnerability=v.semi_invulnerability.at[target, 0].set(0),
         recharging=v.recharging.at[target, 0].set(False),
         substitute_hp=v.substitute_hp.at[target, 0].set(0))
     return state.replace(volatile_status=v,

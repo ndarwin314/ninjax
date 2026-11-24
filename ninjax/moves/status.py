@@ -114,6 +114,17 @@ def create_substitute(state, player):
     return jax.lax.cond(eligible, partial(_pay_substitute_cost, player=player, cost=cost), _identity, state)
 
 
+def create_shed_tail_substitute(state, player):
+    """Pay half maximum HP and create a quarter-HP Shed Tail Substitute."""
+    max_hp = state.active.max_hp[player]
+    cost = (max_hp + 1) // 2
+    state = take_damage_value(state, player, jnp.array([cost]), False)
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(
+        substitute_hp=v.substitute_hp.at[player, 0].set(max_hp // 4)))
+    return emit(state, EventKind.CONDITION, player, detail=13, before=0, after=1)
+
+
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
     """Execute a status move and commit its drag through the shared continuation."""
     forced = forced_switch_move(move)
@@ -314,6 +325,8 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     field_failed = ((move.weather_effect[0] != 0) & (state.weather.weather == move.weather_effect[0])) | (
         (move.terrain_effect[0] != 0) & (state.terrain.terrain == move.terrain_effect[0])) | (
         (move.identifier[0] == 115) & (state.reflect[attacker_idx, 0] > 0))
+    # Chilly Reception can pivot even when snow was already active.
+    field_failed &= move.identifier[0] != 881
     state = field_status(state, attacker_idx, move)
 
     state = apply_restriction(state, attacker_idx, move)

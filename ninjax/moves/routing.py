@@ -15,16 +15,17 @@ from ninjax.ability_effects import underlying_ability
 from ninjax.battle.switching import force_switch_target, forced_switch_move
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
-from ninjax.enums.moves import MoveType, ProtectionKind
+from ninjax.enums.moves import MoveType, ProtectionKind, SemiInvulnerability
 from ninjax.enums.pokemon import StatEnum, Type, Status
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
-from ninjax.moves.properties import absorption_from_fields, effective_move, move_accuracy, substitute_intercepts
-from ninjax.moves.status import _status_move_effects
+from ninjax.moves.properties import absorption_from_fields, effective_move, is_poison_type_user, move_accuracy, substitute_intercepts
+from ninjax.moves.status import _status_move_effects, create_shed_tail_substitute
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.faint_effects import resolve_faints
+from ninjax.side.field_conditions import clear_target_screens
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.queries import contact_reactions_allowed, is_floating_fields, move_immune_from_fields
 from ninjax.side.stat_effects import stat_changes
@@ -120,6 +121,27 @@ def _attempt_accuracy(k, s, *, hit, attacker_index, move):
     return k, s, hit
 
 
+def semi_invulnerable_to_move(state, attacker, move):
+    """Check whether a target's charge location avoids this opposing move.
+
+    No Guard on either active Pokémon bypasses this check. The listed moves
+    are the Gen 9 exceptions for each represented location.
+    """
+    target = 1 - attacker
+    location = state.volatile_status.semi_invulnerability[target, 0]
+    ident = move.identifier[0]
+    airborne_hit = jnp.isin(ident, jnp.array([16, 87, 239, 327, 479, 542, 614]))
+    underground_hit = (ident == 89) | (ident == 222)
+    underwater_hit = (ident == 57) | (ident == 250)
+    avoided = ((location == SemiInvulnerability.AIRBORNE) & ~airborne_hit) | (
+        (location == SemiInvulnerability.UNDERGROUND) & ~underground_hit) | (
+        (location == SemiInvulnerability.UNDERWATER) & ~underwater_hit) | (
+        location == SemiInvulnerability.VANISHED)
+    no_guard = (state.ability[attacker, 0] == AbilityEnum.NO_GUARD) | (state.ability[target, 0] == AbilityEnum.NO_GUARD)
+    toxic_bypass = (ident == 92) & is_poison_type_user(state, attacker)
+    return avoided & ~no_guard & ~toxic_bypass & ~move.target_self[0]
+
+
 def _prepare_accuracy(key, state, attacker_index, move, absorption=None):
     """Record misses/immunity and return whether normal hit routing is allowed."""
     key, subkey = random.split(key)
@@ -136,7 +158,7 @@ def _prepare_accuracy(key, state, attacker_index, move, absorption=None):
     # still strikes Spiky Shield, and Protect blocks before a miss is rolled.
     protected = _blocked_helper(state, move, attacker_index)
 
-    hit = (jnp.less_equal(r, accuracy)[0] | protected) & move.implemented[0]
+    hit = (jnp.less_equal(r, accuracy)[0] | protected) & move.implemented[0] & ~semi_invulnerable_to_move(state, attacker_index, move)
     return jax.lax.cond(
         cannot_target,
         partial(_block_accuracy_target, attacker_index=attacker_index),
@@ -163,7 +185,9 @@ def _resolve_and_hit(key, state, attacker_index, move):
     """Resolve a selected move for callers that already checked accuracy."""
     move = _resolve_hit_move(state, attacker_index, move)
     absorption = absorption_from_fields(move, state.ability[1 - attacker_index])
-    return _move_hits(key, state, attacker_index, move, absorption)
+    return jax.lax.cond(semi_invulnerable_to_move(state, attacker_index, move),
+        _record_move_miss, partial(_move_hits, absorption=absorption),
+        key, state, attacker_index, move)
 
 
 def _selected_hit_move(state, player, index):
@@ -176,6 +200,18 @@ def _resolve_hit_move(state, player, move):
     return jax.lax.cond(state.event_move == -1, _struggle_move, effective_move, state, player, move)
 
 
+def apply_pre_damage_move_effects(state, player, move, damaging_hit):
+    """Apply move-specific TryHit effects after gates and before Substitute."""
+    identifier = move.identifier[0]
+    breaks_screens = (identifier == 280) | (identifier == 873)
+    return clear_target_screens(state, 1 - player, damaging_hit & breaks_screens)
+
+
+def _apply_shed_tail(state, *, player):
+    """Create the Substitute only after Shed Tail's eligibility checks."""
+    return create_shed_tail_substitute(state, player)
+
+
 def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move: Move, absorption) -> Tuple[chex.PRNGKey, BattleState]:
     """Join normal and forced routing before one damage/status executor.
 
@@ -186,6 +222,7 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
 
     key, state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
         _prepare_struggle_hit, partial(_prepare_normal_hit, absorption=absorption), key, state, attacker_index, move)
+    state = apply_pre_damage_move_effects(state, attacker_index, move, branch == 0)
     # Only status drags routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
     forced = (branch == 1) & forced_switch_move(move)
@@ -194,8 +231,27 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
          do_flash_fire_from_move, do_healing_from_move, is_immune, _defer_forced_switch],
         key, state, attacker_index, move, stat, boost_value)
     key, state = force_switch_target(key, state, attacker_index, wind=move.identifier[0] == 18, enabled=forced)
-    requested = move.switch_out[0] & (branch <= 1)
-    return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
+    ident = move.identifier[0]
+    bench = jnp.any(state.roster[attacker_index] & (state.team.current_hp[attacker_index, :, 0] > 0) &
+                    (jnp.arange(6) != state.active_index[attacker_index, 0]))
+    shed = ident == 880
+    hp = state.active.current_hp[attacker_index, 0]
+    max_hp = state.active.max_hp[attacker_index]
+    shed_ok = bench & (state.volatile_status.substitute_hp[attacker_index, 0] == 0) & (hp > (max_hp + 1) // 2)
+    state = jax.lax.cond(shed & (branch == 1) & shed_ok,
+        partial(_apply_shed_tail, player=attacker_index), _identity, state)
+    failed = (shed & ~shed_ok) | ((ident == 100) & ~bench) | ((ident == 226) & ~bench)
+    state = jax.lax.cond((branch == 1) & failed,
+        partial(_record_pivot_failure, player=attacker_index), _identity, state)
+    requested = move.switch_out[0] & (branch <= 1) & ~failed
+    transfer = jnp.where(ident == 226, 1, jnp.where(shed, 2, 0))
+    return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested),
+        switch_transfer=state.switch_transfer.at[attacker_index].set(jnp.where(requested, transfer, 0)))
+
+
+def _record_pivot_failure(state, *, player):
+    """Record a status pivot that cannot initiate its replacement."""
+    return record_hit(state, 0, player, HitOutcome.FAILED)
 
 
 def _match_move_leaf_dtype(value, ref):
@@ -273,6 +329,14 @@ def _prepare_normal_hit(key, state, attacker_index, move, *, absorption=None):
     """Resolve normal hit routing before the common damage/status executor."""
     # decide branch to execute based on ability immunities
     defender_idx = 1 - attacker_index
+    # Phantom Force and Shadow Force remove protection after the accuracy and
+    # invulnerability checks, before attempting the actual hit.
+    v = state.volatile_status
+    breaks = ((move.identifier[0] == 566) | (move.identifier[0] == 467)) & v.protected[defender_idx, 0]
+    state = state.replace(volatile_status=v.replace(
+        protected=v.protected.at[defender_idx, 0].set(jnp.where(breaks, False, v.protected[defender_idx, 0])),
+        protection_kind=v.protection_kind.at[defender_idx, 0].set(jnp.where(breaks, ProtectionKind.NONE, v.protection_kind[defender_idx, 0])),
+        protect_chain=v.protect_chain.at[defender_idx, 0].set(jnp.where(breaks, 0, v.protect_chain[defender_idx, 0]))))
     ability = state.ability[defender_idx]
     defender_types = state.effective_types(defender_idx)
     defender_item = state.active_field('item', defender_idx)

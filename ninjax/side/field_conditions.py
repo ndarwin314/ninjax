@@ -20,6 +20,14 @@ from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts, clear_boosts, set_boosts
 
 
+def clear_target_screens(state, target, enabled):
+    """Clear the selected side's three damage-reducing screens."""
+    return state.replace(
+        reflect=state.reflect.at[target].set(jnp.where(enabled, 0, state.reflect[target])),
+        light_screen=state.light_screen.at[target].set(jnp.where(enabled, 0, state.light_screen[target])),
+        aurora_veil=state.aurora_veil.at[target].set(jnp.where(enabled, 0, state.aurora_veil[target])))
+
+
 def _field_status_add_boosts(s, *, player):
     """Field status add boosts."""
     return add_boosts(s, player, 1, 1)

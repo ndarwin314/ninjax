@@ -58,6 +58,15 @@ class ProtectionKind(JaxEnum):
     ENDURE = 8
 
 
+class SemiInvulnerability(JaxEnum):
+    """Location of a Pokémon during a two-turn move's charge."""
+    NONE = 0
+    AIRBORNE = 1
+    UNDERGROUND = 2
+    UNDERWATER = 3
+    VANISHED = 4
+
+
 class MoveResult(JaxEnum):
     """A Pokémon's whole-move outcome for the current or previous turn."""
     NOT_ATTEMPTED = 0

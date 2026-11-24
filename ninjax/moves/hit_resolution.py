@@ -115,7 +115,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         target_speed=target_speed,
         positive_stages=jnp.sum(jnp.maximum(state.boosts.normal_boosts[attacker_idx, 1:], 0)) +
                         jnp.sum(jnp.maximum(state.boosts.acc_boosts[attacker_idx], 0)),
-        previous_failed=state.volatile_status.previous_move_result[attacker_idx] == MoveResult.FAILED
+        previous_failed=state.volatile_status.previous_move_result[attacker_idx] == MoveResult.FAILED,
+        target_charging_move=state.volatile_status.charging_move_id[1-attacker_idx, 0],
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier
@@ -160,16 +161,19 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         offensive_modifier=offensive_modifier, defensive_modifier=defensive_modifier,
     )
 
-    # Brick Break removes screens before their final-damage contribution.
-    for name in ('reflect', 'light_screen', 'aurora_veil'):
-        current = getattr(state, name)
-        state = state.replace(**{name: current.at[1-attacker_idx].set(jnp.where(move.identifier[0] == 280, 0, current[1-attacker_idx]))})
     screen = jnp.where(move.move_type == MoveType.PHYSICAL, state.reflect[1-attacker_idx, 0] > 0,
                        state.light_screen[1-attacker_idx, 0] > 0) | (state.aurora_veil[1-attacker_idx, 0] > 0)
+    charging = state.volatile_status.charging_move_id[1-attacker_idx, 0]
+    ident = move.identifier[0]
+    # Exceptional moves strike these charge states at double damage; Bounce
+    # uses a separate BasePower callback instead of Fly's damage callback.
+    semi_bonus = ((charging == 19) & ((ident == 16) | (ident == 239))) | (
+        (charging == 91) & ((ident == 89) | (ident == 222))) | (
+        (charging == 291) & ((ident == 57) | (ident == 250)))
     damage = compute_damage_multipliers(attacker, defender, weather, move,
         base_damage, is_crit, damage_roll, gravity,
         effectiveness=damage_effectiveness, screen=screen,
-        user_speed=user_speed, target_speed=target_speed)
+        user_speed=user_speed, target_speed=target_speed, semi_damage_boost=semi_bonus)
     # Gen 9 Unseen Fist bypasses Protect without reducing damage.
 
     # Fixed damage ignores damage modifiers (including screens), but reaches

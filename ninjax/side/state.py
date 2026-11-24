@@ -108,6 +108,8 @@ class VolatileStatus(struct.PyTreeNode):
     substitute_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     # A stored move ID forces its second turn, independently of remaining PP.
     charging_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    # SemiInvulnerability enum, cleared on release, interruption or departure.
+    semi_invulnerability: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     charge_target_side: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     charge_target_position: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     recharging: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
@@ -189,6 +191,8 @@ class BattleState(struct.PyTreeNode):
     legal_action_mask: Array = field(default_factory=partial(jnp.ones, (2, 15), dtype=jnp.bool_))
     can_tera: Array = field(default_factory=partial(jnp.ones, (2, 1), dtype=jnp.bool_))
     switch_requested: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+    # Replacement continuation: 0 normal, 1 Baton Pass, 2 Shed Tail.
+    switch_transfer: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
     roster: Array = field(default_factory=partial(jnp.ones, (2, 6), dtype=jnp.bool_))
     winner: Array = field(default_factory=partial(jnp.int32, -1))
     perish_turns: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))

@@ -172,11 +172,40 @@ def _cure_switch_status(s, *, side_idx):
     return cure_status(s, side_idx)
 
 
+def reset_switch_effects(state, side_idx, transfer=0):
+    """Clear departure effects, preserving Baton Pass (1) or Shed Tail (2).
+
+    Baton Pass copies represented passable conditions and stat stages. Shed
+    Tail copies only Substitute. Apply this before hazards and entry abilities.
+    """
+    old = state.volatile_status
+    boosts = state.boosts
+    perish = state.perish_turns[side_idx]
+    baton = transfer == 1
+    state = jax.lax.cond(baton, _identity, partial(clear_boosts, side_idx=side_idx), state)
+    state = clear_volatile_status(state, side_idx)
+    substitute = (transfer == 1) | (transfer == 2)
+    volatile = state.volatile_status
+    # Disable, Encore, Destiny Bond and ability-specific effects are noCopy;
+    # Taunt, confusion, Substitute and Perish Song are passable.
+    volatile = volatile.replace(
+        substitute_hp=volatile.substitute_hp.at[side_idx].set(jnp.where(substitute, old.substitute_hp[side_idx], 0)),
+        confusion_turns=volatile.confusion_turns.at[side_idx].set(jnp.where(baton, old.confusion_turns[side_idx], 0)),
+        taunt_turns=volatile.taunt_turns.at[side_idx].set(jnp.where(baton, old.taunt_turns[side_idx], 0)))
+    current = state.boosts
+    current = current.replace(
+        normal_boosts=current.normal_boosts.at[side_idx].set(jnp.where(baton, boosts.normal_boosts[side_idx], current.normal_boosts[side_idx])),
+        acc_boosts=current.acc_boosts.at[side_idx].set(jnp.where(baton, boosts.acc_boosts[side_idx], current.acc_boosts[side_idx])))
+    return state.replace(volatile_status=volatile, boosts=current,
+                         perish_turns=state.perish_turns.at[side_idx].set(jnp.where(baton, perish, -1)))
+
+
 def swap_out(
     key,
     state: BattleState,
     side_idx,
-    new_active: int | jax.Array
+    new_active: int | jax.Array,
+    transfer=0,
 ) -> BattleState:
     """Switch one side to a team slot and apply represented entry effects.
 
@@ -211,7 +240,7 @@ def swap_out(
     state = take_damage_percent(state, side_idx, jnp.where(
         (state.ability[side_idx] == AbilityEnum.REGENERATOR) & (outgoing.current_hp > 0), -1/3, 0))
     # clear boosts and volatile status from active pokemon, maybe add baton pass check here?
-    state = clear_volatile_status(clear_boosts(state, side_idx), side_idx)
+    state = reset_switch_effects(state, side_idx, transfer)
     state = state.replace(volatile_status=state.volatile_status.replace(
         entry_turn=state.volatile_status.entry_turn.at[side_idx, 0].set(state.turn_number)))
 
@@ -219,8 +248,7 @@ def swap_out(
     # this update could be saved since we need an update later but idk if it will matter
     active = state.active_index.at[side_idx].set(new_active)
     toxic_counter = state.toxic_counter.at[side_idx].set(0)
-    state = state.replace(active_index=active, toxic_counter=toxic_counter,
-                          perish_turns=state.perish_turns.at[side_idx].set(-1))
+    state = state.replace(active_index=active, toxic_counter=toxic_counter)
 
     # hazards
     active = state.effective_active[side_idx]
