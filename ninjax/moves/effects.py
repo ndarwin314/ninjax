@@ -18,7 +18,7 @@ from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.side.field_conditions import set_terrain
-from ninjax.side.hp_effects import take_damage_percent
+from ninjax.side.hp_effects import apply_indirect_hp_change, take_damage_percent
 from ninjax.side.item_effects import kings_rock_flinch
 from ninjax.side.queries import contact_reactions_allowed, is_powder_immune_fields
 from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
@@ -60,12 +60,28 @@ def _after_damage_spin(s, *, player):
         partial(_after_damage_add_boosts, player=player), _preserve_operand, s)
 
 
+def _innards_out_damage(state, *, attacker_idx, defender_idx, damage):
+    """Attribute Innards Out damage to the fainted holder."""
+    previous_source, previous_cause = state.event_source, state.event_cause
+    state = state.replace(event_source=jnp.asarray(defender_idx, jnp.int32),
+                          event_cause=jnp.int32(Cause.INDIRECT))
+    state = apply_indirect_hp_change(state, attacker_idx, damage, source=defender_idx)
+    return state.replace(event_source=previous_source, event_cause=previous_cause)
+
+
+def _skip_innards_out(state):
+    """Keep state when the hit does not trigger Innards Out."""
+    return state
+
+
 def after_every_hit(
         key: chex.PRNGKey,
         state: BattleState,
         attacker_idx,
         move: Move,
-        is_crit: bool
+        is_crit: bool,
+        hit_damage=0,
+        move_damage=0,
 ):
     """Apply the represented ability and contact effects after one hit."""
     defender_idx = 1 - attacker_idx
@@ -116,13 +132,19 @@ def after_every_hit(
     # it, and Pads/Long Reach/Magic Guard protect the surviving attacker.
 
     damp = jnp.any((state.ability[:, 0] == AbilityEnum.DAMP) & (state.active_field('current_hp')[:, 0] > 0))
-    aftermath = ((defender_ability[0] == AbilityEnum.AFTERMATH) & (state.active_field('current_hp', defender_idx)[0] == 0) &
+    aftermath = ((defender_ability[0] == AbilityEnum.AFTERMATH) & ~defender_alive[0] & (hit_damage > 0) &
         move.contact[0] & contact_reactions_allowed(attacker_ability[0], attacker_item) & ~damp &
         (attacker_ability[0] != AbilityEnum.MAGIC_GUARD) & (state.active_field('current_hp', attacker_idx)[0] > 0))
     source = state.event_source
     state = state.replace(event_source=jnp.asarray(defender_idx, jnp.int32))
     state = take_damage_percent(state, attacker_idx, jnp.where(aftermath, 1/4, 0), cause=Cause.CONTACT)
     state = state.replace(event_source=source)
+    innards = ((defender_ability[0] == AbilityEnum.INNARDS_OUT) & ~defender_alive[0] &
+               (hit_damage > 0) & (attacker_ability[0] != AbilityEnum.MAGIC_GUARD) &
+               (state.active_field('current_hp', attacker_idx)[0] > 0))
+    state = jax.lax.cond(innards,
+        partial(_innards_out_damage, attacker_idx=attacker_idx, defender_idx=defender_idx, damage=move_damage),
+        _skip_innards_out, state)
     return key, state
 
 

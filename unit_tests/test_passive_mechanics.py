@@ -20,6 +20,7 @@ from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import do_contact, secondary_effects
 from ninjax.moves.execution import _prepare_move_use
 from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.multi_hit import resolve_multi_hit
 from ninjax.moves.properties import effective_move, effective_priority, move_accuracy
 from ninjax.moves.routing import move_hits
 from ninjax.moves.status import do_status_move
@@ -320,13 +321,17 @@ def test_projected_secondary_abilities(neutral_type):
 
 
 def test_rock_head_and_shell_armor(neutral_type):
-    """Rock Head prevents move recoil; Shell Armor prevents guaranteed criticals."""
+    """Recoil respects Rock Head and Magic Guard, and Shell Armor prevents crits."""
     key, state = neutral_type
-    _, ordinary, _, _ = resolve_damaging_hit(key, state, 0, make_move('Double-Edge'))
+    run = jax.jit(resolve_multi_hit)
+    _, ordinary = run(key, state, 0, make_move('Double-Edge'))
     rock = configure(state, {'ability': 'Rock Head'})
-    _, protected, _, _ = resolve_damaging_hit(key, rock, 0, make_move('Double-Edge'))
+    _, protected = run(key, rock, 0, make_move('Double-Edge'))
     assert ordinary.active.current_hp[0, 0] < protected.active.current_hp[0, 0]
     assert protected.active.current_hp[0, 0] == state.active.current_hp[0, 0]
+    magic_guard = update_active(state, 0, state.active[0].replace(ability=jnp.array([A.MAGIC_GUARD])))
+    _, guarded = run(key, magic_guard, 0, make_move('Double-Edge'))
+    assert guarded.active.current_hp[0, 0] == state.active.current_hp[0, 0]
     _, critical, _, _ = resolve_damaging_hit(key, state, 0, make_move('Wicked Blow'))
     armor = configure(state, {'defender': 'Shell Armor'})
     _, blocked, _, _ = resolve_damaging_hit(key, armor, 0, make_move('Wicked Blow'))

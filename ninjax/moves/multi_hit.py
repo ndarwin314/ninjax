@@ -65,16 +65,17 @@ def _check_multi_hit_accuracy(k, *, move, fields):
     return k, random.uniform(subkey) < move_accuracy_from_fields(move, *fields)[0]
 
 
-def _apply_multi_hit(args, *, move, index, contributors, attacker_idx, beat_up, no_recoil):
+def _apply_multi_hit(args, *, move, index, contributors, attacker_idx, beat_up):
     """Apply this hit at its indexed base power."""
     key, state, total, hits = args
     power = jnp.where(move.escalating_power, move.base_power * (index+1), move.base_power)
     contributor = contributors[jnp.minimum(index, 5)]
     base_attack = state.team.stat_table.base_stats[attacker_idx, contributor, StatEnum.ATTACK]
     power = jnp.where(beat_up, 5 + base_attack // 10, power)
-    one = no_recoil.replace(base_power=power)
-    key, state, damage, _ = resolve_damaging_hit(key, state, attacker_idx, one, index)
-    return key, state, total + damage, hits + 1
+    one = move.replace(base_power=power)
+    key, state, _, _ = resolve_damaging_hit(key, state, attacker_idx, one, index)
+    # Hit records capture capped HP loss before on-hit healing.
+    return key, state, total + state.hit_results[index].damage, hits + 1
 
 
 def _emit_multi_hit_miss(s, *, attacker_idx):
@@ -87,7 +88,7 @@ def _record_multi_hit_miss(s, *, index, attacker_idx):
     return record_hit(s, index, 1-attacker_idx, HitOutcome.MISS)
 
 
-def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, no_recoil, contributors):
+def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, contributors):
     """Check later-hit accuracy and apply its result."""
     key, state, total, hits = args
     # Read accuracy fields after the preceding hit, then roll only when needed.
@@ -107,7 +108,6 @@ def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, no_
             contributors=contributors,
             attacker_idx=attacker_idx,
             beat_up=beat_up,
-            no_recoil=no_recoil,
         ),
         _identity,
         (key, state, total, hits),
@@ -123,7 +123,7 @@ def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, no_
 
 
 def _stop_multi_hit(x):
-    """Stop subsequent hits while retaining accumulated damage and hit count."""
+    """Stop subsequent hits while retaining total HP lost and hit count."""
     return (x[0], x[1], jnp.bool_(False), x[2], x[3])
 
 
@@ -135,7 +135,6 @@ def _multi_hit_scan(
     target_hits,
     move,
     beat_up,
-    no_recoil,
     per_hit,
     contributors,
 ):
@@ -155,7 +154,6 @@ def _multi_hit_scan(
             move=move,
             beat_up=beat_up,
             attacker_idx=attacker_idx,
-            no_recoil=no_recoil,
             contributors=contributors,
         ),
         _stop_multi_hit,
@@ -176,7 +174,7 @@ def _roll_self_effect(k, *, move):
 
 
 def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
-    """Resolve up to ten hits in a fixed scan; initial accuracy was already checked."""
+    """Resolve up to ten hits and finalize using their total actual HP loss."""
     ability = state.ability[attacker_idx, 0]
     item = state.active_field('item', attacker_idx)[0]
     defender = state.effective_active[1-attacker_idx]
@@ -197,24 +195,19 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     target_hits = jnp.where(beat_up, jnp.sum(eligible), target_hits)
     # Loaded Dice and Skill Link remove multiaccuracy in the pinned generation.
     per_hit = move.per_hit_accuracy[0] & (ability != AbilityEnum.SKILL_LINK) & (item != ItemEnum.LOADED_DICE)
-    no_recoil = move.replace(recoil_percent=jnp.where(move.hit_rule == HitRule.SINGLE, move.recoil_percent, 0))
-    (key, state, _, damage, hits), _ = jax.lax.scan(
+    (key, state, _, hp_lost, hits), _ = jax.lax.scan(
         partial(
             _multi_hit_scan,
             attacker_idx=attacker_idx,
             target_hits=target_hits,
             move=move,
             beat_up=beat_up,
-            no_recoil=no_recoil,
             per_hit=per_hit,
             contributors=contributors,
         ),
-        (key, state, jnp.bool_(True), jnp.zeros((1,), jnp.int32), jnp.int32(0)),
+        (key, state, jnp.bool_(True), jnp.int32(0), jnp.int32(0)),
         jnp.arange(10),
     )
-    # The currently supported multi-hit moves have no recoil. Calculated damage
-    # is retained here for future recoil support; actual HP loss is not yet
-    # aggregated across hits.
     # Scale Shot (Showdown move ID 799) lowers Defense and raises Speed after hitting.
     state = jax.lax.cond(
         (move.identifier[0] == 799) & (hits > 0) & (state.active_field('current_hp', attacker_idx)[0] > 0),
@@ -230,7 +223,7 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
         _successful_check,
         key,
     )
-    return key, finish_damaging_move(state, attacker_idx, move, damage, defender, self_effect)
+    return key, finish_damaging_move(state, attacker_idx, move, hp_lost, defender, self_effect)
 
 
 def _successful_check(k):

@@ -16,11 +16,14 @@ from ninjax.enums.field import Terrain, TerrainEnum, Weather, WeatherEnum
 from ninjax.enums.moves import MoveType
 from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.moves.effects import do_contact
+from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.teams.construction import make_move
 from ninjax.moves.execution import move_used
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.pokemon import Pokemon
 from ninjax.records.events import CAPACITY, Cause, EventBuffer, EventKind, capture_conditions, emit
+from ninjax.side.faint_effects import direct_faint, resolve_faints
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status, status_helper
@@ -166,13 +169,14 @@ def test_forced_struggle_and_knockout_outcomes(neutral_type):
     assert after.turn == 1
     assert jnp.all(after.battle.active.current_hp < state.battle.active.current_hp)
     assert jnp.all(after.battle.team.moves.current_pp == 0)
-    # Self-KO and recoil both ending the battle have different winners.
+    # A pre-hit self-KO and a post-hit recoil KO resolve in opposite orders.
     base = original.replace(roster=jnp.zeros((2, 6), bool).at[:, 0].set(True))
     base = base.replace(team=base.team.replace(current_hp=base.team.current_hp.at[:, 0, 0].set(1)))
-    move = base.active[0].moves[0]
-    run = jax.jit(lambda m: do_damaging_move(key, base, 0, m, 0, 0)[1])
-    assert run(move.replace(self_ko=jnp.array([True]))).winner == 1
-    assert run(move.replace(recoil_percent=jnp.array([1.]))).winner == 0
+    fainted_user = direct_faint(base, 0, 0, Cause.SELF_KO)
+    assert resolve_faints(take_damage_value(fainted_user, 1, 1, True, source=0)).winner == 1
+    move = base.active[0].moves[0].replace(recoil_percent=jnp.array([1.]))
+    _, recoil = do_damaging_move(key, base, 0, move, 0, 0)
+    assert resolve_faints(recoil).winner == 0
     perish = base.replace(perish_turns=jnp.ones((2, 1), jnp.int32),
                           team=base.team.replace(stat_table=base.team.stat_table.replace(
                               base_stats=base.team.stat_table.base_stats.at[0, :, StatEnum.SPEED].set(1))))
@@ -222,9 +226,11 @@ def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
         current_hp=state.team.current_hp.at[1, 0, 0].set(5))
     state = state.replace(team=team)
     attacker_hp = state.active.current_hp[0, 0]
-    surviving = take_damage_value(state, 1, jnp.array([4]), True, source=0)
+    hit = jax.jit(resolve_damaging_hit)
+    _, surviving, _, _ = hit(key, state, 0, make_move("Super Fang"))
     assert surviving.active.current_hp[0, 0] == attacker_hp
-    fainted = take_damage_value(state, 1, jnp.array([5]), True, source=0)
+    lethal = make_move("Night Shade")
+    _, fainted, _, _ = hit(key, state, 0, lethal)
     assert fainted.active.current_hp[1, 0] == 0
     assert fainted.active.current_hp[0, 0] == attacker_hp - 5
 
@@ -234,12 +240,11 @@ def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
         ability=team.ability.at[0, 0, 0].set(AbilityEnum.INNARDS_OUT),
         current_hp=team.current_hp.at[0, 0, 0].set(5))
     state = state.replace(team=team, event_cause=jnp.int32(Cause.MOVE))
-    result = take_damage_value(state, 1, jnp.array([5]), True, source=0)
+    _, result, _, _ = hit(key, state, 0, lethal)
     events = result.events.unpack()
-    assert events.count == 4
-    assert jnp.array_equal(events.kind[:4], jnp.array([EventKind.HP, EventKind.FAINT] * 2))
-    assert jnp.array_equal(events.target[:4], jnp.array([1, 1, 0, 0]))
-    assert jnp.array_equal(result.faint_source, jnp.array([-1, 0]))
+    faints = events.valid & (events.kind == EventKind.FAINT)
+    assert jnp.array_equal(events.target[faints], jnp.array([1, 0]))
+    assert jnp.array_equal(result.faint_source, jnp.array([1, 0]))
     assert jnp.array_equal(result.faint_cause, jnp.array([Cause.INDIRECT, Cause.MOVE]))
 
 
@@ -534,7 +539,7 @@ def test_damage_ability_effectiveness_and_gravity(neutral_type):
     attacker, defender = state.active[0], state.active[1]
     move = attacker.moves[0]
     def damage(attacker, defender, move, gravity):
-        return compute_damage_multipliers(key, attacker, defender, Weather(0, 0), move,
+        return compute_damage_multipliers(attacker, defender, WeatherEnum.NONE, move,
                                           jnp.array([100]), jnp.array([False]), 1., gravity)[0]
     damage = jax.jit(damage)
     water = move.replace(type=jnp.array([Type.WATER]))
@@ -658,16 +663,14 @@ def test_sturdy_only_survives_lethal_full_health_attack(neutral_type, compiled_t
     assert hit(damaged, hp, True).active.current_hp[1, 0] == 0
 
 
-def test_multiscale_reduces_attacks_only_at_full_hp(neutral_type, compiled_take_damage):
-    key, state = neutral_type
-    team = state.team.replace(ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.MULTISCALE))
-    state = state.replace(team=team)
+def test_multiscale_is_resolved_before_hp_commit(neutral_type, compiled_take_damage):
+    """HP commits accept calculated damage without reapplying Multiscale."""
+    _, state = neutral_type
+    state = state.replace(team=state.team.replace(
+        ability=state.team.ability.at[1, 0, 0].set(AbilityEnum.MULTISCALE)))
     hp = state.active.current_hp[1, 0]
-    hit = compiled_take_damage
-    reduced = hit(state, 100, True)
-    assert reduced.active.current_hp[1, 0] == hp - 50
-    assert hit(reduced, 100, True).active.current_hp[1, 0] == hp - 150
-    assert hit(state, 100, False).active.current_hp[1, 0] == hp - 100
+    assert compiled_take_damage(state, 100, True).active.current_hp[1, 0] == hp - 100
+    assert compiled_take_damage(state, 100, False).active.current_hp[1, 0] == hp - 100
 
 
 def test_observation_events_and_private_hp(neutral_type):
@@ -732,3 +735,18 @@ def test_residual_effect_order_and_events(neutral_type):
     assert jnp.all(out.events.kind[:6] == EventKind.HP)
     assert jnp.array_equal(out.events.target[:6], jnp.array([0, 1, 0, 1, 0, 1]))
     assert out.events.count == 6
+
+
+def test_residual_hp_phases_use_speed_before_status_priority(neutral_type):
+    """Weather applies in Speed order, and poison precedes burn across sides."""
+    _, state = neutral_type
+    table = state.team.stat_table.replace(
+        base_stats=state.team.stat_table.base_stats.at[1, 0, StatEnum.SPEED].add(100))
+    status = state.team.status.at[0, 0, 0].set(Status.POISON).at[1, 0, 0].set(Status.BURN)
+    state = state.replace(
+        team=state.team.replace(stat_table=table, status=status),
+        weather=Weather(WeatherEnum.SANDSTORM, 2))
+    events = jax.jit(end_turn_damage)(state).events.unpack()
+    assert events.count == 4
+    assert jnp.array_equal(events.target[:4], jnp.array([1, 0, 0, 1]))
+    assert jnp.array_equal(events.cause[:4], jnp.array([Cause.WEATHER, Cause.WEATHER, Cause.STATUS, Cause.STATUS]))

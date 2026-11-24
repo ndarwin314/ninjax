@@ -12,19 +12,19 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import underlying_ability
-from ninjax.battle.switching import _no_forced_switch, execute_forced_switch, prepare_forced_switch
-from ninjax.calculations.logic import quad_or, triple_or
+from ninjax.battle.switching import force_switch_target, forced_switch_move
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
-from ninjax.enums.moves import MoveFlags, MoveType, ProtectionKind
+from ninjax.enums.moves import MoveType, ProtectionKind
 from ninjax.enums.pokemon import StatEnum, Type, Status
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
-from ninjax.moves.properties import effective_move, move_accuracy, substitute_intercepts
+from ninjax.moves.properties import absorption_from_fields, effective_move, move_accuracy, substitute_intercepts
 from ninjax.moves.status import _status_move_effects
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
+from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.queries import contact_reactions_allowed, is_floating_fields, move_immune_from_fields
 from ninjax.side.stat_effects import stat_changes
@@ -43,7 +43,7 @@ def _unchanged_key_state(k, s):
     return (k, s)
 
 
-def _unchanged_selected_move(k, s, p, move):
+def _unchanged_selected_move(k, s, p, move, absorption):
     """Skip a selected move while accepting its player and slot operands."""
     return (k, s)
 
@@ -80,17 +80,18 @@ def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx,
 def _apply_move_effects(key, state, attacker_index, move_index):
     """Skip Struggle accuracy while sharing the downstream hit executor."""
     move = _selected_hit_move(state, attacker_index, move_index)
+    absorption = absorption_from_fields(move, state.ability[1 - attacker_index])
     # Forced Struggle already uses -1 as its action-local public move marker.
     # Accuracy can write events but does not change the resolved move.
     key, state, ready = jax.lax.cond(
         state.event_move == -1,
         _ready_move,
-        partial(_prepare_accuracy, attacker_index=attacker_index, move=move),
+        partial(_prepare_accuracy, attacker_index=attacker_index, move=move, absorption=absorption),
         key,
         state,
     )
     return jax.lax.cond(ready, _move_hits, _unchanged_selected_move,
-        key, state, attacker_index, move)
+        key, state, attacker_index, move, absorption)
 
 
 def move_not_drawn_in(key: chex.PRNGKey, state: BattleState, attacker_index, move_index: int, unused: int) -> Tuple[chex.PRNGKey, BattleState]:
@@ -119,11 +120,11 @@ def _attempt_accuracy(k, s, *, hit, attacker_index, move):
     return k, s, hit
 
 
-def _prepare_accuracy(key, state, attacker_index, move):
+def _prepare_accuracy(key, state, attacker_index, move, absorption=None):
     """Record misses/immunity and return whether normal hit routing is allowed."""
     key, subkey = random.split(key)
     r = random.uniform(subkey)
-    accuracy = move_accuracy(state, attacker_index, move)
+    accuracy = move_accuracy(state, attacker_index, move, absorption)
 
     # Worry Seed fails against these identities before accuracy, including
     # while an ability's effects are suppressed.
@@ -151,16 +152,18 @@ def is_immune(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, s
 
 
 def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:
-    """Dispatch an implemented move after an accuracy check, or do nothing."""
+    """Dispatch an accuracy-checked move and resolve its pending faints."""
     move = state.active_moves(attacker_index, move_index)
-    return jax.lax.cond(move.implemented[0], _resolve_and_hit, _record_move_miss,
-                        key, state, attacker_index, move)
+    key, state = jax.lax.cond(move.implemented[0], _resolve_and_hit, _record_move_miss,
+                              key, state, attacker_index, move)
+    return key, resolve_faints(state)
 
 
 def _resolve_and_hit(key, state, attacker_index, move):
     """Resolve a selected move for callers that already checked accuracy."""
     move = _resolve_hit_move(state, attacker_index, move)
-    return _move_hits(key, state, attacker_index, move)
+    absorption = absorption_from_fields(move, state.ability[1 - attacker_index])
+    return _move_hits(key, state, attacker_index, move, absorption)
 
 
 def _selected_hit_move(state, player, index):
@@ -173,7 +176,7 @@ def _resolve_hit_move(state, player, move):
     return jax.lax.cond(state.event_move == -1, _struggle_move, effective_move, state, player, move)
 
 
-def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move: Move) -> Tuple[chex.PRNGKey, BattleState]:
+def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move: Move, absorption) -> Tuple[chex.PRNGKey, BattleState]:
     """Join normal and forced routing before one damage/status executor.
 
     Ability and type immunities, status moves, and damaging moves share one
@@ -182,18 +185,15 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
     """
 
     key, state, move, branch, stat, boost_value = jax.lax.cond(state.event_move == -1,
-        _prepare_struggle_hit, _prepare_normal_hit, key, state, attacker_index, move)
+        _prepare_struggle_hit, partial(_prepare_normal_hit, absorption=absorption), key, state, attacker_index, move)
     # Only status drags routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
-    forced = (branch == 1) & ((move.identifier[0] == 18) | (move.identifier[0] == 46))
+    forced = (branch == 1) & forced_switch_move(move)
     key, state = jax.lax.switch(jnp.where(forced, 6, branch),
         [do_damaging_move, _status_move_effects, do_stat_boost_from_move,
          do_flash_fire_from_move, do_healing_from_move, is_immune, _defer_forced_switch],
         key, state, attacker_index, move, stat, boost_value)
-    key, state, request = jax.lax.cond(forced,
-                                      partial(prepare_forced_switch, wind=move.identifier[0] == 18), _no_forced_switch,
-                                      key, state, attacker_index)
-    state = execute_forced_switch(state, request)
+    key, state = force_switch_target(key, state, attacker_index, wind=move.identifier[0] == 18, enabled=forced)
     requested = move.switch_out[0] & (branch <= 1)
     return key, state.replace(switch_requested=state.switch_requested.at[attacker_index].set(requested))
 
@@ -269,7 +269,7 @@ def _blocked_helper(state, move: Move, attacker_index):
     blocked = state.volatile_status.protected[1 - attacker_index, 0] & ~move.target_self[0] & move.protectable[0] & ~bypass
     return blocked
 
-def _prepare_normal_hit(key, state, attacker_index, move):
+def _prepare_normal_hit(key, state, attacker_index, move, *, absorption=None):
     """Resolve normal hit routing before the common damage/status executor."""
     # decide branch to execute based on ability immunities
     defender_idx = 1 - attacker_index
@@ -280,39 +280,13 @@ def _prepare_normal_hit(key, state, attacker_index, move):
     gravity = state.gravity_duration > 0
     v = state.volatile_status
     move = move.replace(priority=jnp.where(v.encore_overridden[attacker_index], v.queued_priority[attacker_index], move.priority))
-    is_flash_fire = jnp.logical_and(ability==AbilityEnum.FLASH_FIRE, move.type==Type.FIRE)
-    is_spa_boost = jnp.logical_or(
-        jnp.logical_and(ability==AbilityEnum.STORM_DRAIN, move.type==Type.WATER),
-        jnp.logical_and(ability==AbilityEnum.LIGHTNING_ROD, move.type==Type.ELECTRIC))
-
-    is_attack_boost = jnp.logical_and(ability == AbilityEnum.SAP_SIPPER, move.type == Type.GRASS)
-
-    # Whirlwind retains its existing forced-switch failure classification.
-    wind_absorbed = (ability == AbilityEnum.WIND_RIDER) & ((move.move_flags & MoveFlags.WIND) != 0) & (move.identifier != 18)
-    is_attack_boost |= wind_absorbed
-    is_speed_boost = jnp.logical_and(ability==AbilityEnum.MOTOR_DRIVE, move.type==Type.ELECTRIC)
-    is_def_boost = jnp.logical_and(ability==AbilityEnum.WELL_BAKED_BODY, move.type==Type.FIRE)
-    is_heal = quad_or(
-        jnp.logical_and(ability == AbilityEnum.WATER_ABSORB, move.type == Type.WATER),
-        jnp.logical_and(ability == AbilityEnum.VOLT_ABSORB, move.type == Type.ELECTRIC),
-        jnp.logical_and(ability == AbilityEnum.EARTH_EATER, move.type == Type.GROUND),
-        jnp.logical_and(ability == AbilityEnum.DRY_SKIN, move.type == Type.WATER)
-    )
-    # all of this is hacky and inelegant and probably could be simplified
-    is_stat_boost = quad_or(is_speed_boost, is_attack_boost, is_spa_boost, is_def_boost)
-    not_bypass_move = triple_or(is_flash_fire, is_stat_boost, is_heal)
+    if absorption is None:
+        absorption = absorption_from_fields(move, ability)
     immune = move_immune_from_fields(defender_types, ability, defender_item, move, gravity)
-    immune = jnp.logical_and(immune, ~not_bypass_move)
-    is_status = jnp.logical_and(move.move_type == MoveType.STATUS, ~not_bypass_move & ~immune)
-    # Encode the selected outcome for lax.switch. Self-targeted status moves
-    # explicitly select the status branch instead of defender immunity branches.
-    branch_index = (
-            is_status +
-            is_stat_boost * 2 +
-            is_flash_fire * 3 +
-            is_heal * 4 +
-            immune * 5
-    )
+    # Opposing absorption abilities intercept before ordinary type immunity.
+    branch_index = jnp.select(
+        (absorption.stat != 0, absorption.flash_fire, absorption.heal, immune,
+         move.move_type == MoveType.STATUS), (2, 3, 4, 5, 1), default=0)
     branch_index = jnp.where(move.target_self & (move.move_type == MoveType.STATUS), 1, branch_index)
     # Psychic Terrain blocks opposing priority moves before absorption abilities
     # or other hit effects can activate, but only for grounded targets.
@@ -376,9 +350,7 @@ def _prepare_normal_hit(key, state, attacker_index, move):
                         jnp.where(branch_index[0] >= 2, HitOutcome.IMMUNE, HitOutcome.HIT)))
     recipient = jnp.where(outcome == HitOutcome.HIT, HitRecipient.POKEMON, HitRecipient.NONE)
     state = record_hit(state, 0, target, outcome, recipient)
-    boost_value = 1 + (ability==AbilityEnum.WELL_BAKED_BODY)
-
-    return key, state, move, branch_index[0], is_attack_boost * StatEnum.ATTACK + is_def_boost * StatEnum.DEFENSE + is_spa_boost * StatEnum.SPECIAL_ATTACK + is_speed_boost * StatEnum.SPEED, boost_value
+    return key, state, move, branch_index[0], absorption.stat, absorption.stages
 
 
 def move_misses(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_index: int) -> Tuple[chex.PRNGKey, BattleState]:

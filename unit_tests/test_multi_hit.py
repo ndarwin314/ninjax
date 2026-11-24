@@ -1,19 +1,52 @@
 """Controlled checks for multi-hit rules and per-hit state transitions."""
-from ninjax.enums.moves import HitRule
 import jax
 import jax.numpy as jnp
 
 from ninjax.calculations.damage import compute_base_power
 from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.items import ItemEnum as I
-from ninjax.enums.moves import MoveType
+from ninjax.enums.moves import HitRule, MoveType
 from ninjax.enums.pokemon import StatEnum as S, Status
 from ninjax.moves.effects import after_every_hit
 from ninjax.moves.execution import move_used
 from ninjax.moves.multi_hit import resolve_multi_hit, sample_hit_count
-from ninjax.records.events import EventKind
+from ninjax.records.events import Cause, EventKind
+from ninjax.records.hits import HitRecipient
+from ninjax.side.faint_effects import resolve_faints
 from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
+
+
+def test_recoil_uses_total_actual_hp_loss_once(neutral_type):
+    """Recoil rounds once across a broken Substitute and a capped knockout."""
+    key, state = neutral_type
+    state = state.replace(
+        team=state.team.replace(current_hp=state.team.current_hp.at[1, 0, 0].set(3)),
+        volatile_status=state.volatile_status.replace(
+            substitute_hp=state.volatile_status.substitute_hp.at[1, 0].set(3)))
+    state = state.replace(
+        team=state.team.replace(current_hp=state.team.current_hp.at[0, 0, 0].set(3)),
+        roster=jnp.zeros_like(state.roster).at[:, 0].set(True))
+    # Synthetic two-hit Night Shade isolates actual damage from overkill.
+    move = make_move('Night Shade').replace(
+        hit_rule=jnp.array([HitRule.FIXED_TWO]), recoil_percent=jnp.array([.5]))
+    run = jax.jit(resolve_multi_hit)
+    _, out = run(key, state, 0, move)
+    assert out.hit_results[0].recipient == HitRecipient.SUBSTITUTE
+    assert out.hit_results[1].recipient == HitRecipient.POKEMON
+    assert out.hit_results[0].damage == 3
+    assert out.hit_results[1].damage == 3
+    assert out.active.current_hp[0, 0] == state.active.current_hp[0, 0] - 3
+    recoil = out.events.valid & (out.events.kind == EventKind.HP) & (out.events.cause == Cause.RECOIL)
+    assert jnp.sum(recoil) == 1
+    assert jnp.array_equal(out.faint_order, jnp.array([2, 1]))
+    assert resolve_faints(out).winner == 0
+
+    # A zero-damage fixed hit must not incur minimum recoil.
+    no_loss = make_move('Endeavor').replace(recoil_percent=jnp.array([.5]))
+    _, out = run(key, neutral_type[1], 0, no_loss)
+    assert out.hit_results[0].damage == 0
+    assert out.active.current_hp[0, 0] == neutral_type[1].active.current_hp[0, 0]
 
 
 def hit_events(state, target=1):

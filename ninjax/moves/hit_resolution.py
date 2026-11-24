@@ -9,46 +9,35 @@ from ninjax.calculations.damage import (
     compute_base_damage,
     compute_base_power,
     compute_damage_multipliers,
-    damage_post_modifiers,
     hit_type_effectiveness,
 )
-from ninjax.calculations.modifiers import CRIT_STAGES, conditional_mult_round
+from ninjax.calculations.modifiers import CRIT_STAGES
 from ninjax.calculations.stats import raw_boosted_stats
 from ninjax.enums.abilities import AbilityEnum
-from ninjax.enums.field import Weather
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.moves import MoveType, OffensiveStatOwner
+from ninjax.enums.moves import MoveType, OffensiveStatOwner, MoveResult
 from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import after_damage, after_every_hit, secondary_effects
 from ninjax.moves.model import Move
 from ninjax.moves.properties import substitute_intercepts
-from ninjax.records.events import Cause, EventKind, emit
+from ninjax.records.events import EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import after_hit, consume, remove_item
 from ninjax.side.queries import (
-    conditional_mult_round as fixed_modifier,
     effective_weather,
     effective_speed,
-    modify_stats,
+    stat_modifier,
 )
 from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
 
 
-# Generation 9 Unseen Fist deals full damage when bypassing Protect.
-UNSEEN_FIST_PROTECT_MULTIPLIER = 1.0
-
-def _damage_substitute(s, *, target_idx, damage, defender, ident):
+def _damage_substitute(s, *, target_idx, damage):
     """Remove capped Substitute HP without triggering Pokémon damage hooks."""
     v = s.volatile_status
     old = v.substitute_hp[target_idx, 0]
-    # Multiscale modifies ordinary damage calculation even against a doll;
-    # fixed damage bypasses it just as it does for Pokémon HP.
-    scaled = conditional_mult_round(damage, .5,
-        (defender.ability == AbilityEnum.MULTISCALE) & (defender.current_hp == defender.max_hp) &
-        ~((ident == 101) | (ident == 162) | (ident == 877) | (ident == 283)))
-    loss = jnp.minimum(old, jnp.maximum(0, scaled[0]))
+    loss = jnp.minimum(old, jnp.maximum(0, damage[0]))
     remaining = old - loss
     s = s.replace(volatile_status=v.replace(
         substitute_hp=v.substitute_hp.at[target_idx, 0].set(remaining),
@@ -58,10 +47,9 @@ def _damage_substitute(s, *, target_idx, damage, defender, ident):
     return s
 
 
-def _damage_hit_target(s, *, target_idx, damage, ident, attacker_idx):
-    """Apply direct hit damage, preserving fixed-damage and source attribution."""
-    return take_damage_value(s, target_idx, damage, True,
-                fixed_damage=(ident == 101) | (ident == 162) | (ident == 877) | (ident == 283), source=attacker_idx)
+def _damage_hit_target(s, *, target_idx, damage, attacker_idx):
+    """Commit calculated hit damage with its attacker's source attribution."""
+    return take_damage_value(s, target_idx, damage, True, source=attacker_idx)
 
 
 def _apply_drain(s, *, attacker_idx, defender_ability, healing):
@@ -69,14 +57,11 @@ def _apply_drain(s, *, attacker_idx, defender_ability, healing):
     return take_damage_value(s, attacker_idx, jnp.where(defender_ability == AbilityEnum.LIQUID_OOZE, healing, -healing), False)
 
 
-def _unchanged_recoil_state(s, p, d):
-    """Skip recoil while accepting the damage branch operands."""
-    return s
-
-
-def _run_hit_effects(k, s, *, attacker_idx, move, is_crit):
+def _run_hit_effects(k, s, *, attacker_idx, move, is_crit, hit_index):
     """Apply per-hit move effects after damage reaches the Pokémon."""
-    return after_every_hit(k, s, attacker_idx, move, is_crit)
+    history = s.hit_results[:]
+    total = jnp.sum(jnp.where(jnp.arange(history.damage.size) <= hit_index, history.damage, 0))
+    return after_every_hit(k, s, attacker_idx, move, is_crit, history.damage[hit_index], total)
 
 
 def _run_held_hit_effects(s, *, attacker_idx, move, damage, raw_effectiveness):
@@ -102,14 +87,9 @@ def _run_after_damage(s, *, attacker_idx, move):
 def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_index=0):
     """Apply one hit; return key, state, calculated damage and defender snapshot.
 
-    Damage has shape (1,) and may exceed the target's remaining HP. The defender
-    snapshot is taken before this hit. A multi-hit caller must track actual HP
-    lost separately; comparing final HP is insufficient when an item heals
-    during a hit. Keys explicitly advance for damage and secondary-effect rolls.
-
-    Recoil remains here for single-hit moves to preserve existing event order.
-    The multi-hit caller suppresses it; multi-hit recoil requires an explicit
-    actual-damage total and is not yet supported.
+    Calculated damage has shape (1,) and can exceed the recipient's HP.
+    The hit record stores actual loss before healing. Move finalization uses
+    that loss for recoil. The defender snapshot is from before the hit.
     """
     active = state.effective_active
     attacker = active[attacker_idx]
@@ -123,14 +103,19 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     gravity = state.gravity_duration > 0
     raw_effectiveness, damage_effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity)
-    # Base power, Expert Belt and held-item reactions share the raw matchup.
+    # Base power and held-item reactions receive the raw type matchup.
+    user_speed = effective_speed(state, attacker_idx, weather)
+    target_speed = effective_speed(state, 1-attacker_idx, weather)
     power = compute_base_power(
         attacker,
         defender,
         move,
         state.terrain, weather, gravity, raw_effectiveness=raw_effectiveness,
-        user_speed=effective_speed(state, attacker_idx, weather),
-        target_speed=effective_speed(state, 1-attacker_idx, weather)
+        user_speed=user_speed,
+        target_speed=target_speed,
+        positive_stages=jnp.sum(jnp.maximum(state.boosts.normal_boosts[attacker_idx, 1:], 0)) +
+                        jnp.sum(jnp.maximum(state.boosts.acc_boosts[attacker_idx], 0)),
+        previous_failed=state.volatile_status.previous_move_result[attacker_idx] == MoveResult.FAILED
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier
@@ -158,8 +143,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     )
 
 
-    attacker_stats = modify_stats(state, attacker_idx, attacker_stats, weather)
-    defender_stats = modify_stats(state, 1-attacker_idx, defender_stats, weather)
+    offensive_modifier = stat_modifier(state, attacker_idx, move.offensive_stat, weather)
+    defensive_modifier = stat_modifier(state, 1 - attacker_idx, move.defensive_stat, weather)
     base_damage = compute_base_damage(
         attacker.ability,
         defender.ability,
@@ -171,37 +156,21 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         power,
         attacker.status,
         defender.status,
-        state.volatile_status.flash_fire[attacker_idx]
+        state.volatile_status.flash_fire[attacker_idx],
+        offensive_modifier=offensive_modifier, defensive_modifier=defensive_modifier,
     )
 
-    # there is a specific order to the multipliers that i will preserve since rounding is done
-    # between every multiplication by a modifier
-    # at some point we can see if it makes any difference for speed to not do it this way
-    damage = compute_damage_multipliers(
-        key,
-        attacker,
-        defender,
-        Weather(weather, state.weather.duration),
-        move,
-        base_damage,
-        is_crit,
-        damage_roll,
-        gravity, effectiveness=damage_effectiveness
-    )
-
-    damage = damage_post_modifiers(damage, defender.ability, move)
+    # Brick Break removes screens before their final-damage contribution.
     for name in ('reflect', 'light_screen', 'aurora_veil'):
         current = getattr(state, name)
         state = state.replace(**{name: current.at[1-attacker_idx].set(jnp.where(move.identifier[0] == 280, 0, current[1-attacker_idx]))})
     screen = jnp.where(move.move_type == MoveType.PHYSICAL, state.reflect[1-attacker_idx, 0] > 0,
                        state.light_screen[1-attacker_idx, 0] > 0) | (state.aurora_veil[1-attacker_idx, 0] > 0)
-    damage = conditional_mult_round(damage, .5, screen & ~is_crit & (attacker.ability != AbilityEnum.INFILTRATOR))
-    damage = conditional_mult_round(damage, 5324/4096, attacker.item == ItemEnum.LIFE_ORB)
-
-    damage = fixed_modifier(damage, 4915/4096,
-        (attacker.item == ItemEnum.EXPERT_BELT) & (raw_effectiveness > 1))
-    bypass = state.volatile_status.protected[1-attacker_idx] & (attacker.ability == AbilityEnum.UNSEEN_FIST) & move.contact
-    damage = conditional_mult_round(damage, UNSEEN_FIST_PROTECT_MULTIPLIER, bypass)
+    damage = compute_damage_multipliers(attacker, defender, weather, move,
+        base_damage, is_crit, damage_roll, gravity,
+        effectiveness=damage_effectiveness, screen=screen,
+        user_speed=user_speed, target_speed=target_speed)
+    # Gen 9 Unseen Fist bypasses Protect without reducing damage.
 
     # Fixed damage ignores damage modifiers (including screens), but reaches
     # this branch only after the normal type/ability/protection checks.
@@ -216,12 +185,11 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         move.target_self[0], move.sound[0], move.bypass_substitute[0])
     state = jax.lax.cond(
         intercepted,
-        partial(_damage_substitute, target_idx=target_idx, damage=damage, defender=defender, ident=ident),
+        partial(_damage_substitute, target_idx=target_idx, damage=damage),
         partial(
             _damage_hit_target,
             target_idx=target_idx,
             damage=damage,
-            ident=ident,
             attacker_idx=attacker_idx,
         ),
         state,
@@ -238,8 +206,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     target_status = state.active_field('status', target_idx)
     thaw = (move.type == Type.FIRE) & (actual_loss > 0) & ~intercepted & (target_status == Status.FREEZE)
     state = update_active_fields(state, 1-attacker_idx, status=jnp.where(thaw, Status.NONE, target_status))
-    # Drain and recoil use HP removed before a berry heals, with half-up
-    # rounding, and never the uncapped calculated damage.
+    # Drain uses actual HP removed before on-hit healing, rounded half up.
     healing = jnp.maximum(1, jnp.floor(actual_loss * move.drain_fraction + .5)).astype(jnp.int32)
     state = jax.lax.cond(
         (move.drain_fraction[0] > 0) & (actual_loss[0] > 0),
@@ -248,16 +215,10 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         state,
     )
 
-    # lax.cond keeps both branches compatible with traced move and ability data.
-    state = jax.lax.cond(
-        jnp.logical_and(move.recoil, attacker.ability!=AbilityEnum.ROCK_HEAD)[0],
-        do_recoil, _unchanged_recoil_state,
-        state, attacker_idx, jnp.maximum(1, jnp.floor(actual_loss*move.recoil_percent + .5)).astype(jnp.int32))
-
     key, state = jax.lax.cond(
         intercepted,
         _unchanged_key_state,
-        partial(_run_hit_effects, attacker_idx=attacker_idx, move=move, is_crit=is_crit),
+        partial(_run_hit_effects, attacker_idx=attacker_idx, move=move, is_crit=is_crit, hit_index=hit_index),
         key,
         state,
     )
@@ -294,14 +255,6 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         state,
     )
     return key, state, damage, defender
-
-
-def do_recoil(state: BattleState, attacker_idx: int, damage) -> BattleState:
-    """Apply the supplied indirect recoil damage to the attacker."""
-    original_cause = state.event_cause
-    state = take_damage_value(state.replace(event_cause=jnp.int32(Cause.RECOIL)), attacker_idx, damage, False)
-    state = state.replace(event_cause=original_cause)
-    return state
 
 
 def _identity(x):

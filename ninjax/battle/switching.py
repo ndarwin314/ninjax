@@ -69,9 +69,17 @@ def _no_forced_switch(key, state, attacker):
                                           jnp.int32(0), key)
 
 
-def force_switch_target(key, state, attacker, *, wind=True):
-    """Execute a random drag, distinguishing Whirlwind from sound-based Roar."""
-    key, state, request = prepare_forced_switch(key, state, attacker, wind=wind)
+def forced_switch_move(move):
+    """Recognize moves that request the shared status drag continuation."""
+    identifier = move.identifier[0]
+    return (identifier == 18) | (identifier == 46)
+
+
+def force_switch_target(key, state, attacker, *, wind=True, enabled=True):
+    """Prepare and commit one drag request for either move entry point."""
+    key, state, request = jax.lax.cond(
+        enabled, partial(prepare_forced_switch, wind=wind), _no_forced_switch,
+        key, state, attacker)
     return key, execute_forced_switch(state, request)
 
 

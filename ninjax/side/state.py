@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from ninjax.calculations.modifiers import conditional_mult_round
 from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP
 from ninjax.calculations.stats import StatBoosts
 from ninjax.enums.abilities import AbilityEnum
@@ -164,6 +163,8 @@ class BattleState(struct.PyTreeNode):
     hit_results: HitResults = field(default_factory=HitResults.empty)
     # Pending faint records: target side is the row; slots preserve identity.
     faint_pending: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+    # Positive sequence within the pending faint batch; zero means empty.
+    faint_order: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
     faint_source: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
     faint_source_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
     faint_target_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
@@ -353,29 +354,8 @@ class BattleState(struct.PyTreeNode):
 
     @property
     def boosted_stats(self):
-        """Return active stats with the ability and status modifiers handled here.
-
-        The result has player and stat axes ``(2, 6)``. This property is used
-        for action ordering; the damage path separately applies its modifiers.
-        Ability coverage is incomplete.
-        """
-        active = self.active
-        ability = self.ability
-        status = active.status
-        stats = self.active.stats
-        # squeeze removes dimensions with length 1 which makes this broadcast correctly
-        # its probably going to be helpful to use this in other places
-
-        # Marvel Scale changes the displayed defensive stat; the damage path
-        # applies its own defensive-stat modifiers separately.
-        temp = conditional_mult_round(stats[...,StatEnum.DEFENSE], 1.5,
-                                      jnp.logical_and(ability==AbilityEnum.MARVEL_SCALE, active.has_status).squeeze())
-        stats = stats.at[..., StatEnum.DEFENSE].set(temp)
-
-
-        stats = jnp.floor(stats * STAT_MULTIPLIER_LOOKUP[6+self.boosts.normal_boosts])
-        # Chain Speed ability/item/field modifiers after stage rounding.
-        return jax.vmap(partial(_modify_stats_row, state=self))(jnp.arange(2), stats)
+        """Return the stage-adjusted stat view with shared battle factors."""
+        return jax.vmap(partial(_modify_stats_row, state=self))(jnp.arange(2), self.raw_boosted_stats)
 
     @property
     def effective_speeds(self):

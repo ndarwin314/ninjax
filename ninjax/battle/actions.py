@@ -88,7 +88,7 @@ def step_move(
         _prepare_struggle_action,
         partial(_prepare_selected_or_continued, continued=continued, is_tera=is_tera), key, state, player_idx, index)
     selected_move = state.active_moves(player_idx, index)
-    key, state, is_interrupted = before_move(key, state, player_idx, inclusive_paralysis=~struggle, restriction_blocked=restriction_blocked,
+    key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
         defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
     key, state = jax.lax.cond(
         is_interrupted.reshape(()), move_interrupted,
@@ -170,7 +170,7 @@ def step_switch(
     # TODO: add an opponent switched field somewhere for stakeout + analytic
     """Advance the action key and execute the selected switch with a separate key."""
     key, switch_key = random.split(key)
-    return key, swap_out(switch_key, state, player_index, index)
+    return key, resolve_faints(swap_out(switch_key, state, player_index, index))
 
 
 def step_action(
@@ -184,10 +184,9 @@ def step_action(
         action = BattleAction.from_legacy(action)
     state = state.replace(event_source=jnp.asarray(player_index, jnp.int32),
         event_cause=jnp.int32(Cause.MOVE), event_move=jnp.int32(0))
-    key, state = lax.cond(action.transformation == Transformation.NONE,
+    return lax.cond(action.transformation == Transformation.NONE,
         partial(_execute_ordinary_callback, action=action, player_index=player_index),
         _keep_key_state, key, state)
-    return key, resolve_faints(state)
 
 
 def _ordinary_action(key, state, action, player_index):

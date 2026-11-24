@@ -20,7 +20,7 @@
 - Avoid using nested functions or lambda functions when possible. Prefer adding helpers with static arguments
 - Make all imports at top level
 - Try to have functions pass minimal values needed for their own execution or of parallel branches
-- 
+- Prioritize unified design over preserving old implementations and ordering when adding functionality
 
 ## Workflow
 - Inspect existing code before making changes.

@@ -7,6 +7,7 @@ from ninjax.battle.environment import Battle
 from ninjax.battle.field import step_field
 from ninjax.battle.types import ActionType, BattleAction
 from ninjax.enums.moves import MoveResult, MoveType
+from ninjax.calculations.damage import resolve_hit_base_power
 from ninjax.moves.properties import effective_move
 from ninjax.records.hits import HitOutcome
 from ninjax.side.updates import clear_volatile_status
@@ -58,14 +59,14 @@ def test_previous_result_rollover_and_protect(neutral_type):
     assert failed.volatile_status.move_result[0, 0] == MoveResult.FAILED
     key, next_turn = step_field(key, failed)
     assert next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED
-    assert effective_move(next_turn, 0, make_move('Stomping Tantrum')).base_power[0] == 150
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 150
     state = equip_move(state, 'Dragon Pulse')
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
     key, protected = step_move(key, state, 0, 0, False)
     assert protected.volatile_status.move_result[0, 0] == MoveResult.SUCCEEDED
     _, next_turn = step_field(key, protected)
-    assert effective_move(next_turn, 0, make_move('Stomping Tantrum')).base_power[0] == 75
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 75
 
 
 def test_scheduler_supplies_sucker_punch_intent(neutral_type):
@@ -90,7 +91,7 @@ def test_full_hp_healing_records_failure(neutral_type):
     key, out = step_move(key, state, 0, 0, False)
     assert out.volatile_status.move_result[0, 0] == MoveResult.FAILED
     _, out = step_field(key, out)
-    assert effective_move(out, 0, make_move('Stomping Tantrum')).base_power[0] == 150
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=out.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 150
 
 
 def test_observation_exposes_history_not_pending_intent(neutral_type):

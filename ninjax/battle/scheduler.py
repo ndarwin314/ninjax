@@ -82,7 +82,7 @@ def _execute_queued_action(current):
     known = current.revealed_moves.at[player, slot].set(current.revealed_moves[player, slot] | spent | called)
     has_bench = jnp.any(current.selected[player] & (battle.team.current_hp[player, :, 0] > 0) &
                        (jnp.arange(6) != battle.active_index[player, 0]))
-    pivot = battle.switch_requested[player] & (battle.active_field('current_hp', player)[0] > 0) & has_bench
+    pivot = (battle.winner < 0) & battle.switch_requested[player] & (battle.active_field('current_hp', player)[0] > 0) & has_bench
     battle = battle.replace(switch_requested=jnp.zeros(2, bool))
     requested = jnp.zeros(2, bool).at[player].set(pivot)
     return current.replace(key=key, battle=battle, revealed_moves=known, cursor=current.cursor + 1,
@@ -97,7 +97,7 @@ def _keep_episode(c):
 def _resolve_queued_action(_, current):
     """Resolve queued action."""
     execute = _execute_queued_action
-    return lax.cond((current.cursor < 2) & ~jnp.any(current.acting_player_mask), execute,
+    return lax.cond((current.cursor < 2) & (current.battle.winner < 0) & ~jnp.any(current.acting_player_mask), execute,
                     _keep_episode, current)
 
 
@@ -122,7 +122,7 @@ def _skip_replacement(key, battle, player, index):
 def replace_player(player, carry):
     """Preserve player order, switch keys and condition snapshots."""
     current, actions = carry
-    key, battle = lax.cond(current.acting_player_mask[player],
+    key, battle = lax.cond(current.acting_player_mask[player] & (current.battle.winner < 0),
                            _execute_replacement, _skip_replacement,
                            current.key, current.battle, player, actions.index[player])
 
@@ -154,11 +154,11 @@ def advance_turn(state, actions):
 
     state = lax.fori_loop(0, 2, resolve, state)
     finish = _finish_turn
-    state = lax.cond((state.cursor == 2) & ~jnp.any(state.acting_player_mask) & ~finished_replacement,
+    state = lax.cond((state.cursor == 2) & (state.battle.winner < 0) & ~jnp.any(state.acting_player_mask) & ~finished_replacement,
                      finish, _keep_episode, state)
     needs = (state.battle.active_field('current_hp')[:, 0] <= 0) & jnp.any((state.battle.team.current_hp[..., 0] > 0) & state.selected, axis=1)
     waiting = jnp.any(state.acting_player_mask)
-    needs = jnp.where(waiting, state.acting_player_mask, needs)
+    needs = (state.battle.winner < 0) & jnp.where(waiting, state.acting_player_mask, needs)
     state = state.replace(phase=jnp.where(jnp.any(needs), Phase.REPLACEMENT, Phase.TURN),
                           acting_player_mask=jnp.where(jnp.any(needs), needs, jnp.ones(2, bool)))
     revealed = state.revealed.at[jnp.arange(2), state.battle.active_index[:, 0]].set(True)

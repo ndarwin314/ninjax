@@ -1,16 +1,39 @@
-"""Faint records, direct fainting and deferred Destiny Bond resolution."""
+"""HP commits and ordered singles faint resolution."""
 from functools import partial
 
 import jax
 import jax.numpy as jnp
 
+from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.pokemon import StatEnum
 from ninjax.records.events import Cause, EventKind, emit
-from ninjax.side.updates import update_active_fields
+from ninjax.side.updates import conditional_add_boosts, update_active_fields
 
 
-def _clear_fainted_destiny_bond(s, *, target):
-    """Clear fainted destiny bond."""
-    return clear_destiny_bond(s, target)
+def _end_fainted_effects(state, *, target):
+    """End represented effects that require the original holder to stay active."""
+    state = clear_destiny_bond(state, target)
+    v = state.volatile_status
+    v = v.replace(
+        ability_override=v.ability_override.at[target, 0].set(-1),
+        ability_suppressed=v.ability_suppressed.at[target, 0].set(False),
+        paradox_stat=v.paradox_stat.at[target, 0].set(-1),
+        paradox_booster=v.paradox_booster.at[target, 0].set(False),
+        flash_fire=v.flash_fire.at[target, 0].set(False),
+        charging_move_id=v.charging_move_id.at[target, 0].set(0),
+        recharging=v.recharging.at[target, 0].set(False),
+        substitute_hp=v.substitute_hp.at[target, 0].set(0))
+    return state.replace(volatile_status=v,
+        switch_requested=state.switch_requested.at[target].set(False))
+
+
+def _apply_ko_ability(state, *, source):
+    """Award the living move source its after-faint boost."""
+    ability = state.ability[source, 0]
+    beast = ability == AbilityEnum.BEAST_BOOST
+    best_stat = 1 + jnp.argmax(state.active_stats(source)[1:])
+    stat = jnp.where(beast, best_stat, StatEnum.ATTACK)
+    return conditional_add_boosts(state, source, beast | (ability == AbilityEnum.MOXIE), stat, 1)
 
 
 def _identity(s):
@@ -18,46 +41,68 @@ def _identity(s):
     return s
 
 
-def _resolve_faints_retaliate(s, *, target, safe_source, source):
+def _resolve_faints_retaliate(s, *, target, safe_source):
     """Commit the direct faint with an explicit Destiny Bond cause."""
     old_source, old_cause, old_move = s.event_source, s.event_cause, s.event_move
     s = s.replace(event_source=jnp.asarray(target, jnp.int32), event_cause=jnp.int32(Cause.DESTINY_BOND), event_move=jnp.int32(194))
-    mon = s.active[safe_source]
-    s = emit(s, EventKind.HP, safe_source, before=mon.current_hp, after=0,
-        hp_change=-mon.current_hp, hp_fraction_change=-jnp.ceil(mon.hp_percent * 100)/100)
-    s = emit(s, EventKind.FAINT, safe_source)
-    s = update_active_fields(s, safe_source, current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive))
-    s = clear_destiny_bond(s, target)
-    s = clear_destiny_bond(s, safe_source)
-    # In Gen 9 the last Pokémon to faint wins a simultaneous final KO.
-    both_out = ~jnp.any((s.team.current_hp[..., 0] > 0) & s.roster)
-    return s.replace(event_source=old_source, event_cause=old_cause, event_move=old_move,
-                     winner=jnp.where(both_out, source, s.winner))
+    s = direct_faint(s, safe_source, target, Cause.DESTINY_BOND)
+    return s.replace(event_source=old_source, event_cause=old_cause, event_move=old_move)
 
 
-def _resolve_faints_resolve(target, s):
-    """Consume one pending faint and its captured Destiny Bond state."""
+def _resolve_next_faint(_, s):
+    """Consume the oldest record and allow its reactions to queue a new faint."""
+    target = jnp.argmin(jnp.where(s.faint_pending, s.faint_order, jnp.iinfo(jnp.int32).max))
+    return jax.lax.cond(jnp.any(s.faint_pending), _resolve_faint, _keep_faint_state, s, target)
+
+
+def _keep_faint_state(state, target):
+    """Keep state once the pending records have drained."""
+    return state
+
+
+def _resolve_faint(s, target):
+    """Run faint and after-faint effects with their recorded attribution."""
     source = s.faint_source[target]
-    safe_source = jnp.maximum(source, 0)
-    triggers = (s.faint_pending[target] & s.faint_destiny_bond[target] &
-        (s.faint_cause[target] == Cause.MOVE) & (source >= 0) & (source != target) &
-        (s.active_index[target, 0] == s.faint_target_slot[target]) &
-        (s.active_index[safe_source, 0] == s.faint_source_slot[target]) &
-        (s.active.current_hp[safe_source, 0] > 0))
-    s = jax.lax.cond(s.faint_pending[target], partial(_clear_fainted_destiny_bond, target=target), _identity, s)
+    safe_source = jnp.clip(source, 0, 1)
+    matches_target = s.active_index[target, 0] == s.faint_target_slot[target]
+    opposing_move = ((s.faint_cause[target] == Cause.MOVE) & (source >= 0) &
+                     (source < 2) & (source != target) &
+                     (s.active_index[safe_source, 0] == s.faint_source_slot[target]))
+    bond = (matches_target & s.faint_destiny_bond[target] & opposing_move &
+            (s.active_field('current_hp', safe_source)[0] > 0))
     s = s.replace(faint_pending=s.faint_pending.at[target].set(False),
+                  faint_order=s.faint_order.at[target].set(0),
                   faint_destiny_bond=s.faint_destiny_bond.at[target].set(False))
-    retaliate = partial(_resolve_faints_retaliate, target=target, safe_source=safe_source, source=source)
-    return jax.lax.cond(triggers, retaliate, _identity, s)
+    s = jax.lax.cond(matches_target, partial(_end_fainted_effects, target=target), _identity, s)
+    retaliate = partial(_resolve_faints_retaliate, target=target, safe_source=safe_source)
+    s = jax.lax.cond(bond, retaliate, _identity, s)
+    # Terminal battles end before the AfterFaint ability event.
+    remaining = jnp.any((s.team.current_hp[..., 0] > 0) & s.roster, axis=1)
+    boost = opposing_move & (s.active_field('current_hp', safe_source)[0] > 0) & jnp.all(remaining)
+    s = jax.lax.cond(boost, partial(_apply_ko_ability, source=safe_source), _identity, s)
+    return resolve_terminal_outcome(s, remaining, target)
+
+
+def resolve_terminal_outcome(state, remaining, last_fainted):
+    """Set the singles winner after all faints from this checkpoint resolve.
+
+    A double knockout goes to the side whose final Pokémon fainted last.
+    The producer sets the order, including for self-KO moves and Perish Song.
+    """
+    winner = jnp.where(jnp.any(remaining), jnp.argmax(remaining), last_fainted)
+    terminal = ~jnp.all(remaining) & ~jnp.any(state.faint_pending)
+    return state.replace(winner=jnp.where(terminal, winner, state.winner).astype(jnp.int32))
 
 
 def record_faint(state, target, source, cause, enabled):
     """Save a faint's identity and cause independently of observation events."""
     enabled = jnp.asarray(enabled).reshape(()) & ~state.faint_pending[target]
     source = jnp.asarray(source, jnp.int32)
-    source_slot = jnp.where(source >= 0, state.active_index[jnp.maximum(source, 0), 0], -1)
+    source_slot = jnp.where(source >= 0, state.active_index[jnp.clip(source, 0, 1), 0], -1)
     return state.replace(
         faint_pending=state.faint_pending.at[target].set(state.faint_pending[target] | enabled),
+        faint_order=state.faint_order.at[target].set(jnp.where(
+            enabled, jnp.max(state.faint_order) + 1, state.faint_order[target])),
         faint_source=state.faint_source.at[target].set(jnp.where(enabled, source, state.faint_source[target])),
         faint_source_slot=state.faint_source_slot.at[target].set(jnp.where(enabled, source_slot, state.faint_source_slot[target])),
         faint_target_slot=state.faint_target_slot.at[target].set(jnp.where(enabled, state.active_index[target, 0], state.faint_target_slot[target])),
@@ -65,17 +110,32 @@ def record_faint(state, target, source, cause, enabled):
         faint_destiny_bond=state.faint_destiny_bond.at[target].set(jnp.where(enabled, state.volatile_status.destiny_bond[target, 0], state.faint_destiny_bond[target])))
 
 
+@jax.jit
+def commit_hp_change(state, player, old_hp, new_hp, max_hp, source, cause, attack=False):
+    """Commit HP and record a new faint once, independently of public events."""
+    # Ordinary HP changes cannot revive a fainted Pokémon.
+    new_hp = jnp.where(old_hp > 0, new_hp, old_hp)
+    fainted = (old_hp[0] > 0) & (new_hp[0] == 0)
+    state = update_active_fields(state, player, current_hp=new_hp, is_alive=new_hp > 0)
+    v = state.volatile_status
+    loss = jnp.where(attack, jnp.maximum(old_hp - new_hp, 0), v.last_damage[player])
+    state = state.replace(volatile_status=v.replace(last_damage=v.last_damage.at[player].set(loss)))
+    delta = new_hp - old_hp
+    public_delta = (jnp.ceil(new_hp / max_hp * 100) - jnp.ceil(old_hp / max_hp * 100)) / 100
+    state = emit(state, EventKind.HP, player, detail=jnp.asarray(attack, jnp.int32),
+                 before=old_hp, after=new_hp, hp_change=delta,
+                 hp_fraction_change=public_delta, enabled=delta != 0)
+    state = emit(state, EventKind.FAINT, player, enabled=fainted)
+    return record_faint(state, player, source, cause, fainted)
+
+
 def direct_faint(state, player, source, cause):
     """Faint an active Pokémon without damage protections or damage callbacks."""
-    mon = state.active[player]
-    alive = mon.current_hp[0] > 0
+    hp = state.active_field('current_hp', player)
     previous_source, previous_cause = state.event_source, state.event_cause
     state = state.replace(event_source=jnp.asarray(source, jnp.int32), event_cause=jnp.asarray(cause, jnp.int32))
-    state = emit(state, EventKind.HP, player, before=mon.current_hp, after=0, hp_change=-mon.current_hp,
-        hp_fraction_change=-jnp.ceil(mon.hp_percent * 100) / 100, enabled=alive)
-    state = emit(state, EventKind.FAINT, player, enabled=alive)
-    state = update_active_fields(state, player, current_hp=jnp.zeros_like(mon.current_hp), is_alive=jnp.zeros_like(mon.is_alive))
-    state = record_faint(state, player, source, cause, alive)
+    state = commit_hp_change(state, player, hp, jnp.zeros_like(hp), state.active_stats(player)[0],
+                             source, cause)
     return state.replace(event_source=previous_source, event_cause=previous_cause)
 
 
@@ -89,11 +149,11 @@ def clear_destiny_bond(state, player):
 
 @jax.jit
 def resolve_faints(state):
-    """Resolve pending singles faint effects after the move's HP effects finish.
+    """Resolve pending singles faint effects at an action or residual checkpoint.
 
     Records identify the actual source and team slots. Destiny Bond directly
     faints a surviving opposing attacker; it is neither damage nor another
     opposing move and therefore cannot recurse or invoke damage protections.
     """
-    resolve = _resolve_faints_resolve
-    return jax.lax.fori_loop(0, 2, resolve, state)
+    # Each active can faint once at this checkpoint, including Bond retaliation.
+    return jax.lax.fori_loop(0, 2, _resolve_next_faint, state)

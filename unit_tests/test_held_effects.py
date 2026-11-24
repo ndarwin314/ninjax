@@ -120,7 +120,7 @@ def test_single_hit_and_move_finalization_are_separate(neutral_type):
     assert damage.shape == (1,)
     assert hit_state.active.current_hp[0, 0] == state.active.current_hp[0, 0]
     assert hit_state.active.current_hp[1, 0] < defender_before.current_hp[0]
-    finished = jax.jit(finish_damaging_move)(hit_state, 0, move, damage, defender_before)
+    finished = jax.jit(finish_damaging_move)(hit_state, 0, move, hit_state.hit_results[0].damage, defender_before)
     assert finished.active.current_hp[0, 0] == state.active.current_hp[0, 0] - state.active.max_hp[0] // 10
     assert jnp.any((finished.events.kind == EventKind.HP) & (finished.events.target == 0))
     full_key, full = jax.jit(lambda k, s, m: do_damaging_move(k, s, 0, m, 0, 0))(key, state, move)

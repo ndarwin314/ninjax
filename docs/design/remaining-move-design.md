@@ -166,23 +166,31 @@ revision `23b41aa29e2ff5ff80e03f57b257b595a5852047`.
    move-specific rules. The resulting matchup also feeds conditional power,
    Expert Belt and reactive item checks.
 3. **Compute intrinsic base power at the appropriate hit-time snapshot.**
-   Extend `PowerRule` / `resolve_variable_base_power` with pure formulas; invoke
-   new HP/status/speed rules from `compute_base_power` with live operands.
-   Existing property-time rules already alter `move.base_power`, so avoid
-   resolving them again at hit time. This split should be explicit until those
-   existing callers are migrated. Rising Voltage already demonstrates a
-   hit-time intrinsic callback in `resolve_terrain_base_power`.
+   `PowerRule` / `resolve_hit_base_power` now own all represented hit-time
+   callbacks, including Acrobatics, Stored Power, weights, Stomping Tantrum,
+   HP/status/speed rules and Rising Voltage. `compute_base_power` invokes this
+   single dispatcher before the modifier chain. Weather Ball remains a
+   property-time ModifyMove effect; hit-plan contributions remain supplied power.
 4. **Chain BasePower event modifiers.** `chain_move_power_modifiers` owns the
    priority-0 move factors. Keep them after Technician, abilities, items and
    ordinary terrain effects, retaining integer chain rounding and one final
    application to intrinsic power.
-5. **Select and modify damage stats.** `resolve_damaging_hit` currently selects
-   stage-adjusted stats, then calls `modify_stats` and `compute_base_damage`.
-   Category selection must already be complete; a move's category comparison
-   need not use the same ability/item-modified stats as its final damage.
-6. **Apply damage-stage exceptions.** `compute_damage_multipliers` owns weather,
-   STAB, effectiveness and burn stages. An exception at one of these stages
-   must preserve that stage's rounding rather than emulate it with extra power.
+5. **Select and modify damage stats.** `resolve_damaging_hit` selects the
+   stage-adjusted stats and reads their field and item factors via
+   `stat_modifier`. `compute_base_damage` adds the move-dependent ability
+   factors and applies each stat's chain once. Category selection happens
+   before these damage-specific factors enter the calculation.
+6. **Apply damage stages through one calculation.** `compute_damage_multipliers`
+   owns weather, critical hits, random rolls, STAB, effectiveness, burn and the
+   final damage chain. `apply_weather_damage`, `stab_damage_modifier` and
+   `apply_burn_penalty` isolate focused responsibilities. `final_damage_modifier`
+   chains represented abilities, held items and singles screens in Speed/effect
+   order, then applies the result once. Multiscale is part of this chain for
+   both Pokémon and Substitute recipients; HP commits do not reapply it.
+   Power and damage chains share fixed-point primitives in
+   `calculations.modifiers`. Exceptions must retain their stage's rounding.
+   Offline comparisons live in `test_damage_modifiers.py`, recorded by
+   `tools/record_damage_modifiers.cjs` against the pinned Showdown revision.
 
 ### Implemented conditional-power batch
 
@@ -225,7 +233,7 @@ execution boundary. Extend rule metadata only when implementing its consumers.
 | Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
 | Item/form-dependent type override | Judgment, Raging Bull, Aura Wheel | **New** `properties.item_form_move_type(type_rule, default_type, effective_item, species, form)` returns only a transient type; **existing** `_override_type` calls it with host-defined plate/form mappings. **New** `properties.move_species_eligible(move_id, species, form)` supplies Aura Wheel's execution-time failure check to **existing** `execution.dispatch_selected_move`. Raging Bull's screen removal belongs to **new** `routing.apply_pre_damage_move_effects(state, player, move)`, delegating to **new** `side.field_conditions.clear_target_screens(state, target)`; it is not a typing side effect. |
 | Special effectiveness | Freeze-Dry, Flying Press | **New** `type_effectiveness.move_type_effectiveness_factors(move_type, defender_types, effectiveness_rule)` returns one factor per defensive type. It replaces Water's factor for Freeze-Dry or multiplies the resolved primary type's factors by Flying's factors for Flying Press. **Existing** `queries.move_immune_from_fields` and `damage.hit_type_effectiveness` both consume it; the latter retains responsibility for raw/damage matchup outputs and represented ability/Gravity handling. |
-| Weather damage exception | Hydro Steam | Extract **new** `damage.apply_weather_damage_modifier(damage, move_id, move_type, effective_weather)` from **existing** `compute_damage_multipliers`. It returns damage after exactly the weather stage's rounding, replacing the usual sun/Water reduction with Hydro Steam's 1.5 bonus. Call it once, at the current weather stage. |
+| Weather damage exception | Hydro Steam | Extend **existing** `damage.apply_weather_damage(damage, move_type, weather)` with a move-rule input. Replace the usual sun/Water reduction with Hydro Steam's 1.5 bonus, retaining weather-stage rounding and one call from `compute_damage_multipliers`. |
 | Category selection | Photon Geyser, Shell Side Arm | **New** `properties.resolve_move_category(key, move, level, user_atk, user_spa, target_def, target_spd)` returns `(key, resolved_move)`. Delegate to **new** `properties.photon_geyser_category(atk, spa)` and `properties.shell_side_arm_category(key, level, atk, spa, defense, sp_defense)`; the latter returns `(key, category)` and draws only for a tie. Set category, stat selectors and conditional contact together via **new** `properties.with_damage_category(move, category, physical_contact)`. Gather inputs with **new** `queries.category_stat_fields(state, player)`, preserving stage adjustments while excluding ordinary item/ability stat modifiers. |
 | Transformation-dependent type/category | Tera Blast, Tera Starstorm | **New** `properties.transformed_move_type(type_rule, default_type, tera_type, is_terastallized, form)` integrates through `_override_type`. Extend `resolve_move_category` for Tera Blast and use **new** `properties.transformation_move_properties(move, tera_type, is_terastallized, form)` for power, target and self-effect changes. Implement these only with the transformation lifecycle and eligibility checks; the existing type/category fields do not unlock complete moves. |
 
@@ -235,7 +243,7 @@ Keep the hit-time power boundary explicit:
 
 ```text
 resolve_damaging_hit
-  gathers effective speeds only for speed-dependent rules
+  gathers effective speeds for intrinsic power and final modifier ordering
   -> compute_base_power(..., user_speed=..., target_speed=...)
      -> resolve_hit_base_power(base_power, power_rule, user_hp, user_max_hp,
                                target_hp, target_max_hp, target_status,
@@ -254,14 +262,16 @@ whether conditional gathering actually saves work. None of these helpers
 consumes PRNG keys. Extend `PowerRule` to identify each intrinsic formula and
 priority-0 modifier rule explicitly.
 
-Retain **existing** `resolve_variable_base_power` for the rules currently
-resolved in `move_overrides` until a separate migration. `resolve_hit_base_power`
-must leave those already-resolved rules unchanged, including multi-hit powers
-supplied by the hit plan. Move the current Rising Voltage call into the hit-time
-dispatch rather than calling `resolve_terrain_base_power` a second time.
-Terrain Pulse is different: its type and intrinsic doubling are ModifyType/
-ModifyMove callbacks and must be resolved together during property preparation,
-not recalculated from a later terrain snapshot in the hit-time resolver.
+The intrinsic-power paths are now unified: `move_overrides` resolves only
+Weather Ball's property-time power, typing and priority. The old
+`resolve_variable_base_power` and separate `resolve_terrain_base_power`
+functions have been removed. `resolve_hit_base_power` handles the migrated
+rules using live effective weights, held-item presence, positive stage counts
+and previous-turn failure state supplied at the hit boundary. Stored Power uses
+the supplied base power plus 20 per positive stage, matching the reference.
+Weather Ball and fixed hit-plan contributions pass through without reapplication.
+Terrain Pulse will likewise resolve type and ModifyMove doubling together during
+property preparation, not from a later terrain snapshot.
 
 For keyed category selection, introduce **new**
 `routing.prepare_hit_move(key, state, player, move) -> (key, resolved_move)`.
@@ -292,10 +302,10 @@ both early immunity and downstream raw-effectiveness consumers in the same
 change. Do not maintain separate Freeze-Dry/Flying Press lookup logic in routing
 and damage.
 
-Facade has one additional owner: extract **new**
-`damage.apply_burn_damage_modifier(damage, move_id, category, user_status,
-user_ability)` from the burn stage in **existing** `compute_damage_multipliers`.
-It returns damage after the current burn-stage rounding and skips that penalty
+Facade has one additional owner: **implemented**
+`damage.apply_burn_penalty(damage, status, ability, category, identifier)`, called
+from the burn stage in `compute_damage_multipliers`.
+It returns damage after burn-stage rounding and skips that penalty
 for Facade in the Scarlet/Violet ruleset. Keep the existing position relative to
 weather, critical damage, random roll, STAB, effectiveness and later modifiers.
 Its priority-0 power boost still belongs to
@@ -407,14 +417,14 @@ copied and reset. `HitOutcome.PROTECTED` is distinct from a failed or immune
 attempt. Status callbacks report represented failure conditions, though not all
 status move failures are classified yet.
 
-Destiny Bond is the first consumer of `record_faint`/`resolve_faints` in
-`side.py`. Damage records capture the actual source side and team slot, target
-slot, cause, and bond state. Resolution runs at action boundaries after recoil
-and healing, independently of the public event buffer. Retaliation directly
-faints a surviving opposing attacker; indirect damage and changed source slots
-do not qualify. Its volatile expires on the next action attempt or switch,
-and consecutive execution removes the bond and fails. Existing ability faint
-hooks remain in the damage path; consolidating those timing rules is future work.
+HP commits queue a faint on the first transition to zero HP. The singles
+resolver consumes pending records in order at action, switch, and residual
+checkpoints. Records capture the source side and team slot, target slot, cause,
+and Destiny Bond state independently of the public event buffer. Destiny Bond
+can append a direct faint for a surviving opposing attacker. Moxie and Beast
+Boost use the recorded move source after faint resolution. Innards Out and
+Aftermath run as hit reactions. Winner selection uses the last recorded faint
+when both sides run out of Pokémon at the same checkpoint.
 
 Substitute uses switch-cleared `VolatileStatus.substitute_hp`. A move's most
 recent attempts are retained in a fixed ten-entry `HitResults` buffer, with

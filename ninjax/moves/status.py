@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import worry_seed
-from ninjax.battle.switching import force_switch_target
+from ninjax.battle.switching import force_switch_target, forced_switch_move
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
 from ninjax.enums.moves import ProtectionKind
@@ -115,20 +115,16 @@ def create_substitute(state, player):
 
 
 def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    """Execute a status move directly, including immediate forced switching."""
-    return jax.lax.cond(
-        (move.identifier[0] == 18) | (move.identifier[0] == 46),
-        partial(force_switch_target, attacker=attacker_idx, wind=move.identifier[0] == 18),
-        partial(
-            _status_move_effects,
-            attacker_idx=attacker_idx,
-            move=move,
-            stat_index=stat_index,
-            boost_value=boost_value,
-        ),
-        key,
-        state,
-    )
+    """Execute a status move and commit its drag through the shared continuation."""
+    forced = forced_switch_move(move)
+    key, state = jax.lax.cond(
+        forced,
+        _unchanged_key_state,
+        partial(_status_move_effects, attacker_idx=attacker_idx, move=move,
+                stat_index=stat_index, boost_value=boost_value),
+        key, state)
+    return force_switch_target(key, state, attacker_idx, wind=move.identifier[0] == 18,
+                               enabled=forced)
 
 
 def _record_item_swap_blocked(s, *, attacker_idx):

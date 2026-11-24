@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ninjax.calculations.damage import compute_base_power, resolve_variable_base_power
+from ninjax.calculations.damage import compute_base_power, resolve_hit_base_power
 from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.field import Terrain, TerrainEnum as T, WeatherEnum as W
 from ninjax.enums.items import ItemEnum as I
@@ -24,7 +24,7 @@ POWER_PROBES = json.loads((Path(__file__).parent / 'fixtures/showdown/power-modi
 @pytest.fixture(scope='module')
 def resolve_power():
     """Exercise runtime rule selection through one shared JIT executable."""
-    return jax.jit(resolve_variable_base_power)
+    return jax.jit(resolve_hit_base_power)
 
 
 @pytest.mark.parametrize('rule,context,expected', [
@@ -33,10 +33,9 @@ def resolve_power():
     (PowerRule.DOUBLE_WITHOUT_ITEM, {'no_item': False}, 55),
     (PowerRule.DOUBLE_AFTER_FAILURE, {'previous_failed': True}, 110),
     (PowerRule.DOUBLE_AFTER_FAILURE, {'previous_failed': False}, 55),
-    (PowerRule.POSITIVE_STAGES, {'positive_stages': 0}, 20),
-    (PowerRule.POSITIVE_STAGES, {'positive_stages': 7}, 160),
-    (PowerRule.DOUBLE_IN_WEATHER, {'weather_active': True}, 110),
-    (PowerRule.DOUBLE_IN_WEATHER, {'weather_active': False}, 55),
+    (PowerRule.POSITIVE_STAGES, {'positive_stages': 0}, 55),
+    (PowerRule.POSITIVE_STAGES, {'positive_stages': 7}, 195),
+    (PowerRule.DOUBLE_IN_WEATHER, {}, 55),
     (PowerRule.REMOVABLE_ITEM_BOOST, {}, 55),
     
 ])
@@ -65,7 +64,8 @@ def test_rule_dispatch_is_independent_of_identifier(neutral_type):
     _, state = neutral_type
     move = make_move('Tackle').replace(power_rule=jnp.array([PowerRule.DOUBLE_WITHOUT_ITEM]))
     resolved = effective_move(state, 0, move)
-    assert resolved.base_power[0] == 80
+    assert resolved.base_power[0] == 40
+    assert compute_base_power(state.active[0], state.active[1], resolved, state.terrain)[0] == 80
     assert move.base_power[0] == 40
     assert make_move('Low Kick').power_rule[0] == PowerRule.TARGET_WEIGHT
     assert make_move('Weather Ball').power_rule[0] == PowerRule.DOUBLE_IN_WEATHER

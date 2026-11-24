@@ -280,8 +280,7 @@ Remaining integration and mechanics include:
 
 - Auditing move-specific exceptions and interactions across the enabled catalogue;
   zero unavailable moves does not imply complete mechanics coverage.
-- Other Mental Herb effects and multi-hit recoil's once-per-move aggregation
-  of actual HP lost.
+- Other Mental Herb effects.
 - Protect and Spiky Shield share the protection chain and support Unseen Fist
   bypass; failure when no actions remain and additional protection variants
   are not yet represented.

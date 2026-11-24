@@ -6,7 +6,9 @@ import jax.numpy as jnp
 from jax import lax, random
 
 from ninjax.battle.residuals import (
-    end_turn_damage,
+    ResidualHPPhase,
+    residual_speed_order,
+    run_hp_residuals,
     leftovers,
     residual_abilities,
     residual_orbs,
@@ -14,15 +16,15 @@ from ninjax.battle.residuals import (
     step_side_conditions,
 )
 from ninjax.enums.field import Terrain, Weather
-from ninjax.side.faint_effects import resolve_faints
-from ninjax.side.hp_effects import take_damage_value
+from ninjax.records.events import Cause
+from ninjax.side.faint_effects import direct_faint, resolve_faints
 from ninjax.side.item_effects import refresh_paradox, update_items
 from ninjax.side.state import BattleState
 
 
 def _perish_faint(state, player):
-    """Resolve one expiring Perish Song counter as indirect HP loss."""
-    return take_damage_value(state, player, state.active.current_hp[player], False)
+    """Faint an active Pokémon whose Perish Song counter reached zero."""
+    return direct_faint(state, player, -1, Cause.PERISH)
 
 
 def _unchanged_player_state(state, player):
@@ -30,42 +32,67 @@ def _unchanged_player_state(state, player):
     return state
 
 
+def _perish_residual(key, state):
+    """Queue the order-24 Perish Song faints in Speed order."""
+    speeds = state.effective_speeds
+    effective = jnp.where(state.trick_room_duration > 0, -speeds, speeds)
+    key, tie_key = random.split(key)
+    slowest = jnp.where(effective[0] == effective[1], random.randint(tie_key, (), 0, 2), jnp.argmin(effective))
+    expiring = state.perish_turns[:, 0] == 1
+    for player in (1 - slowest, slowest):
+        state = lax.cond(expiring[player], _perish_faint, _unchanged_player_state, state, player)
+    state = state.replace(perish_turns=jnp.maximum(0, state.perish_turns - 1))
+    return key, resolve_faints(state)
+
+
+def _before_status(key, state, order):
+    """Run order-five status cures and Leftovers before poison and burn."""
+    key, state = residual_abilities(key, state, speed_boost=False, order=order)
+    return key, leftovers(state, order)
+
+
+def _skip_ordered_group(key, state, order):
+    """Skip a residual group after a terminal checkpoint."""
+    return key, state
+
+
+def _late_residuals(key, state, order):
+    """Run order-28 abilities, followed by status orbs and item updates."""
+    key, state = step_moody(key, state, order)
+    key, state = residual_abilities(key, state, status_cures=False, order=order)
+    state = run_hp_residuals(state, (ResidualHPPhase.BAD_DREAMS,), order)
+    return lax.cond(state.winner < 0, _finish_residual_items,
+                    _skip_ordered_group, key, state, order)
+
+
+def _finish_residual_items(key, state, order):
+    """Run late status orbs and then update held items."""
+    key, state = residual_orbs(key, state, order)
+    return key, update_items(state)
+
+
+def _skip_residual_effects(key, state):
+    """Keep a finished battle at the residual checkpoint that ended it."""
+    return key, state
+
+
 def step_field(
     key: chex.PRNGKey,
     state: BattleState,
 ) -> tuple[jax.Array, BattleState]:
-    # there is probably some reason we need rng or actions but idk rn
-    """Apply residual phases once, then decrement timers and resolve deferred faints."""
+    """Run the residual schedule, resolving faints between HP phases."""
     weather_duration = jnp.maximum(state.weather.duration - 1, 0)
     new_weather = jnp.where(weather_duration > 0, state.weather.weather, 0)
     terrain_duration = jnp.maximum(state.terrain.duration - 1, 0)
     new_terrain = jnp.where(terrain_duration > 0, state.terrain.terrain, 0)
 
+    order = residual_speed_order(state)
     key, state = step_side_conditions(key, state)
-
-    # Hydration and Shed Skin resolve at residual order 5, before poison/burn.
-    key, state = residual_abilities(key, state, speed_boost=False)
-
-    # weather, terrain, status, items (leftovers etc)
-    state = end_turn_damage(state)
-
-
-    state = leftovers(state)
-    key, state = step_moody(key, state)
-    key, state = residual_abilities(key, state, status_cures=False)
-    key, state = residual_orbs(key, state)
-    state = update_items(state)
-    # Perish Song resolves at the end of the turn, using effective speed order.
-    speeds = state.effective_speeds
-    effective = jnp.where(state.trick_room_duration > 0, -speeds, speeds)
-    expiring = state.perish_turns[:, 0] == 1
-    for player in range(2):
-        state = lax.cond(expiring[player], _perish_faint, _unchanged_player_state, state, player)
-    key, tie_key = random.split(key)
-    slowest = jnp.where(effective[0] == effective[1], random.randint(tie_key, (), 0, 2), jnp.argmin(effective))
-    both_out = ~jnp.any((state.team.current_hp[..., 0] > 0) & state.roster)
-    state = state.replace(perish_turns=jnp.where(state.perish_turns > 0, state.perish_turns-1, state.perish_turns),
-                          winner=jnp.where(jnp.all(expiring) & both_out, slowest, state.winner))
+    state = run_hp_residuals(state, (ResidualHPPhase.WEATHER, ResidualHPPhase.GRASSY_TERRAIN), order)
+    key, state = lax.cond(state.winner < 0, _before_status, _skip_ordered_group, key, state, order)
+    state = run_hp_residuals(state, (ResidualHPPhase.POISON, ResidualHPPhase.BURN), order)
+    key, state = lax.cond(state.winner < 0, _perish_residual, _skip_residual_effects, key, state)
+    key, state = lax.cond(state.winner < 0, _late_residuals, _skip_ordered_group, key, state, order)
 
     state = state.replace(
         turn_number=state.turn_number + 1,
@@ -77,4 +104,4 @@ def step_field(
             previous_move_result=state.volatile_status.move_result, move_result=jnp.zeros_like(state.volatile_status.move_result)),
     )
 
-    return key, resolve_faints(refresh_paradox(state))
+    return key, refresh_paradox(state)

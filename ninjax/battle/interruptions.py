@@ -25,7 +25,11 @@ def _before_move_freeze_check(args, *, player_idx):
 
 
 def _before_move_result(args):
-    """Skip the freeze roll and preserve state with no freeze interruption."""
+    """
+    Skip the freeze roll and preserve state with no freeze interruption.
+    Continue without a self-hit after confusion expires.
+    Skip confusion when a higher-priority condition already interrupted.
+    """
     return (args[0], args[1], jnp.bool_(False))
 
 
@@ -64,11 +68,6 @@ def _before_move_roll_hit(args, *, player_idx):
     return key, lax.cond(hit, self_hit, _before_move_unchanged, state), hit
 
 
-def _before_move_result_2(args):
-    """Continue without a self-hit after confusion expires."""
-    return (args[0], args[1], jnp.bool_(False))
-
-
 def _before_move_confusion_check(args, *, player_idx):
     """Count down confusion and possibly apply its special self-hit."""
     key, state = args
@@ -78,21 +77,14 @@ def _before_move_confusion_check(args, *, player_idx):
     state = emit(state, EventKind.CONDITION, player_idx, detail=12, before=1, after=0, enabled=remaining == 0)
     roll_hit = partial(_before_move_roll_hit, player_idx=player_idx)
     return lax.cond(remaining > 0, roll_hit,
-        _before_move_result_2, (key, state))
+        _before_move_result, (key, state))
 
 
-def _before_move_result_3(args):
-    """Skip confusion when a higher-priority condition already interrupted."""
-    return (args[0], args[1], jnp.bool_(False))
-
-
-def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_paralysis=True,
+def before_move(key: chex.PRNGKey, state: BattleState, player_idx,
                 restriction_blocked=False, defrost_move=False, sleep_usable=False):
     """Resolve represented status and volatile interruptions before an action.
 
     Return the advanced key, immutable state and a scalar interruption flag.
-    The explicit threshold parameter preserves the existing normal-move and
-    Struggle comparisons until their rules are unified separately.
     """
     actor = state.active[player_idx]
     old_sleep = actor.sleep_counter
@@ -112,9 +104,9 @@ def before_move(key: chex.PRNGKey, state: BattleState, player_idx, inclusive_par
     confusion_check = partial(_before_move_confusion_check, player_idx=player_idx)
     confused = (state.volatile_status.confusion_turns[player_idx, 0] > 0) & ~higher_blocked
     key, state, self_hit = lax.cond(confused, confusion_check,
-        _before_move_result_3, (key, state))
+        _before_move_result, (key, state))
     key, subkey = random.split(key)
     roll = random.uniform(subkey)
-    fully_paralyzed = (state.active.status[player_idx] == Status.PARALYZE) & jnp.where(inclusive_paralysis, roll <= .25, roll < .25)
+    fully_paralyzed = (state.active.status[player_idx] == Status.PARALYZE) & (roll < .25)
     interrupted = higher_blocked | self_hit | fully_paralyzed
     return key, state, interrupted.reshape(())

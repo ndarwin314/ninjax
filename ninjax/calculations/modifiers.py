@@ -58,25 +58,12 @@ IRON_FIST = 1.2
 RECKLESS = 1.2
 
 
-def conditional_mult_round(damage, mult, cond) -> Array:
-    # Truncate toward zero, matching numpy.fix.
-    """Apply an enabled multiplier and truncate toward zero."""
-    return jnp.trunc(conditional_mult(damage, mult, cond)).astype(int)
+def chain_modifier(modifier, numerator, enabled=True):
+    """Chain a 4096-based factor, rounding intermediate modifier halves up."""
+    factor = jnp.where(enabled, numerator, 4096).astype(jnp.int32)
+    return (modifier * factor + 2048) >> 12
 
 
-def conditional_mult(value, mult, cond):
-    # TODO, there is a buggy thing happening where multiplying a (2,1) array by a (2,) makes a (2,2) instead of (2,1)
-    # this doesnt seem correct to me but i guess its how jax broadcasts so figure out how to deal with that
-    """Apply a multiplier where the supplied condition is enabled."""
-    return value * jnp.power(mult, cond)
-
-
-def conditional_mult_prod(value, mult, cond):
-    """Multiply all enabled modifiers before applying them to the value."""
-    return value * jnp.prod(jnp.power(mult, cond))
-
-
-def conditional_mult_prod_round(damage, mult, cond):
-    # Truncate toward zero, matching numpy.fix.
-    """Apply the product of enabled modifiers and truncate toward zero."""
-    return jnp.trunc(conditional_mult_prod(damage, mult, cond)).astype(int)
+def apply_modifier(value, modifier):
+    """Apply a 4096-based modifier with Showdown's half-down rounding."""
+    return (jnp.asarray(value, jnp.int32) * modifier + 2047) >> 12

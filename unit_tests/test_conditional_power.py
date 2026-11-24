@@ -6,9 +6,11 @@ import pytest
 from ninjax.calculations.damage import compute_base_power, compute_damage_multipliers
 from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.field import Weather, WeatherEnum as W
-from ninjax.enums.moves import PowerRule
+from ninjax.enums.moves import PowerRule, MoveResult
 from ninjax.enums.pokemon import Status
 from ninjax.moves.hit_resolution import resolve_damaging_hit
+from ninjax.moves.properties import effective_move
+from ninjax.enums.items import ItemEnum as I
 from ninjax.side.updates import update_active
 from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
@@ -66,8 +68,8 @@ def test_facade_bypasses_only_its_burn_penalty(neutral_type):
     key, state = neutral_type
     user = state.active[0].replace(status=jnp.array([Status.BURN]))
     multiply = jax.jit(compute_damage_multipliers)
-    facade = multiply(key, user, state.active[1], Weather(W.NONE, 0), make_move('Facade'), 100, False, 1.)
-    tackle = multiply(key, user, state.active[1], Weather(W.NONE, 0), make_move('Tackle'), 100, False, 1.)
+    facade = multiply(user, state.active[1], W.NONE, make_move('Facade'), 100, False, 1.)
+    tackle = multiply(user, state.active[1], W.NONE, make_move('Tackle'), 100, False, 1.)
     assert facade[0] == 100 and tackle[0] == 50
 
 
@@ -78,3 +80,52 @@ def test_facade_status_eligibility(neutral_type, power, status, expected):
     _, state = neutral_type
     user = state.active[0].replace(status=jnp.array([status]))
     assert power(user, state.active[1], make_move('Facade'), state.terrain)[0] == expected
+
+
+@pytest.mark.parametrize('name', ['Electro Drift', 'Collision Course'])
+@pytest.mark.parametrize('effectiveness,expected', [(0.5, 100), (1., 100), (2., 133)])
+def test_super_effective_bonus_applies_once(neutral_type, power, name, effectiveness, expected):
+    """Both moves select one shared 5461/4096 modifier, with no ID-based duplicate."""
+    _, state = neutral_type
+    move = make_move(name).replace(base_power=jnp.array([100]))
+    assert move.power_rule[0] == PowerRule.SUPER_EFFECTIVE_MODIFIER
+    result = power(state.active[0], state.active[1], move, state.terrain,
+                   raw_effectiveness=effectiveness)
+    assert result[0] == expected
+
+
+@pytest.fixture(scope='module')
+def hit():
+    """Share the full per-hit executable across live-state power checks."""
+    return jax.jit(resolve_damaging_hit)
+
+
+@pytest.mark.parametrize('name,expected_power', [('Acrobatics', 110),
+    ('Stored Power', 80), ('Low Kick', 120), ('Heavy Slam', 120), ('Stomping Tantrum', 150)])
+def test_migrated_rules_read_hit_time_state(neutral_type, hit, name, expected_power):
+    """Property resolution must not freeze items, boosts, weights or failure history."""
+    key, state = neutral_type
+    # Resolve with an item, no boosts, ordinary weights and no failed history.
+    before = update_active(state, 0, state.active[0].replace(item=jnp.array([I.LEFTOVERS])))
+    move = effective_move(before, 0, make_move(name))
+    assert move.base_power[0] == make_move(name).base_power[0]
+    state = update_active(state, 0, state.active[0].replace(weight_hg=jnp.array([10000])))
+    state = update_active(state, 1, state.active[1].replace(weight_hg=jnp.array([2000]),
+        ability=jnp.array([A.BATTLE_ARMOR])))
+    state = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 1].set(3)))
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(previous_move_result=v.previous_move_result.at[0, 0].set(MoveResult.FAILED)))
+    _, actual, damage, _ = hit(key, state, 0, move)
+    fixed = move.replace(power_rule=jnp.array([PowerRule.FIXED]), base_power=jnp.array([expected_power]))
+    _, expected, fixed_damage, _ = hit(key, state, 0, fixed)
+    assert damage[0] == fixed_damage[0]
+    assert actual.active.current_hp[1, 0] == expected.active.current_hp[1, 0]
+
+
+def test_weather_ball_property_power_is_not_doubled_again(neutral_type, power):
+    """Weather Ball keeps ModifyMove timing and passes through hit-time resolution."""
+    _, state = neutral_type
+    state = state.replace(weather=Weather(W.RAIN, 5))
+    move = effective_move(state, 0, make_move('Weather Ball'))
+    assert move.base_power[0] == 100
+    assert power(state.active[0], state.active[1], move, state.terrain, W.RAIN)[0] == 100

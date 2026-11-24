@@ -12,11 +12,12 @@ from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome
-from ninjax.side.hp_effects import take_damage_percent, take_damage_value
+from ninjax.side.faint_effects import direct_faint
+from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import consume, update_items
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
-from ninjax.side.updates import add_boosts, conditional_add_boosts, update_active_fields
+from ninjax.side.updates import add_boosts, conditional_add_boosts
 
 
 def _apply_self_stat_changes(s, *, attacker_idx, move):
@@ -26,17 +27,39 @@ def _apply_self_stat_changes(s, *, attacker_idx, move):
 
 def _apply_self_ko(s, *, attacker_idx):
     """Remove the remaining user HP for a self-KO move."""
-    return take_damage_value(s, attacker_idx, s.active[attacker_idx].current_hp, False)
+    return direct_faint(s, attacker_idx, attacker_idx, Cause.SELF_KO)
 
 
-def finish_damaging_move(state: BattleState, attacker_idx, move: Move, damage, defender: Pokemon, self_effect=True) -> BattleState:
-    """Run existing once-per-move effects and resolve simultaneous knockouts.
+def _apply_recoil_damage(state, *, player, damage):
+    """Commit recoil with the user's attribution and restore the action context."""
+    source, cause = state.event_source, state.event_cause
+    state = state.replace(event_source=jnp.asarray(player, jnp.int32),
+                          event_cause=jnp.int32(Cause.RECOIL))
+    state = take_damage_value(state, player, damage, False, source=player)
+    return state.replace(event_source=source, event_cause=cause)
 
-    ``damage`` is the sum of calculated damage, not HP actually lost. Effects
-    requiring actual HP lost need a separate total before they can be added.
+
+def _apply_move_recoil(state, player, move, hp_lost):
+    """Apply damage-based recoil once, after all hits and their reactions."""
+    ability = state.ability[player, 0]
+    enabled = (move.recoil[0] & (hp_lost > 0) &
+               (ability != AbilityEnum.ROCK_HEAD) & (ability != AbilityEnum.MAGIC_GUARD) &
+               (state.active_field('current_hp', player)[0] > 0))
+    # Apply the move fraction and round half up once across all recipients.
+    amount = jnp.maximum(1, jnp.floor(hp_lost * move.recoil_percent[0] + .5)).astype(jnp.int32)
+    return jax.lax.cond(enabled, partial(_apply_recoil_damage, player=player, damage=amount),
+                        _identity, state)
+
+
+def finish_damaging_move(state: BattleState, attacker_idx, move: Move, hp_lost, defender: Pokemon, self_effect=True) -> BattleState:
+    """Run once-per-move effects before the action faint checkpoint.
+
+    ``hp_lost`` is the total HP removed from Pokémon and Substitutes.
     ``defender`` is the snapshot from before the first hit. ``self_effect`` is
     the caller's once-per-move chance outcome, shared by all self stat changes.
     """
+
+    state = _apply_move_recoil(state, attacker_idx, move, hp_lost)
 
     # Hyper Beam requires recharge after a successful hit, including a hit
     # on Substitute or a knockout. Misses and blocked attempts never reach here.
@@ -51,7 +74,7 @@ def finish_damaging_move(state: BattleState, attacker_idx, move: Move, damage, d
         _identity,
         state,
     )
-    state = after_move(state, attacker_idx, move, damage[0] > 0)
+    state = after_move(state, attacker_idx, move, hp_lost > 0)
     state = after_move_finished(state, defender, 1-attacker_idx, defender.current_hp)
     state = jax.lax.cond(
         move.self_ko[0],
@@ -59,18 +82,12 @@ def finish_damaging_move(state: BattleState, attacker_idx, move: Move, damage, d
         _identity,
         state,
     )
-    # Retain the cause-dependent winner for a simultaneous final knockout;
-    # the environment uses this value when it constructs the terminal reward.
-    both_out = ~jnp.any((state.team.current_hp[..., 0] > 0) & state.roster)
-    winner = jnp.where(move.self_ko[0] | (move.identifier[0] == 153), 1-attacker_idx, attacker_idx)
-    state = state.replace(winner=jnp.where(both_out, winner, state.winner))
-
     return state
 
 
 def _apply_crash_damage(s, *, player):
     """Apply half-max-HP recoil after a failed crash-damage move."""
-    return take_damage_percent(s, player, .5, cause=Cause.RECOIL)
+    return _apply_recoil_damage(s, player=player, damage=jnp.maximum(1, s.active_stats(player)[0] // 2))
 
 
 def finish_attempt(state, player, move):
@@ -89,20 +106,11 @@ def finish_attempt(state, player, move):
     )
 
 
-def _struggle_recoil(b, player):
-    """Apply Struggle's existing quarter-max-HP recoil after shared damage."""
-    actor = b.active[player]
-    hp = jnp.maximum(0, actor.current_hp - jnp.maximum(1, jnp.round(actor.max_hp / 4)))
-    b = b.replace(event_cause=jnp.int32(Cause.RECOIL))
-    b = emit(b, EventKind.HP, player, before=actor.current_hp, after=hp,
-             hp_change=hp-actor.current_hp,
-             hp_fraction_change=(jnp.ceil(hp / actor.max_hp * 100) -
-                                 jnp.ceil(actor.current_hp / actor.max_hp * 100)) / 100,
-             enabled=hp != actor.current_hp)
-    b = emit(b, EventKind.FAINT, player, enabled=(actor.current_hp > 0) & (hp == 0))
-    b = update_active_fields(b, player, current_hp=hp, is_alive=hp > 0)
-    b = b.replace(winner=jnp.where(~jnp.any((b.team.current_hp[..., 0] > 0) & b.roster), player, b.winner))
-    return b
+def _struggle_recoil(state, *, player):
+    """Apply quarter-max-HP Struggle recoil and record any resulting faint."""
+    max_hp = state.active_stats(player)[0]
+    damage = jnp.maximum(1, (max_hp + 2) // 4)
+    return _apply_recoil_damage(state, player=player, damage=damage)
 
 
 def _apply_throat_spray(s, *, player):
@@ -113,8 +121,12 @@ def _apply_throat_spray(s, *, player):
 def after_move(state, player, move, dealt_damage):
     """Apply Life Orb recoil before the surviving user's Throat Spray effect."""
     mon = state.active[player]
-    alive = mon.current_hp[0] > 0
-    state = take_damage_percent(state, player, jnp.where(alive & dealt_damage & (mon.item[0] == I.LIFE_ORB), .1, 0))
+    orb = ((mon.current_hp[0] > 0) & dealt_damage & (mon.item[0] == I.LIFE_ORB) &
+           (state.ability[player, 0] != AbilityEnum.MAGIC_GUARD))
+    damage = jnp.maximum(1, mon.max_hp // 10)
+    state = jax.lax.cond(orb, partial(_apply_recoil_damage, player=player, damage=damage),
+                         _identity, state)
+    alive = state.active_field('current_hp', player)[0] > 0
     spray = alive & move.sound[0] & (state.active.item[player, 0] == I.THROAT_SPRAY)
     state = consume(state, player, spray)
     return jax.lax.cond(spray, partial(_apply_throat_spray, player=player), _identity, state)

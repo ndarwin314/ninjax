@@ -1,7 +1,9 @@
 """Properties helpers for immutable JAX battle state."""
+from typing import NamedTuple
+
+import jax
 import jax.numpy as jnp
 
-from ninjax.calculations.damage import resolve_variable_base_power
 from ninjax.calculations.modifiers import (
     COMPOUND_EYES_MULTIPLIER,
     VICTORY_STAR,
@@ -11,17 +13,12 @@ from ninjax.calculations.stat_formulas import ACCURACY_MULTIPLIER_LOOKUP
 from ninjax.enums.abilities import AbilityEnum, AbilityEnum as A
 from ninjax.enums.field import TerrainEnum as T, WeatherEnum, WeatherEnum as W
 from ninjax.enums.items import ItemEnum, ItemEnum as I
-from ninjax.enums.moves import MoveFlags, MoveResult, MoveType
-from ninjax.enums.pokemon import FormEnum, Type
+from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
+from ninjax.enums.pokemon import FormEnum, StatEnum, Type
 from ninjax.side.queries import (
     effective_weather,
     is_floating_fields,
 )
-
-
-def _move_overrides_weight(weight, ability):
-    """Apply represented weight abilities in integer hectograms."""
-    return jnp.maximum(1, weight * jnp.where(ability == A.HEAVY_METAL, 2, 1) // jnp.where(ability == A.LIGHT_METAL, 2, 1))
 
 
 def effective_move(state, attacker_index, move):
@@ -73,9 +70,45 @@ def effective_priority(state, player, move):
     return _ability_priority(state, player, move, move_type, priority, ability)
 
 
-def move_accuracy(state, attacker_index, move):
+class Absorption(NamedTuple):
+    """The single defender response shared by accuracy and hit dispatch."""
+
+    stat: jax.Array
+    stages: jax.Array
+    flash_fire: jax.Array
+    heal: jax.Array
+
+    @property
+    def active(self):
+        """Return whether this response bypasses the accuracy roll."""
+        return (self.stat != 0) | self.flash_fire | self.heal
+
+
+def absorption_from_fields(move, ability):
+    """Classify the represented opposing ability intercepts before accuracy."""
+    water = move.type == Type.WATER
+    electric = move.type == Type.ELECTRIC
+    fire = move.type == Type.FIRE
+    defense = (ability == A.WELL_BAKED_BODY) & fire
+    # Whirlwind lets the drag request handle Wind Rider and its failure outcome.
+    attack = ((ability == A.SAP_SIPPER) & (move.type == Type.GRASS)) | (
+        (ability == A.WIND_RIDER) & ((move.move_flags & MoveFlags.WIND) != 0) &
+        (move.identifier != 18))
+    special_attack = ((ability == A.STORM_DRAIN) & water) | ((ability == A.LIGHTNING_ROD) & electric)
+    speed = (ability == A.MOTOR_DRIVE) & electric
+    stat = jnp.select((defense, attack, special_attack, speed),
+                      (StatEnum.DEFENSE, StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK, StatEnum.SPEED),
+                      default=0)
+    heal = (water & ((ability == A.WATER_ABSORB) | (ability == A.DRY_SKIN))) | (
+        electric & (ability == A.VOLT_ABSORB)) | ((move.type == Type.GROUND) & (ability == A.EARTH_EATER))
+    opposing = ~move.target_self
+    return Absorption(jnp.where(opposing, stat, 0), 1 + defense,
+                      opposing & (ability == A.FLASH_FIRE) & fire, opposing & heal)
+
+
+def move_accuracy(state, attacker_index, move, absorption=None):
     """Calculate the currently represented accuracy for an individual attempt."""
-    return move_accuracy_from_fields(move, *accuracy_fields(state, attacker_index))
+    return move_accuracy_from_fields(move, *accuracy_fields(state, attacker_index), absorption=absorption)
 
 
 def accuracy_fields(state, attacker_index):
@@ -89,7 +122,7 @@ def accuracy_fields(state, attacker_index):
 
 
 def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, field_weather,
-                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns):
+                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns, *, absorption=None):
     """Calculate accuracy from the current move and relevant battle fields."""
     weather = effective_weather(field_weather, abilities, hp)
     is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
@@ -116,25 +149,12 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
         jnp.equal(defender_ability, AbilityEnum.NO_GUARD),
         jnp.equal(attacker_ability, AbilityEnum.NO_GUARD))
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
-    flash_fire = (defender_ability == AbilityEnum.FLASH_FIRE) & (move.type == Type.FIRE) & ~move.target_self
-    accuracy = jnp.where(flash_fire, 1., accuracy)
-    # Storm Drain and Water Absorb intercept incoming Water moves in TryHit,
-    # before Showdown's accuracy stage. Dispatch their branch even on a move
-    # that would otherwise miss; self-targeted moves are handled separately.
-    absorbed = (((move.type == Type.WATER) & ((defender_ability == AbilityEnum.STORM_DRAIN) |
-        (defender_ability == AbilityEnum.WATER_ABSORB) | (defender_ability == AbilityEnum.DRY_SKIN))) |
-        ((move.type == Type.ELECTRIC) & ((defender_ability == AbilityEnum.LIGHTNING_ROD) |
-        (defender_ability == AbilityEnum.VOLT_ABSORB) | (defender_ability == AbilityEnum.MOTOR_DRIVE))) |
-        ((move.type == Type.FIRE) & (defender_ability == AbilityEnum.WELL_BAKED_BODY)) |
-        ((move.type == Type.GRASS) & (defender_ability == AbilityEnum.SAP_SIPPER)) |
-        ((move.type == Type.GROUND) & (defender_ability == AbilityEnum.EARTH_EATER))) & ~move.target_self
-
-    absorbed |= (defender_ability == AbilityEnum.WIND_RIDER) & ((move.move_flags & MoveFlags.WIND) != 0) & ~move.target_self
-    accuracy = jnp.where(absorbed, 1., accuracy)
+    if absorption is None:
+        absorption = absorption_from_fields(move, defender_ability)
     # Blizzard in snow and Hurricane in rain bypass accuracy/evasion checks.
     weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | ((move.identifier == 542) & (weather == WeatherEnum.RAIN))
     accuracy = jnp.where((defender_ability == AbilityEnum.TANGLED_FEET) & (confusion_turns > 0), accuracy * .5, accuracy)
-    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always, 1., accuracy)
+    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always | absorption.active, 1., accuracy)
 
     return accuracy
 
@@ -146,22 +166,16 @@ def substitute_intercepts(substitute_hp, attacker_ability, target_self, sound, b
 
 
 def move_overrides(state, player, move):
-    """Resolve represented move power, typing and grounded terrain priority."""
+    """Resolve property-time power/type changes and grounded terrain priority."""
     ident = move.identifier
     abilities = state.ability
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
     types = state.effective_types(player)
     item = state.active_field('item', player)
-    opponent = 1-player
-    positive = jnp.sum(jnp.maximum(state.boosts.normal_boosts[player, 1:], 0)) + jnp.sum(jnp.maximum(state.boosts.acc_boosts[player], 0))
-    weight = _move_overrides_weight(state.active_field('weight_hg', player), abilities[player])
-    target_weight = _move_overrides_weight(state.active_field('weight_hg', opponent), abilities[opponent])
-    # Gather only the live inputs needed by the pure variable-power formulas.
-    power = resolve_variable_base_power(move.base_power, move.power_rule,
-        no_item=item == I.NONE,
-        previous_failed=state.volatile_status.previous_move_result[player] == MoveResult.FAILED,
-        positive_stages=positive, user_weight=weight, target_weight=target_weight,
-        weather_active=weather != W.NONE)
+    # Weather Ball's power is a ModifyMove effect, coupled to its type change.
+    # All BasePower callbacks are evaluated later from live hit-time inputs.
+    power = jnp.where((move.power_rule == PowerRule.DOUBLE_IN_WEATHER) &
+                      (weather != W.NONE), move.base_power * 2, move.base_power)
     move_type = _override_type(state, player, ident, move.type, weather, types)
     priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
     return move.replace(base_power=power, type=move_type, priority=priority)

@@ -43,6 +43,7 @@ POWER_RULES = {
     'Brine': PowerRule.TARGET_HALF_HP_MODIFIER,
     'Psyblade': PowerRule.ELECTRIC_TERRAIN_MODIFIER,
     'Collision Course': PowerRule.SUPER_EFFECTIVE_MODIFIER,
+    'Electro Drift': PowerRule.SUPER_EFFECTIVE_MODIFIER,
 }
 
 # Showdown's Terastallized form names use the same Ivy Cudgel typing.

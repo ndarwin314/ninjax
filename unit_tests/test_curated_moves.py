@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from ninjax.calculations.damage import compute_base_power
 from ninjax.battle.actions import step_move
 from ninjax.battle.ordering import action_order
 from ninjax.battle.residuals import step_side_conditions
@@ -79,7 +80,7 @@ def test_self_drops_and_two_stat_setup(neutral_type):
     """Close Combat drops both defenses; Calm Mind raises both special stats."""
     key, state = neutral_type
     move = make_move('Close Combat')
-    out = finish_damaging_move(state, 0, move, jnp.array([1]), state.active[1])
+    out = finish_damaging_move(state, 0, move, jnp.int32(1), state.active[1])
     assert out.boosts.normal_boosts[0, 2] == -1
     assert out.boosts.normal_boosts[0, 4] == -1
     _, out = do_status_move(key, state, 0, make_move('Calm Mind'), 0, 0)
@@ -103,12 +104,12 @@ def test_screens_weather_and_court_change(neutral_type):
 def test_conditional_move_overrides(neutral_type):
     """Weather Ball, Acrobatics, Stored Power, and Grassy Glide use live state."""
     _, state = neutral_type
-    assert effective_move(state, 0, make_move('Acrobatics')).base_power[0] == 110
+    assert compute_base_power(state.active[0], state.active[1], make_move('Acrobatics'), state.terrain)[0] == 110
     rain = state.replace(weather=Weather(W.RAIN, 5))
     ball = effective_move(rain, 0, make_move('Weather Ball'))
     assert ball.type[0] == Type.WATER and ball.base_power[0] == 100
     state = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 1].set(3)))
-    assert effective_move(state, 0, make_move('Stored Power')).base_power[0] == 80
+    assert compute_base_power(state.active[0], state.active[1], make_move('Stored Power'), state.terrain, positive_stages=3)[0] == 80
     state = state.replace(terrain=Terrain(T.GRASSY, 5))
     assert effective_move(state, 0, make_move('Grassy Glide')).priority[0] == 1
 
@@ -158,7 +159,7 @@ def test_low_kick_weight_thresholds(neutral_type, weight, power):
     """Weight boundaries use hectograms and the Scarlet/Violet power table."""
     _, state = neutral_type
     state = update_active(state, 1, state.active[1].replace(weight_hg=jnp.array([weight])))
-    assert effective_move(state, 0, make_move('Low Kick')).base_power[0] == power
+    assert compute_base_power(state.active[0], state.active[1], make_move('Low Kick'), state.terrain)[0] == power
 
 
 def test_defog_and_perish_song_soundproof(neutral_type):

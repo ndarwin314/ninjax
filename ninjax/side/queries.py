@@ -1,6 +1,7 @@
 """Read-only field, immunity, item and stat queries; no state writes."""
 import jax.numpy as jnp
 
+from ninjax.calculations.modifiers import apply_modifier, chain_modifier
 from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP
 
 from ninjax.calculations.logic import triple_or
@@ -90,13 +91,6 @@ def contact_reactions_allowed(ability, item):
     return (ability != A.LONG_REACH) & (item != I.PROTECTIVE_PADS)
 
 
-def conditional_mult_round(value, multiplier, enabled):
-    """Showdown's 4096-based modifier, rounding exact halves down."""
-    modifier = jnp.floor(jnp.asarray(multiplier) * 4096).astype(jnp.int32)
-    rounded = jnp.floor((jnp.floor(value * modifier) + 2047) / 4096).astype(jnp.int32)
-    return jnp.where(enabled, rounded, value)
-
-
 def effective_weather(weather, abilities, current_hp):
     """Resolve scalar weather using active abilities/HP of shape (2, 1).
 
@@ -146,52 +140,54 @@ def effective_speed(state, player, weather):
         state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
 
 
+def stat_modifier(state, player, indices, weather):
+    """Read the shared item, field, and Speed factors for selected stats."""
+    return stat_modifier_from_fields(
+        indices, state.active_field('item', player)[0], state.ability[player, 0],
+        state.active_field('species', player)[0], state.effective_types(player),
+        state.active_field('status', player)[0], weather, state.terrain.terrain,
+        state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
+
+
 def modify_stats(state, player, stats, weather=None):
-    """Chain represented stat modifiers at 4096 precision, then round once.
-
-    For example, Choice Specs plus Hadron Engine combines into a 2x modifier;
-    rounding the two stat changes separately loses a point on odd base stats.
-    """
-
-    item, ability = state.active_field('item', player)[0], state.ability[player, 0]
-    species = state.active_field('species', player)[0]
-    types = state.active_field('type_list', player)
+    """Apply the stat-view factors after stage rounding."""
+    ability = state.ability[player, 0]
     status = state.active_field('status', player)[0]
     if weather is None:
         weather = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp'))
-    return modify_stats_from_fields(stats, item, ability, species, types, status, weather,
-                                    state.terrain.terrain, state.volatile_status.paradox_stat[player, 0],
-                                    state.tailwind[player, 0])
-
-
-def modify_stats_from_fields(stats, item, ability, species, types, status, weather,
-                             terrain, paradox_stat, tailwind):
-    """Apply battle stat modifiers to a stage-adjusted stat vector."""
     indices = jnp.arange(6)
+    modifier = stat_modifier(state, player, indices, weather)
+    modifier = chain_defense_ability(modifier, ability, status, indices)
+    result = apply_modifier(stats, modifier)
+    return jnp.where(indices == S.SPEED, _paralyzed_speed(result, ability, status), result)
+
+
+def chain_defense_ability(modifier, ability, status, stat):
+    """Add intrinsic Defense ability factors for views and hit calculations."""
+    modifier = chain_modifier(modifier, 6144,
+        (stat == S.DEFENSE) & (ability == A.MARVEL_SCALE) & (status != Status.NONE))
+    return chain_modifier(modifier, 8192, (stat == S.DEFENSE) & (ability == A.FUR_COAT))
+
+
+def stat_modifier_from_fields(indices, item, ability, species, types, status, weather,
+                              terrain, paradox_stat, tailwind):
+    """Build the shared modifier for one stat or a vector of stat indices."""
     choice = (((indices == S.ATTACK) & (item == I.CHOICE_BAND)) |
-              ((indices == S.SPECIAL_ATTACK) & (item == I.CHOICE_SPECS)) |
-              ((indices == S.SPEED) & (item == I.CHOICE_SCARF)))
+              ((indices == S.SPECIAL_ATTACK) & (item == I.CHOICE_SPECS)))
     light_ball = (item == I.LIGHT_BALL) & (species == 25) & ((indices == S.ATTACK) | (indices == S.SPECIAL_ATTACK))
     vest = (indices == S.SPECIAL_DEFENSE) & (item == I.ASSAULT_VEST)
     field = ((indices == S.ATTACK) & (ability == A.ORICHALCUM_PULSE) & (weather == W.SUN)) | (
         (indices == S.SPECIAL_ATTACK) & (ability == A.HADRON_ENGINE) & (terrain == T.ELECTRIC))
     weather_defense = ((indices == S.DEFENSE) & (weather == W.SNOW) & jnp.any(types == Type.ICE)) | (
         (indices == S.SPECIAL_DEFENSE) & (weather == W.SANDSTORM) & jnp.any(types == Type.ROCK))
-    paradox = indices == paradox_stat
-    ability_factor, quick_feet_factor, tailwind_factor = _speed_factors(ability, status, weather, terrain, tailwind)
-    modifiers = jnp.full(6, 4096, jnp.int32)
-    for factor in (jnp.where(choice | vest, 6144, 4096),
-                   jnp.where(light_ball, 8192, 4096),
-                   jnp.where(field, 5461, 4096),
-                   jnp.where(weather_defense, 6144, 4096),
-                   jnp.where(indices == S.SPEED, ability_factor, 4096),
-                   jnp.where(indices == S.SPEED, quick_feet_factor, 4096),
-                   jnp.where(indices == S.SPEED, tailwind_factor, 4096),
-                   jnp.where(paradox, jnp.where(indices == S.SPEED, 6144, 5325), 4096)):
-        modifiers = (modifiers * factor + 2048) // 4096
-    result = conditional_mult_round(stats, modifiers / 4096, True)
-    # Paralysis halves the final Speed, unless Quick Feet replaces its effect.
-    return jnp.where((indices == S.SPEED) & (status == Status.PARALYZE) & (ability != A.QUICK_FEET), result // 2, result)
+    modifier = chain_modifier(4096, 6144, choice | vest)
+    modifier = chain_modifier(modifier, 8192, light_ball)
+    modifier = chain_modifier(modifier, 5461, field)
+    modifier = chain_modifier(modifier, 6144, weather_defense)
+    modifier = chain_modifier(modifier, 5325, indices == paradox_stat)
+    # The scalar Speed query uses this exact same chain without other stat reads.
+    return jnp.where(indices == S.SPEED,
+        _speed_modifier(item, ability, status, weather, terrain, paradox_stat, tailwind), modifier)
 
 
 def _speed_factors(ability, status, weather, terrain, tailwind):
@@ -206,11 +202,20 @@ def _speed_factors(ability, status, weather, terrain, tailwind):
             jnp.where(tailwind > 0, 8192, 4096))
 
 
+def _speed_modifier(item, ability, status, weather, terrain, paradox_stat, tailwind):
+    """Build the shared Speed factor for scalar or vector callers."""
+    modifier = chain_modifier(4096, 6144, item == I.CHOICE_SCARF)
+    for factor in _speed_factors(ability, status, weather, terrain, tailwind):
+        modifier = chain_modifier(modifier, factor)
+    return chain_modifier(modifier, 6144, paradox_stat == S.SPEED)
+
+
+def _paralyzed_speed(speed, ability, status):
+    """Apply paralysis after the Speed modifier event."""
+    return jnp.where((status == Status.PARALYZE) & (ability != A.QUICK_FEET), speed // 2, speed)
+
+
 def modify_speed(speed, item, ability, status, weather, terrain, paradox_stat, tailwind):
-    """Apply only Speed modifiers, preserving the full stat path's rounding."""
-    modifier = jnp.where(item == I.CHOICE_SCARF, 6144, 4096)
-    for factor in (*_speed_factors(ability, status, weather, terrain, tailwind),
-                   jnp.where(paradox_stat == S.SPEED, 6144, 4096)):
-        modifier = (modifier * factor + 2048) // 4096
-    result = conditional_mult_round(speed, modifier / 4096, True)
-    return jnp.where((status == Status.PARALYZE) & (ability != A.QUICK_FEET), result // 2, result)
+    """Apply the shared Speed factors, followed by paralysis."""
+    modifier = _speed_modifier(item, ability, status, weather, terrain, paradox_stat, tailwind)
+    return _paralyzed_speed(apply_modifier(speed, modifier), ability, status)

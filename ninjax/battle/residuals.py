@@ -1,7 +1,5 @@
-"""End-of-turn effects called in the order scheduled by battle.step_field.
-
-Functions retain current player ordering, event attribution and PRNG policy.
-Residual ordering coverage remains partial; extraction does not change rules."""
+"""Schedule represented end-of-turn effects using live battle state."""
+from enum import IntEnum
 from functools import partial
 from typing import Tuple
 
@@ -16,6 +14,7 @@ from ninjax.enums.items import ItemEnum as I
 from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.records.events import Cause
 from ninjax.restrictions import tick
+from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.item_effects import cure_status
 from ninjax.side.queries import effective_weather, is_floating, is_sand_immune
@@ -35,68 +34,94 @@ __all__ = (
 )
 
 
-def _apply_end_turn_effect(s, effect, *, idx):
-    """Apply one weather or terrain HP fraction to both players in order."""
-    percent, cause = effect
-    return take_damage_percent(s, idx, percent, cause=cause), None
+class ResidualHPPhase(IntEnum):
+    """HP effects that share the ordered per-holder update loop."""
+
+    WEATHER = 0
+    GRASSY_TERRAIN = 1
+    POISON = 2
+    BURN = 3
+    BAD_DREAMS = 4
+
+
+def residual_speed_order(state):
+    """Return fastest first, using side order for equal Speed."""
+    return jnp.argsort(-state.effective_speeds, stable=True)
+
+
+def _weather_fraction(state, mon):
+    """Read the effective weather and the holder's current weather reactions."""
+    weather = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp'))
+    ability = mon.ability[0]
+    return jnp.select(
+        (weather == WeatherEnum.SANDSTORM, weather == WeatherEnum.RAIN,
+         weather == WeatherEnum.SUN, weather == WeatherEnum.SNOW),
+        ((~is_sand_immune(mon)[0]) / 16,
+         -((ability == AbilityEnum.RAIN_DISH) + 2 * (ability == AbilityEnum.DRY_SKIN)) / 16,
+         ((ability == AbilityEnum.DRY_SKIN) | (ability == AbilityEnum.SOLAR_POWER)) / 8,
+         -(ability == AbilityEnum.ICE_BODY).astype(jnp.int32) / 16),
+        default=0.)
+
+
+def _residual_fraction(state, player, phase):
+    """Resolve one holder's eligibility and HP fraction at this phase."""
+    mon = state.effective_active[player]
+    ability, status = mon.ability[0], mon.status[0]
+    weather = _weather_fraction(state, mon)
+    grassy = ((state.terrain.terrain == TerrainEnum.GRASSY) &
+              (~is_floating(mon)[0] | (state.gravity_duration > 0)))
+    poison = jnp.where(status == Status.POISON, 1 / 8,
+                        jnp.where(status == Status.TOXIC, state.toxic_counter[player, 0] / 16, 0.))
+    poison = jnp.where((ability == AbilityEnum.POISON_HEAL) & (poison > 0), -1 / 8, poison)
+    burn = (status == Status.BURN) * jnp.where(ability == AbilityEnum.HEATPROOF, 1 / 32, 1 / 16)
+    source = 1 - player
+    dreams = ((state.ability[source, 0] == AbilityEnum.BAD_DREAMS) &
+              (state.active_field('current_hp', source)[0] > 0) &
+              ((status == Status.SLEEP) | (ability == AbilityEnum.COMATOSE)))
+    fractions = jnp.stack((weather, jnp.where(grassy, -1 / 16, 0.), poison, burn, dreams / 8))
+    fraction = fractions[phase]
+    return jnp.where((mon.current_hp[0] > 0) &
+                     ((ability != AbilityEnum.MAGIC_GUARD) | (fraction < 0)), fraction, 0.)
+
+
+def _apply_residual_hp(state, player, fraction, phase):
+    """Attribute and commit a single residual HP change."""
+    causes = jnp.array([Cause.WEATHER, Cause.TERRAIN, Cause.STATUS, Cause.STATUS, Cause.INDIRECT])
+    source = state.event_source
+    state = state.replace(event_source=jnp.where(phase == ResidualHPPhase.BAD_DREAMS, 1 - player, source))
+    state = take_damage_percent(state, player, fraction, cause=causes[phase])
+    return state.replace(event_source=source)
+
+
+def _skip_residual_hp(state, player, fraction, phase):
+    """Leave HP and events untouched when the holder is ineligible."""
+    return state
+
+
+def _apply_hp_phase_to_player(index, state, *, phase, order):
+    """Run the current phase for one holder in the Speed order."""
+    player = order[index]
+    fraction = _residual_fraction(state, player, phase)
+    return jax.lax.cond((state.winner < 0) & (fraction != 0),
+                        _apply_residual_hp, _skip_residual_hp, state, player, fraction, phase)
+
+
+def _run_hp_phase(state, phase, *, order):
+    """Apply a phase and resolve its faints before the next phase."""
+    state = jax.lax.fori_loop(0, 2, partial(_apply_hp_phase_to_player, phase=phase, order=order), state)
+    return resolve_faints(state), None
+
+
+def run_hp_residuals(state, phases, order=None):
+    """Scan a fixed list of residual phases with one shared HP update body."""
+    if order is None:
+        order = residual_speed_order(state)
+    return jax.lax.scan(partial(_run_hp_phase, order=order), state, jnp.asarray(phases, jnp.int32))[0]
 
 
 def end_turn_damage(state: BattleState) -> BattleState:
-    """Apply the represented weather, terrain, ability, and status HP effects.
-
-    Both sides are updated through ``take_damage_percent``. The exact ordering,
-    including speed-dependent ordering and simultaneous knockouts, is incomplete.
-    """
-    # TODO: the order of all these updates is probably incorrect
-    # i think it should be like sand, sand, grass, grass
-    # whereas this is currently sand, grass, sand grass,
-    # and order should also depend on speed
-    # that being said idk if that is high priority
-    # find something for gen 9 https://www.smogon.com/forums/threads/sword-shield-battle-mechanics-research.3655528/page-64#post-9244179
-    # also another wrinkle is that effects take effect based on speed order
-    # i.e it would go sand fast, sand slow, grass fast, grass slow
-    # this matters a lot in vgc but usually less in singles
-    # it also matters for determining winner if the last pokemon for both players faints on the same turn
-
-    weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
-    active = state.effective_active
-    idx = jnp.array([0,1])
-    floating = is_floating(active)
-    sand_immune = is_sand_immune(active)
-
-    # sand damage
-    sand_damage = (1 - sand_immune) / 16 * (weather == WeatherEnum.SANDSTORM)
-
-    # rain abilities
-    rain_healing = ((active.ability==AbilityEnum.RAIN_DISH) + 2 * (active.ability==AbilityEnum.DRY_SKIN)) / 16 * (weather == WeatherEnum.RAIN)
-    # why is this one an int but the others arent
-
-    # sun abilities
-    sun_damage = ((active.ability==AbilityEnum.DRY_SKIN) + (active.ability==AbilityEnum.SOLAR_POWER)) / 8 * (weather == WeatherEnum.SUN)
-
-    # snow abilities
-    snow_healing = (active.ability==AbilityEnum.ICE_BODY) / 16 * (weather == WeatherEnum.SNOW)
-
-
-    # grassy terrain healing
-    grass_healing = (floating - 1) / 16 * (state.terrain.terrain == TerrainEnum.GRASSY)
-
-    # status damage
-    # technically this should be factored out to multiple bits since it goes burn poison toxic in priority
-    poison_heal = (active.ability == AbilityEnum.POISON_HEAL) & active.is_poisoned
-    status_damage = (1 / 8 * (active.status==Status.POISON) +
-                     1 / 16 * (active.status==Status.BURN) * jnp.where(active.ability == AbilityEnum.HEATPROOF, .5, 1.) +
-                     state.toxic_counter / 16 * (active.status==Status.TOXIC))
-    status_damage = jnp.where(poison_heal, -1/8, status_damage)
-    # Preserve effect-major, then player-major ordering while compiling one
-    # shared HP-update body. All fractions use the original active snapshot.
-    fractions = jnp.stack((sand_damage, -rain_healing, sun_damage,
-                           -snow_healing, grass_healing))
-    causes = jnp.array([Cause.WEATHER] * 4 + [Cause.TERRAIN], jnp.int32)
-    state = jax.lax.scan(partial(_apply_end_turn_effect, idx=idx), state, (fractions, causes))[0]
-
-    state = bad_dreams(state)
-    return take_damage_percent(state, idx, status_damage, cause=Cause.STATUS)
+    """Run all represented HP phases for callers excluding timer and item effects."""
+    return run_hp_residuals(state, tuple(ResidualHPPhase))
 
 
 def step_side_conditions(
@@ -121,25 +146,28 @@ def step_side_conditions(
     return key, state
 
 
-def step_moody(
-    key: chex.PRNGKey,
-    state: BattleState,
-) -> Tuple[chex.PRNGKey, BattleState]:
-    """Apply represented Moody stage changes, splitting one key per side.
-
-    The fixed two-iteration loop is unrolled when tracing a singles battle.
-    """
-    for i in range(2):
-        key, plus_key, minus_key = random.split(key, 3)
-        stages = state.boosts.normal_boosts[i, 1:]
-        can_raise = stages < 6
-        plus = random.categorical(plus_key, jnp.where(can_raise, 0., -jnp.inf))
-        can_lower = (stages > -6) & ((jnp.arange(5) != plus) | ~jnp.any(can_raise))
-        minus = random.categorical(minus_key, jnp.where(can_lower, 0., -jnp.inf))
-        active = (state.ability[i, 0] == AbilityEnum.MOODY) & (state.active.current_hp[i, 0] > 0)
-        state = conditional_add_boosts(state, i, active & jnp.any(can_raise), 1+plus, 2)
-        state = conditional_add_boosts(state, i, active & jnp.any(can_lower), 1+minus, -1)
+def _step_moody_for_player(index, carry, *, order):
+    """Roll Moody for one holder using the shared residual Speed order."""
+    key, state = carry
+    player = order[index]
+    key, plus_key, minus_key = random.split(key, 3)
+    stages = state.boosts.normal_boosts[player, 1:]
+    can_raise = stages < 6
+    plus = random.categorical(plus_key, jnp.where(can_raise, 0., -jnp.inf))
+    can_lower = (stages > -6) & ((jnp.arange(5) != plus) | ~jnp.any(can_raise))
+    minus = random.categorical(minus_key, jnp.where(can_lower, 0., -jnp.inf))
+    active = ((state.ability[player, 0] == AbilityEnum.MOODY) &
+              (state.active_field('current_hp', player)[0] > 0))
+    state = conditional_add_boosts(state, player, active & jnp.any(can_raise), 1 + plus, 2)
+    state = conditional_add_boosts(state, player, active & jnp.any(can_lower), 1 + minus, -1)
     return key, state
+
+
+def step_moody(key, state, order=None):
+    """Apply represented Moody changes, splitting one key per side."""
+    if order is None:
+        order = residual_speed_order(state)
+    return jax.lax.fori_loop(0, 2, partial(_step_moody_for_player, order=order), (key, state))
 
 
 def _apply_orb_status(k, s, *, player, status):
@@ -152,9 +180,10 @@ def _unchanged_key_state(k, s):
     return (k, s)
 
 
-def _residual_orbs_apply(player, carry):
+def _residual_orbs_apply(index, carry, *, order):
     """Use existing status immunity and explicit-key helpers for each holder."""
     key, s = carry
+    player = order[index]
     item = s.active.item[player, 0]
     status = jnp.where(item == I.FLAME_ORB, Status.BURN, jnp.where(item == I.TOXIC_ORB, Status.TOXIC, Status.NONE))
     return jax.lax.cond((status != Status.NONE) & (s.active.current_hp[player, 0] > 0),
@@ -162,35 +191,25 @@ def _residual_orbs_apply(player, carry):
         _unchanged_key_state, key, s)
 
 
-def _leftovers_heal(i, s):
+def _leftovers_heal(index, s, *, order):
     """Apply one player's residual item healing."""
-    mon = s.active[i]
-    return take_damage_percent(s, i, jnp.where((mon.item[0] == I.LEFTOVERS) & (mon.current_hp[0] > 0), -1/16, 0))
+    player = order[index]
+    mon = s.active[player]
+    return take_damage_percent(s, player, jnp.where((mon.item[0] == I.LEFTOVERS) & (mon.current_hp[0] > 0), -1/16, 0))
 
 
-def residual_orbs(key, state):
-    """Inflict orb statuses after this turn's status damage; orbs are not consumed."""
-
-    apply = _residual_orbs_apply
-    return jax.lax.fori_loop(0, 2, apply, (key, state))
-
-
-def leftovers(state):
-    """Heal living Leftovers holders in player order."""
-    heal = _leftovers_heal
-    return jax.lax.fori_loop(0, 2, heal, state)
+def residual_orbs(key, state, order=None):
+    """Inflict held-orb status in Speed order after status damage."""
+    if order is None:
+        order = residual_speed_order(state)
+    return jax.lax.fori_loop(0, 2, partial(_residual_orbs_apply, order=order), (key, state))
 
 
-def _bad_dreams_damage(player, s):
-    """Skip fainted sources, and attribute indirect damage to the opponent."""
-    other = 1-player
-    sleeping = (s.active.status[player, 0] == Status.SLEEP) | (s.ability[player, 0] == AbilityEnum.COMATOSE)
-    eligible = sleeping & (s.ability[other, 0] == AbilityEnum.BAD_DREAMS) & (s.active.current_hp[other, 0] > 0)
-    eligible &= s.ability[player, 0] != AbilityEnum.MAGIC_GUARD
-    source = s.event_source
-    s = s.replace(event_source=jnp.asarray(other, jnp.int32))
-    s = take_damage_percent(s, player, jnp.where(eligible, 1/8, 0), cause=Cause.INDIRECT)
-    return s.replace(event_source=source)
+def leftovers(state, order=None):
+    """Heal living Leftovers holders in the shared Speed order."""
+    if order is None:
+        order = residual_speed_order(state)
+    return jax.lax.fori_loop(0, 2, partial(_leftovers_heal, order=order), state)
 
 
 def _residual_abilities_roll(k):
@@ -219,9 +238,10 @@ def _raise_residual_speed(s, *, player):
     return add_boosts(s, player, StatEnum.SPEED, 1)
 
 
-def _residual_abilities_apply(player, carry, *, status_cures, weather, speed_boost):
+def _residual_abilities_apply(index, carry, *, status_cures, weather, speed_boost, order):
     """Only roll Shed Skin for a living, statused holder."""
     key, s = carry
+    player = order[index]
     mon = s.active[player]
     ability = s.ability[player, 0]
     living = mon.current_hp[0] > 0
@@ -235,13 +255,11 @@ def _residual_abilities_apply(player, carry, *, status_cures, weather, speed_boo
 
 
 def bad_dreams(state):
-    """Damage sleeping opposing singles Pokémon at residual order eight."""
-
-    damage = _bad_dreams_damage
-    return jax.lax.fori_loop(0, 2, damage, state)
+    """Apply the late Bad Dreams residual with normal HP attribution."""
+    return run_hp_residuals(state, (ResidualHPPhase.BAD_DREAMS,))
 
 
-def residual_abilities(key, state, status_cures=True, speed_boost=True):
+def residual_abilities(key, state, status_cures=True, speed_boost=True, *, order=None):
     """Resolve represented status cures and Speed Boost with explicit randomness.
 
     The scheduler runs status cures before poison/burn damage, then Speed Boost
@@ -250,5 +268,7 @@ def residual_abilities(key, state, status_cures=True, speed_boost=True):
 
 
     weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)
-    apply = partial(_residual_abilities_apply, status_cures=status_cures, weather=weather, speed_boost=speed_boost)
+    if order is None:
+        order = residual_speed_order(state)
+    apply = partial(_residual_abilities_apply, status_cures=status_cures, weather=weather, speed_boost=speed_boost, order=order)
     return jax.lax.fori_loop(0, 2, apply, (key, state))

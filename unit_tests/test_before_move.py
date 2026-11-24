@@ -22,7 +22,7 @@ def test_before_move_preserves_status_and_key_semantics(neutral_type, status, co
     expected_key, subkey = jax.random.split(key)
     expected_status = Status.NONE if counter == 1 else status
     expected_interrupted = flinch or expected_status == Status.SLEEP or (
-        expected_status == Status.PARALYZE and float(jax.random.uniform(subkey)) <= .25)
+        expected_status == Status.PARALYZE and float(jax.random.uniform(subkey)) < .25)
     out_key, out, interrupted = before_move(key, state, 0)
     assert jnp.array_equal(jax.random.key_data(out_key), jax.random.key_data(expected_key))
     assert out.active.status[0, 0] == expected_status

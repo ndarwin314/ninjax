@@ -1,4 +1,5 @@
 """Destiny Bond's lifetime and cause-aware faint resolution."""
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -7,7 +8,7 @@ from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.items import ItemEnum as I
 from ninjax.moves.status import do_status_move
 from ninjax.records.events import Cause, EventBuffer
-from ninjax.side.faint_effects import resolve_faints
+from ninjax.side.faint_effects import direct_faint, resolve_faints
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.updates import clear_volatile_status, update_active
 from ninjax.teams.construction import make_move
@@ -92,3 +93,32 @@ def test_dead_or_replaced_source_is_not_retaliated_against(neutral_type):
     replaced = pending.replace(active_index=pending.active_index.at[0, 0].set(1))
     out = resolve_faints(replaced)
     assert out.active.current_hp[0, 0] == replaced.active.current_hp[0, 0]
+
+@pytest.mark.parametrize('source', [0, 1])
+def test_ko_boost_requires_attributed_faint(neutral_type, source):
+    """Only a new opposing move KO awards a boost at faint resolution."""
+    _, state = neutral_type
+    target = 1 - source
+    state = update_active(state, source, state.active[source].replace(ability=jnp.array([A.MOXIE])))
+    hit = jax.jit(take_damage_value, static_argnames=('is_attack_damage',))
+    pending = hit(state, target, jnp.array([9999]), True, source=source)
+    assert pending.boosts.normal_boosts[source, 1] == 0
+    resolved = resolve_faints(pending)
+    assert resolved.boosts.normal_boosts[source, 1] == 1
+    repeated = resolve_faints(hit(resolved, target, jnp.array([9999]), True, source=source))
+    assert repeated.boosts.normal_boosts[source, 1] == 1
+    indirect = resolve_faints(hit(state, target, jnp.array([9999]), False, source=source))
+    assert indirect.boosts.normal_boosts[source, 1] == 0
+
+@pytest.mark.parametrize('first', [0, 1])
+def test_faint_order_decides_double_knockout(neutral_type, first):
+    """The last recorded faint decides the outcome on either side."""
+    _, state = neutral_type
+    state = state.replace(roster=jnp.zeros((2, 6), bool).at[:, 0].set(True))
+    last = 1 - first
+    state = direct_faint(state, first, -1, Cause.PERISH)
+    state = direct_faint(state, last, -1, Cause.PERISH)
+    state = resolve_faints(state)
+    assert state.winner == last
+    assert not jnp.any(state.faint_pending)
+    assert resolve_faints(state).winner == last
