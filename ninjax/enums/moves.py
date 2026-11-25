@@ -34,6 +34,7 @@ class PowerRule(JaxEnum):
     TARGET_HALF_HP_MODIFIER = 17
     ELECTRIC_TERRAIN_MODIFIER = 18
     SUPER_EFFECTIVE_MODIFIER = 19
+    DOUBLE_IN_TERRAIN = 20
 
 
 class HitRule(JaxEnum):

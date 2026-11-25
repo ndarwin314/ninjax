@@ -12,8 +12,15 @@ the chosen dedicated-field approach.
 ## Current coverage contract
 
 The catalogue contains **685 moves**, including **442** with represented singles
-effects. The pinned random-battle inventory has **263 of 348** moves supported.
+effects and **243** unavailable or unreviewed. The pinned random-battle inventory
+has **263 of 348** moves supported, leaving **85** gaps.
 These are implementation counts, not exhaustive interaction-parity counts.
+
+The current inventory includes Teleport, Chilly Reception, Baton Pass, Shed Tail,
+Raging Bull, six ordinary charge moves and six semi-invulnerable charge moves.
+Parting Shot, damaging forced switches, Revival Blessing and Sky Drop remain
+unavailable. The tables below distinguish implemented mechanisms from remaining
+work; the coverage report is the authoritative list of move names.
 
 Rising Voltage is now enabled for singles: Electric Terrain doubles intrinsic
 power when the target is grounded, independently of the user's ordinary terrain
@@ -105,7 +112,7 @@ host and pass numeric, fixed-shape metadata into traced execution.
 | Dragon Tail, Circle Throw | `forceSwitch: true` | Add a damaging-hit switch continuation, gated by the actual `HitResult` recipient and survival. Substitute interception must not drag the target; do not reuse Whirlwind's status-only gate unchanged. |
 | Revival Blessing | Revival effect | Implement fainted-party-member selection and HP restoration; this is not an ordinary active-Pokémon pivot. |
 | Mist, Safeguard, Quick Guard, Wide Guard | Named `sideCondition` values | Side-condition state/timers or turn-scoped guards and their consumers in stat, status and move routing. Reflect's existing timer does not provide these effects. |
-| Baneful Bunker, Burning Bulwark, Silk Trap, Endure | Named protection/survival volatiles | Extend protection kinds and retaliation or damage-survival rules. Detect can share ordinary Protect; these variants cannot. |
+| Baneful Bunker, Burning Bulwark, Silk Trap, Endure | Named protection/survival volatiles | Protection kinds and some contact retaliation branches exist, but the moves remain disabled. Complete activation, lifecycle and survival rules and validate each variant. |
 | Bind, Fire Spin, Infestation, Magma Storm, Sand Tomb, Thunder Cage, Whirlpool, Wrap | `volatileStatus: partiallytrapped` | Source-aware trapping state, duration, residual damage, switch restrictions and cleanup. |
 | Aqua Ring, Attract, Charge, Curse, Defense Curl, Dragon Cheer, Focus Energy, Gastro Acid, Imprison, Ingrain, Leech Seed, Magnet Rise, Minimize, No Retreat, Power Trick, Smack Down, Stockpile, Tar Shot, Torment, Yawn | Their condition identity | Move-specific condition payloads, application rules, consumers and expiry. The condition string identifies the required handler; it does not supply its lifecycle. |
 
@@ -142,13 +149,12 @@ None becomes implemented merely through the new condition/switch/stat fields.
 Transformations, richer battle history and doubles target resolution remain
 architectural work as described below.
 
-The metadata-wiring batch is implemented. Next candidates are status pivots and
-damaging forced switches, with the composition requirements listed above. The
-support inventory and generated coverage report include the seventeen additions.
+The metadata-wiring batch is implemented. Parting Shot and damaging forced
+switches remain candidates, with the composition requirements listed above.
 
 ## Conditional damage/type rules: pipeline placement
 
-This is an implementation plan, not newly enabled coverage. The placements
+This section records implemented pipeline ownership and follow-up plans. The placements
 below were checked against the local Showdown reference's `data/moves.ts`,
 `data/conditions.ts`, `sim/pokemon.ts` and `sim/battle-actions.ts` at the pinned
 revision `23b41aa29e2ff5ff80e03f57b257b595a5852047`.
@@ -219,19 +225,19 @@ outside this batch.
 ### Move-to-stage map
 
 The function names below record the implementation plan. The conditional-power
-helpers described in the batch above are now implemented; other **new** helpers
+helpers described in the batch above are implemented; other **new** helpers
 remain proposals. **Existing** functions are integration points. Numeric
 helpers take scalar/array facts and return arrays; state access stays at the
 execution boundary. Extend rule metadata only when implementing its consumers.
 
 | Rule family | Moves | Specific owner and call path |
 | --- | --- | --- |
-| Intrinsic status-dependent power | Hex, Infernal Parade | **New** `damage.status_base_power(base_power, target_status, target_ability)` returns intrinsic power, including effective Comatose. **New** `damage.resolve_hit_base_power(...)`, called by **existing** `compute_base_power`, dispatches this before the modifier chain. |
-| Intrinsic user-HP power | Eruption, Water Spout, Dragon Energy; Flail, Reversal | **New** `damage.proportional_hp_base_power(base_power, current_hp, max_hp)` for the first family, and `damage.low_hp_base_power(current_hp, max_hp)` for the discrete Flail/Reversal table. Called by `resolve_hit_base_power` with the live user's HP. Preserve integer truncation, minimum power and threshold boundaries. |
-| Intrinsic target-HP power | Crush Grip, Hard Press | **New** `damage.target_hp_base_power(scale, current_hp, max_hp)` implements the shared nested fixed-point formula; rule dispatch supplies scale 120 or 100 and target HP. It returns intrinsic power to `resolve_hit_base_power`, not a modifier. |
-| Intrinsic speed-ratio power | Electro Ball, Gyro Ball | **New** `damage.electro_ball_base_power(user_speed, target_speed)` and `damage.gyro_ball_base_power(user_speed, target_speed)`, dispatched by `resolve_hit_base_power`. **New** `side.queries.effective_speed(state, player)` gathers independently stage-adjusted Speed and delegates to **existing** `modify_speed`; call it at the hit boundary for both sides. Do not use action order or crit/Unaware-adjusted damage stats. |
-| Priority-0 conditional power factors | Facade; Venoshock, Barb Barrage; Brine | **New** `damage.chain_conditional_move_power_modifiers(modifier, rule, user_status, target_status, target_hp, target_max_hp)` returns the updated integer modifier. **Existing** `chain_move_power_modifiers` calls it at priority 0. Eligibility covers the applicable user status, poison/toxic target status, or half-HP target condition; no intermediate application to power. |
-| Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **New** `damage.chain_field_matchup_move_modifiers(modifier, rule, terrain_type, effectiveness)` handles Electric Terrain's presence and the super-effective factor. **Existing** `chain_move_power_modifiers` delegates to it alongside its current move factors. Psyblade has no user-grounding requirement; Collision Course shares Electro Drift's resolved matchup input. |
+| Intrinsic status-dependent power | Hex, Infernal Parade | **Implemented:** `resolve_hit_base_power` dispatches status-dependent intrinsic power before the modifier chain, including effective Comatose. |
+| Intrinsic user-HP power | Eruption, Water Spout, Dragon Energy; Flail, Reversal | The proportional-HP family is **implemented**. Flail and Reversal still need their discrete low-HP table and support review. |
+| Intrinsic target-HP power | Crush Grip, Hard Press | **Implemented:** the shared nested fixed-point calculation uses the move's scale and live target HP. |
+| Intrinsic speed-ratio power | Electro Ball, Gyro Ball | **Implemented:** `resolve_hit_base_power` uses hit-time effective Speeds from `side.queries.effective_speed`, independent of action order and crit/Unaware damage-stat adjustment. |
+| Priority-0 conditional power factors | Facade; Venoshock, Barb Barrage; Brine | **Implemented:** `chain_conditional_move_power_modifiers` adds eligible factors without an intermediate application to power. |
+| Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **Implemented:** `chain_field_matchup_move_modifiers` handles Electric Terrain's presence and the resolved super-effective matchup. Psyblade has no user-grounding requirement. |
 | Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
 | Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break and is enabled for singles. Aura Wheel has typing for the supplied form. Its species eligibility and Hunger Switch lifecycle remain open. |
 | Item-dependent type override | Judgment | Resolve the transient type from supported Plate metadata during move property resolution. Plate support is still required. |
@@ -365,10 +371,10 @@ Some moves need several of these capabilities.
 | Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
 | Restrictions and prerequisites | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
 | Charge/recharge/locked sequences | Sky Drop, Giga Impact, Outrage, Rollout | Extend shared continuations for carrying a target and other locked sequences. |
-| Preparation and semi-invulnerability | Fly, Dig, Dive, Phantom Force, Focus Punch, Beak Blast | Preparation timing, targetability and pre-execution reactions. |
+| Preparation and semi-invulnerability | Focus Punch, Beak Blast, Sky Drop | Preparation timing, pre-execution reactions and carried-target rules. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the shared charge pipeline. |
 | Damage/action/team history | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
-| Protection and survival | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Additional protection variants, retaliation, bypass and HP survival rules. Detect now shares ordinary Protect. |
-| Switching composition and state transfer | Dragon Tail, Circle Throw, Parting Shot, Chilly Reception, Teleport, Baton Pass, Shed Tail | The switch descriptors are available; add trigger-specific continuations, compound-effect ordering and transfer policies. Flip Turn and Roar are implemented above. |
+| Protection and survival | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Finish activation, retaliation, bypass and survival rules. Several retaliation branches exist; these move names remain unavailable. Detect shares ordinary Protect. |
+| Switching composition and state transfer | Dragon Tail, Circle Throw, Parting Shot, Revival Blessing | Add damaging forced-switch continuations, Parting Shot's reflection and success rules, and a fainted-party selection for revival. Teleport, Chilly Reception, Baton Pass and Shed Tail use the replacement flow. |
 | Item lifecycle | Thief, Bug Bite, Incinerate, Fling, Recycle, Stuff Cheeks, Teatime | Theft/consumption operations, provenance and recoverable-item history. |
 | Ability/type/form/moveset mutation | Skill Swap, Gastro Acid, Soak, Conversion, Transform, Mimic, Sketch | Eligibility, lifecycle hooks, restoration, copied PP and public knowledge. |
 | Custom stats, healing and costs | Belly Drum, Guard Split, Power Trick, Stockpile, Strength Sap, Synthesis, Revival Blessing | Direct assignments, HP costs, counters, contextual healing and party selection. |

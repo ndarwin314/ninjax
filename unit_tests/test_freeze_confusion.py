@@ -18,25 +18,51 @@ from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
 
 
-@pytest.mark.parametrize('name,weather,expected', [
-    ('Blizzard', W.NONE, .7), ('Blizzard', W.SNOW, 1.),
-    ('Hurricane', W.NONE, .7), ('Hurricane', W.RAIN, 1.), ('Hurricane', W.SUN, .5),
+@pytest.mark.parametrize('name,weather,expected,normal', [
+    ('Blizzard', W.NONE, .7, .7), ('Blizzard', W.SNOW, 1., .7),
+    ('Hurricane', W.NONE, .7, .7), ('Hurricane', W.RAIN, 1., .7), ('Hurricane', W.SUN, .5, .7),
+    ('Thunder', W.NONE, .7, .7), ('Thunder', W.RAIN, 1., .7), ('Thunder', W.SUN, .5, .7),
+    ('Bleakwind Storm', W.NONE, .8, .8), ('Bleakwind Storm', W.RAIN, 1., .8), ('Bleakwind Storm', W.SUN, .8, .8),
+    ('Wildbolt Storm', W.NONE, .8, .8), ('Wildbolt Storm', W.RAIN, 1., .8), ('Wildbolt Storm', W.SUN, .8, .8),
+    ('Sandsear Storm', W.NONE, .8, .8), ('Sandsear Storm', W.RAIN, 1., .8), ('Sandsear Storm', W.SUN, .8, .8),
 ])
-def test_weather_accuracy(neutral_type, name, weather, expected):
+def test_weather_accuracy(neutral_type, name, weather, expected, normal):
     """Weather adjusts accuracy and suppressed weather has no effect."""
     _, state = neutral_type
     state = state.replace(weather=Weather(weather, 5))
     assert float(move_accuracy(state, 0, make_move(name))[0]) == pytest.approx(expected)
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.CLOUD_NINE])))
-    assert float(move_accuracy(state, 0, make_move(name))[0]) == pytest.approx(.7)
+    assert float(move_accuracy(state, 0, make_move(name))[0]) == pytest.approx(normal)
 
 
 def test_weather_always_hit_ignores_evasion(neutral_type):
     """Snow and rain bypass evasion for their respective moves."""
     _, state = neutral_type
     state = state.replace(boosts=state.boosts.replace(acc_boosts=state.boosts.acc_boosts.at[1, 1].set(6)))
-    for name, weather in [('Blizzard', W.SNOW), ('Hurricane', W.RAIN)]:
+    for name, weather in [('Blizzard', W.SNOW), ('Hurricane', W.RAIN), ('Thunder', W.RAIN),
+                          ('Bleakwind Storm', W.RAIN), ('Wildbolt Storm', W.RAIN), ('Sandsear Storm', W.RAIN)]:
         assert float(move_accuracy(state.replace(weather=Weather(weather, 5)), 0, make_move(name))[0]) == 1.
+
+
+@pytest.mark.parametrize('name', ['Thunder', 'Hurricane'])
+def test_sun_accuracy_is_base_for_stage_modifiers(neutral_type, name):
+    """Sun's 50% base accuracy still receives ordinary accuracy stages."""
+    _, state = neutral_type
+    state = state.replace(weather=Weather(W.SUN, 5), boosts=state.boosts.replace(
+        acc_boosts=state.boosts.acc_boosts.at[0, 0].set(1)))
+    assert float(move_accuracy(state, 0, make_move(name))[0]) == pytest.approx(.66)
+
+
+def test_weather_accuracy_jit(neutral_type):
+    """Dynamic weather and move identifiers retain their behavior under JIT."""
+    _, state = neutral_type
+    accuracy = jax.jit(move_accuracy)
+    rain = state.replace(weather=Weather(W.RAIN, 5))
+    sun = state.replace(weather=Weather(W.SUN, 5))
+    assert float(accuracy(rain, 0, make_move('Thunder'))[0]) == 1.
+    assert float(accuracy(sun, 0, make_move('Thunder'))[0]) == pytest.approx(.5)
+    assert float(accuracy(rain, 0, make_move('Sandsear Storm'))[0]) == 1.
+    assert float(accuracy(sun, 0, make_move('Sandsear Storm'))[0]) == pytest.approx(.8)
 
 
 def test_secondary_status_and_immunity(neutral_type):

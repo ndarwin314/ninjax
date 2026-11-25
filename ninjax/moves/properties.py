@@ -136,7 +136,10 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
     weather = effective_weather(field_weather, abilities, hp)
     is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
 
-    base_accuracy = jnp.where((move.identifier == 542) & (weather == WeatherEnum.SUN), .5, move.accuracy)
+    # Thunder and Hurricane use 50% base accuracy in sun, before stages and
+    # other accuracy modifiers. The three Forces of Nature storms do not.
+    sun_sensitive = (move.identifier == 87) | (move.identifier == 542)
+    base_accuracy = jnp.where(sun_sensitive & (weather == WeatherEnum.SUN), .5, move.accuracy)
     ignore_evasion = move.ignore_defensive[0] | (attacker_ability[0] == AbilityEnum.KEEN_EYE)
     accuracy = (base_accuracy *
                 ACCURACY_MULTIPLIER_LOOKUP[6 + accuracy_stage] *
@@ -160,8 +163,9 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
     accuracy = jnp.clip(accuracy, no_guard_active, 1)
     if absorption is None:
         absorption = absorption_from_fields(move, defender_ability)
-    # Blizzard in snow and Hurricane in rain bypass accuracy/evasion checks.
-    weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | ((move.identifier == 542) & (weather == WeatherEnum.RAIN))
+    # These weather effects bypass the accuracy roll and its modifiers.
+    rain_sensitive = sun_sensitive | (move.identifier == 846) | (move.identifier == 847) | (move.identifier == 848)
+    weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | (rain_sensitive & (weather == WeatherEnum.RAIN))
     accuracy = jnp.where((defender_ability == AbilityEnum.TANGLED_FEET) & (confusion_turns > 0), accuracy * .5, accuracy)
     toxic_always = (move.identifier == 92) & poison_user
     accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always | absorption.active | toxic_always, 1., accuracy)
@@ -180,13 +184,15 @@ def move_overrides(state, player, move):
     ident = move.identifier
     abilities = state.ability
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
+    terrain = state.terrain.terrain
     types = state.effective_types(player)
     item = state.active_field('item', player)
     # Weather Ball's power is a ModifyMove effect, coupled to its type change.
     # All BasePower callbacks are evaluated later from live hit-time inputs.
-    power = jnp.where((move.power_rule == PowerRule.DOUBLE_IN_WEATHER) &
-                      (weather != W.NONE), move.base_power * 2, move.base_power)
-    move_type = _override_type(state, player, ident, move.type, weather, types)
+    double_in_weather = (move.power_rule == PowerRule.DOUBLE_IN_WEATHER) & (weather != W.NONE)
+    double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != W.NONE)
+    power = jnp.where(double_in_weather | double_in_terrain, move.base_power * 2, move.base_power)
+    move_type = _override_type(state, player, ident, move.type, weather, terrain, types)
     priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
     return move.replace(base_power=power, type=move_type, priority=priority)
 
@@ -213,13 +219,19 @@ def form_move_type(identifier, default_type, form):
     return move_type
 
 
-def _override_type(state, player, ident, move_type, weather, types):
-    """Resolve weather, form and current-type callbacks."""
+def _override_type(state, player, ident, move_type, weather, terrain, types):
+    """Resolve weather, terrain, form and current-type callbacks."""
     weather_ball = (ident == 311) & (weather != W.NONE)
     move_type = jnp.where(weather_ball & (weather == W.SUN), Type.FIRE, move_type)
     move_type = jnp.where(weather_ball & (weather == W.RAIN), Type.WATER, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SANDSTORM), Type.ROCK, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SNOW), Type.ICE, move_type)
+    terrain_pulse = (ident == 805) & (terrain != T.NONE)
+    move_type = jnp.where(terrain_pulse & (terrain == T.ELECTRIC), Type.ELECTRIC, move_type)
+    move_type = jnp.where(terrain_pulse & (terrain == T.GRASSY), Type.GRASS, move_type)
+    move_type = jnp.where(terrain_pulse & (terrain == T.MISTY), Type.FAIRY, move_type)
+    move_type = jnp.where(terrain_pulse & (terrain == T.PSYCHIC), Type.PSYCHIC, move_type)
+
     move_type = form_move_type(ident, move_type, state.active_field('form', player))
     # Revelation Dance uses the first current type; ordinary Tera overrides it.
     first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], Type.NORMAL))
