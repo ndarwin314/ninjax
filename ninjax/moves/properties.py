@@ -15,6 +15,7 @@ from ninjax.enums.field import TerrainEnum as T, WeatherEnum, WeatherEnum as W
 from ninjax.enums.items import ItemEnum, ItemEnum as I
 from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Type
+from ninjax.item_rules import item_is_suppressed, plate_type
 from ninjax.side.queries import (
     effective_weather,
     is_floating_fields,
@@ -65,7 +66,8 @@ def effective_priority(state, player, move):
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
     types = state.effective_types(player)
     item = state.active_field('item', player)
-    move_type = _override_type(state, player, move.identifier, jnp.where(normalize, Type.NORMAL, move.type), weather, types)
+    move_type = _override_type(state, player, move.identifier, jnp.where(normalize, Type.NORMAL, move.type),
+                               weather, state.terrain.terrain, types, item)
     priority = _terrain_priority(state, move.identifier, move.priority, types, ability, item)
     return _ability_priority(state, player, move, move_type, priority, ability)
 
@@ -218,44 +220,10 @@ def form_move_type(identifier, default_type, form):
                               resolved_type, move_type)
     return move_type
 
-def judgement_move_type(item):
-    return jnp.select([
-        item == ItemEnum.FIST_PLATE,
-        item == ItemEnum.SKY_PLATE,
-        item == ItemEnum.TOXIC_PLATE,
-        item == ItemEnum.EARTH_PLATE,
-        item == ItemEnum.STONE_PLATE,
-        item == ItemEnum.INSECT_PLATE,
-        item == ItemEnum.SPOOKY_PLATE,
-        item == ItemEnum.IRON_PLATE,
-        item == ItemEnum.FLAME_PLATE,
-        item == ItemEnum.SPLASH_PLATE,
-        item == ItemEnum.MEADOW_PLATE,
-        item == ItemEnum.ZAP_PLATE,
-        item == ItemEnum.MIND_PLATE,
-        item == ItemEnum.ICICLE_PLATE,
-        item == ItemEnum.DRACO_PLATE,
-        item == ItemEnum.DREAD_PLATE,
-        item == ItemEnum.PIXIE_PLATE,
-    ], [
-        Type.FIGHTING,
-        Type.FLYING,
-        Type.POISON,
-        Type.GROUND,
-        Type.ROCK,
-        Type.BUG,
-        Type.GHOST,
-        Type.STEEL,
-        Type.FIRE,
-        Type.WATER,
-        Type.GRASS,
-        Type.ELECTRIC,
-        Type.PSYCHIC,
-        Type.ICE,
-        Type.DRAGON,
-        Type.DARK,
-        Type.FAIRY
-    ], Type.NORMAL)
+def judgment_move_type(item):
+    """Map represented Plates to Judgment's type, defaulting to Normal."""
+    item_type = plate_type(item)
+    return jnp.where(item_type == Type.NONE, Type.NORMAL, item_type)
 
 
 def _override_type(
@@ -278,7 +246,9 @@ def _override_type(
     move_type = jnp.where(terrain_pulse & (terrain == T.PSYCHIC), Type.PSYCHIC, move_type)
 
     move_type = form_move_type(ident, move_type, state.active_field('form', player))
-    move_type = jnp.where(ident == 449, judgement_move_type(item), move_type)
+    suppressed = item_is_suppressed(state.ability[player], state.magic_room_duration,
+                                    state.volatile_status.embargo_turns[player])
+    move_type = jnp.where((ident == 449) & ~suppressed, judgment_move_type(item), move_type)
     # Revelation Dance uses the first current type; ordinary Tera overrides it.
     first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], Type.NORMAL))
     tera_type = state.active_field('tera_type', player)[0]

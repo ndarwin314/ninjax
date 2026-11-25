@@ -260,6 +260,12 @@ CURATED_ITEMS = {
     'Flame Orb': 'FLAME_ORB', 'Toxic Orb': 'TOXIC_ORB', 'White Herb': 'WHITE_HERB',
     'Air Balloon': 'AIR_BALLOON', 'Hearthflame Mask': 'HEARTHFLAME_MASK',
     'Cornerstone Mask': 'CORNERSTONE_MASK', 'Power Herb': 'POWER_HERB',
+    'Fist Plate': 'FIST_PLATE', 'Sky Plate': 'SKY_PLATE', 'Toxic Plate': 'TOXIC_PLATE',
+    'Earth Plate': 'EARTH_PLATE', 'Stone Plate': 'STONE_PLATE', 'Insect Plate': 'INSECT_PLATE',
+    'Spooky Plate': 'SPOOKY_PLATE', 'Iron Plate': 'IRON_PLATE', 'Flame Plate': 'FLAME_PLATE',
+    'Splash Plate': 'SPLASH_PLATE', 'Meadow Plate': 'MEADOW_PLATE', 'Zap Plate': 'ZAP_PLATE',
+    'Mind Plate': 'MIND_PLATE', 'Icicle Plate': 'ICICLE_PLATE', 'Draco Plate': 'DRACO_PLATE',
+    'Dread Plate': 'DREAD_PLATE', 'Pixie Plate': 'PIXIE_PLATE',
 }
 
 

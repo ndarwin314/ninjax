@@ -8,12 +8,14 @@ from ninjax.calculations.modifiers import (
     apply_modifier,
     chain_modifier,
 )
-from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier, type_effectiveness_factors
+from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier, type_effectiveness_factors, \
+    hit_type_effectiveness
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, WeatherEnum
 from ninjax.enums.items import ItemEnum
 from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
+from ninjax.item_rules import plate_type
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
 from ninjax.side.queries import chain_defense_ability, is_floating, item_transfer_allowed
@@ -103,7 +105,7 @@ def compute_base_power(
         move: Move,
         terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None,
         user_speed=1, target_speed=1, positive_stages=0, previous_failed=False,
-        target_charging_move=0) -> chex.Array:
+        target_charging_move=0, item_suppressed=False) -> chex.Array:
     """Resolve live intrinsic power, then apply ordered power modifiers.
 
     BasePower event factors are chained as 4096-based integers in descending
@@ -114,7 +116,7 @@ def compute_base_power(
     independently of critical-hit and Unaware damage-stat adjustments.
     """
     if raw_effectiveness is None:
-        raw_effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list)
+        raw_effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list, move.effectiveness_rule)
     grounded_user = ~is_floating(attacker) | jnp.asarray(gravity_active)
     grounded_target = ~is_floating(defender) | jnp.asarray(gravity_active)
     # Rising Voltage is a basePowerCallback, before Technician's power check.
@@ -134,7 +136,8 @@ def compute_base_power(
     modifier = chain_aura_power_modifiers(modifier, move.type, attacker.ability, defender.ability)
     modifier = chain_status_and_defender_power_modifiers(modifier, move, attacker.ability,
         defender.ability, attacker.is_poisoned, attacker.status)
-    modifier = chain_item_power_modifiers(modifier, move.type, attacker.item, attacker.form, attacker.species)
+    modifier = chain_item_power_modifiers(modifier, move.type, attacker.item, attacker.form, attacker.species,
+                                          item_suppressed=jnp.asarray(item_suppressed) | (attacker.ability == AbilityEnum.KLUTZ))
     # Punk Rock priority 7 precedes terrain priority 6 and move priority 0.
     modifier = chain_modifier(modifier, 5325, (attacker.ability == AbilityEnum.PUNK_ROCK) & move.sound)
     modifier = chain_terrain_power_modifiers(modifier, move, terrain.terrain, grounded_user, grounded_target)
@@ -186,7 +189,7 @@ def chain_status_and_defender_power_modifiers(modifier, move, ability, defender_
         (defender_ability == AbilityEnum.DRY_SKIN) & (move.type == Type.FIRE))
 
 
-def chain_item_power_modifiers(modifier, move_type, item, form, species):
+def chain_item_power_modifiers(modifier, move_type, item, form, species, item_suppressed=False):
     """Chain represented held-item power bonuses at priority 15."""
     mask = (((item == ItemEnum.WELLSPRING_MASK) & (form == FormEnum.OGERPON_WELLSPRING)) |
         ((item == ItemEnum.HEARTHFLAME_MASK) & (form == FormEnum.OGERPON_HEARTHFLAME)) |
@@ -197,7 +200,10 @@ def chain_item_power_modifiers(modifier, move_type, item, form, species):
             ((move_type == Type.DRAGON) | (move_type == Type.PSYCHIC))) |
         ((item == ItemEnum.LUSTROUS_ORB) & (species == 484) &
             ((move_type == Type.DRAGON) | (move_type == Type.WATER))))
-    return chain_modifier(modifier, 4915, mask | type_boost)
+    # Plates boost matching-type attacks at the same priority as other items.
+    plate = plate_type(item)
+    plate_boost = (plate != Type.NONE) & (plate == move_type) & ~jnp.asarray(item_suppressed)
+    return chain_modifier(modifier, 4915, mask | type_boost | plate_boost)
 
 
 def chain_terrain_power_modifiers(modifier, move, terrain_type, grounded_user, grounded_target):
@@ -282,18 +288,6 @@ def compute_base_damage(
     return base_damage
 
 
-def hit_type_effectiveness(move_type, defender_types, defender_ability, gravity_active):
-    """Return the raw item matchup and the damage matchup from one type lookup."""
-    factors = type_effectiveness_factors(move_type, defender_types)
-    raw = jnp.prod(factors)
-    # Gravity neutralizes Flying's type factor and suppresses Levitate.
-    gravity = jnp.asarray(gravity_active)
-    ground = move_type == Type.GROUND
-    damage_factors = jnp.where(gravity & ground & (defender_types == Type.FLYING), 1, factors)
-    levitate = (defender_ability == AbilityEnum.LEVITATE) & ground & ~gravity
-    return raw, jnp.prod(damage_factors) * (1 - levitate)
-
-
 def apply_weather_damage(ident, damage, move_type, weather):
     """Apply the weather event before critical hits and the random roll."""
     sun = weather == WeatherEnum.SUN
@@ -372,10 +366,12 @@ def final_damage_modifier(user_ability, target_ability, item, move, effectivenes
     return chain_modifier(modifier, 2048, protected)
 
 
-def compute_damage_multipliers(attacker, defender, weather, move, base_damage,
-                               is_crit, damage_roll, gravity_active=False, *,
-                               effectiveness=None, screen=False,
-                               user_speed=1, target_speed=1, semi_damage_boost=False) -> Array:
+def compute_damage_multipliers(
+        attacker, defender,
+        weather, move, base_damage,
+        is_crit, damage_roll,
+        gravity_active=False, *,effectiveness=None, screen=False,
+        user_speed=1, target_speed=1, semi_damage_boost=False) -> Array:
     """Apply weather, crit, random, STAB, types, burn and final modifiers.
 
     Critical hits, random rolls and type resistance truncate independently.
@@ -385,7 +381,9 @@ def compute_damage_multipliers(attacker, defender, weather, move, base_damage,
     PRNG sampling belongs to the caller; damage_roll is an explicit input.
     """
     if effectiveness is None:
-        _, effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity_active)
+        _, effectiveness = hit_type_effectiveness(
+            move.type, defender.type_list, defender.ability, gravity_active, move.effectiveness_rule
+        )
     damage = apply_weather_damage(move.identifier, base_damage, move.type, weather)
     damage = jnp.where(is_crit, damage * 3 // 2, damage)
     damage = jnp.floor(damage * damage_roll).astype(jnp.int32)

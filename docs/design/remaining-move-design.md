@@ -11,13 +11,15 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, including **442** with represented singles
-effects and **243** unavailable or unreviewed. The pinned random-battle inventory
-has **263 of 348** moves supported, leaving **85** gaps.
+The catalogue contains **685 moves**, including **445** with represented singles
+effects and **240** unavailable or unreviewed. The pinned random-battle inventory
+has **265 of 348** moves supported, leaving **83** gaps.
 These are implementation counts, not exhaustive interaction-parity counts.
 
-The current inventory includes Teleport, Chilly Reception, Baton Pass, Shed Tail,
-Raging Bull, six ordinary charge moves and six semi-invulnerable charge moves.
+The current inventory includes Judgment, Freeze-Dry and Flying Press, as well as
+Teleport, Chilly Reception, Baton Pass, Shed Tail, Raging Bull, six ordinary
+charge moves and six semi-invulnerable charge moves. The curated item loader
+supports all 17 typed Plates.
 Parting Shot, damaging forced switches, Revival Blessing and Sky Drop remain
 unavailable. The tables below distinguish implemented mechanisms from remaining
 work; the coverage report is the authoritative list of move names.
@@ -60,6 +62,11 @@ moves, supported random-battle names, random-battle gaps and affected roles.
 The report uses the same support inventory as construction. Its ability/item
 sections retain their separate projection and sampling scopes. Existing
 historical batch counts in other design documents describe those earlier runs.
+
+Plate suppression respects effective Klutz and the Magic Room/Embargo timers;
+those timers are available for Plate calculations, but the Magic Room and
+Embargo moves and general suppression of unrelated held-item effects remain
+unimplemented.
 
 To enable a move, review its complete primary effect and metadata against the
 execution path, add any required mechanics and focused regressions, then add its
@@ -144,7 +151,9 @@ Attack and Dire Claw require custom status-selection rules beyond those lists.
 Similarly, `thawsTarget` is present in the catalogue but is not projected into
 the current Fire-type-only target-thaw path.
 
-Freeze-Dry and Flying Press still need shared effectiveness rules; Wish and Future Sight still need pending-effect state; Seismic Toss still needs fixed-damage dispatch.
+Freeze-Dry and Flying Press now use shared move-aware effectiveness rules; Wish
+and Future Sight still need pending-effect state, and Seismic Toss still needs
+fixed-damage dispatch.
 None becomes implemented merely through the new condition/switch/stat fields.
 Transformations, richer battle history and doubles target resolution remain
 architectural work as described below.
@@ -218,9 +227,9 @@ below labels them new.
 
 Validation lives in `test_variable_power_validation.py`,
 `test_power_rules.py` and `test_conditional_power.py`, with offline fixtures
-captured from the pinned Showdown callbacks and BasePower events. Freeze-Dry,
-Flying Press, Hydro Steam, category-changing moves and transformations remain
-outside this batch.
+captured from the pinned Showdown callbacks and BasePower events. Freeze-Dry
+and Flying Press were enabled separately; category-changing moves and
+transformations remain outside this batch.
 
 ### Move-to-stage map
 
@@ -240,8 +249,8 @@ execution boundary. Extend rule metadata only when implementing its consumers.
 | Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **Implemented:** `chain_field_matchup_move_modifiers` handles Electric Terrain's presence and the resolved super-effective matchup. Psyblade has no user-grounding requirement. |
 | Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
 | Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break and is enabled for singles. Aura Wheel has typing for the supplied form. Its species eligibility and Hunger Switch lifecycle remain open. |
-| Item-dependent type override | Judgment | Resolve the transient type from supported Plate metadata during move property resolution. Plate support is still required. |
-| Special effectiveness | Freeze-Dry, Flying Press | **New** `type_effectiveness.move_type_effectiveness_factors(move_type, defender_types, effectiveness_rule)` returns one factor per defensive type. It replaces Water's factor for Freeze-Dry or multiplies the resolved primary type's factors by Flying's factors for Flying Press. **Existing** `queries.move_immune_from_fields` and `damage.hit_type_effectiveness` both consume it; the latter retains responsibility for raw/damage matchup outputs and represented ability/Gravity handling. |
+| Item-dependent type override | Judgment | **Implemented:** shared Plate lookup resolves Judgment's type and the matching-type BasePower modifier. Klutz and the represented Magic Room/Embargo timers suppress these Plate effects. Arceus Plate transfer restrictions are checked. |
+| Special effectiveness | Freeze-Dry, Flying Press | **Implemented:** `type_effectiveness_factors` applies the move rule per defending type. Early immunity, hit-time matchup and fallback damage calculation consume the rule; Ground, Gravity and Levitate remain contextual checks. |
 | Weather damage exception | Hydro Steam | Extend **existing** `damage.apply_weather_damage(damage, move_type, weather)` with a move-rule input. Replace the usual sun/Water reduction with Hydro Steam's 1.5 bonus, retaining weather-stage rounding and one call from `compute_damage_multipliers`. |
 | Category selection | Photon Geyser, Shell Side Arm | **New** `properties.resolve_move_category(key, move, level, user_atk, user_spa, target_def, target_spd)` returns `(key, resolved_move)`. Delegate to **new** `properties.photon_geyser_category(atk, spa)` and `properties.shell_side_arm_category(key, level, atk, spa, defense, sp_defense)`; the latter returns `(key, category)` and draws only for a tie. Set category, stat selectors and conditional contact together via **new** `properties.with_damage_category(move, category, physical_contact)`. Gather inputs with **new** `queries.category_stat_fields(state, player)`, preserving stage adjustments while excluding ordinary item/ability stat modifiers. |
 | Transformation-dependent type/category | Tera Blast, Tera Starstorm | **New** `properties.transformed_move_type(type_rule, default_type, tera_type, is_terastallized, form)` integrates through `_override_type`. Extend `resolve_move_category` for Tera Blast and use **new** `properties.transformation_move_properties(move, tera_type, is_terastallized, form)` for power, target and self-effect changes. Implement these only with the transformation lifecycle and eligibility checks; the existing type/category fields do not unlock complete moves. |
@@ -323,8 +332,8 @@ sleep; use the checked callback rather than inferring eligibility from prose.
 
 Photon Geyser also needs its ability-ignoring behavior audited before enabling
 the complete move. Shell Side Arm's random category choice must not be rerolled
-when accuracy, hit routing or damage reads the resolved move. Plate support,
-Aura Wheel's species and form lifecycle, and transformation side effects remain
+when accuracy, hit routing or damage reads the resolved move. Aura Wheel's
+species and form lifecycle, and transformation side effects remain
 separate requirements.
 
 Raging Bull and Brick Break share the `apply_pre_damage_move_effects` hook.
@@ -365,7 +374,7 @@ Some moves need several of these capabilities.
 | Missing support | Example moves | Required extension |
 | --- | --- | --- |
 | Wiring existing primitives | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
-| Conditional damage/type rules | Freeze-Dry, Flying Press, Hydro Steam, Terrain Pulse, Photon Geyser, Shell Side Arm | Resolve contextual power, category, typing and effectiveness before damage. |
+| Conditional damage/type rules | Hydro Steam, Terrain Pulse, Photon Geyser, Shell Side Arm | Complete and review contextual power, category, typing and effectiveness before enabling moves. Freeze-Dry and Flying Press are enabled. |
 | Multiple/custom secondaries | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
 | Residual conditions and trapping | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
 | Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |

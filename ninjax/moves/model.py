@@ -71,6 +71,7 @@ class Move(ArrayTree):
     protectable: jax.Array = field(default_factory=lambda: jnp.array([True]))
     encore_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
     sleep_talk_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
+    effectiveness_rule: jax.Array = field(default_factory=lambda: jnp.array([0]))
 
     def __post_init__(self):
         """Normalize scalar metadata and pad stat-change arrays to seven slots.

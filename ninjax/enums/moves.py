@@ -7,6 +7,11 @@ import jax.numpy as jnp
 from ninjax.enums.base import JaxEnum
 
 
+class EffectivenessRule(JaxEnum):
+    DEFAULT = 0
+    FREEZE_DRY = 1
+    FLYING_PRESS = 2
+
 class PowerRule(JaxEnum):
     """Power computation rules, independent of move identity.
 

@@ -9,7 +9,7 @@ from ninjax.teams.construction import CATALOGUE, make_move, make_sandbox_teams
 from tools.audit_random_battle_mechanics import coverage_report
 
 
-@pytest.mark.parametrize('name', ['Wish', 'Smack Down', 'Fire Fang', 'Transform', 'Freeze-Dry'])
+@pytest.mark.parametrize('name', ['Wish', 'Smack Down', 'Fire Fang', 'Transform'])
 def test_catalogue_membership_does_not_enable_missing_effects(name):
     """Known metadata must not advertise moves with missing execution rules."""
     assert name in CATALOGUE
@@ -19,7 +19,7 @@ def test_catalogue_membership_does_not_enable_missing_effects(name):
     assert move.identifier[0] == CATALOGUE[name]['num']
 
 
-@pytest.mark.parametrize('name', ['Tackle', 'Protect', 'Sleep Talk', 'Flame Charge', 'Arm Thrust', 'Milk Drink'])
+@pytest.mark.parametrize('name', ['Tackle', 'Protect', 'Sleep Talk', 'Flame Charge', 'Arm Thrust', 'Milk Drink', 'Freeze-Dry', 'Flying Press', 'Judgment'])
 def test_reviewed_effects_remain_available(name):
     """Dedicated and generic mechanics share the same support decision."""
     assert is_move_supported(name)

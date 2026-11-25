@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from ninjax.calculations.stats import Nature, StatTable
 from ninjax.data.load_json import dex
 from ninjax.enums.field import TerrainEnum, WeatherEnum
-from ninjax.enums.moves import HitRule, MoveFlags, MoveType, PowerRule
+from ninjax.enums.moves import EffectivenessRule, HitRule, MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.moves.model import Move
 from ninjax.moves.support import is_move_supported
@@ -72,7 +72,10 @@ def make_move(name):
     data = data or dict(type='Normal', category='Status', power=0, accuracy=1., priority=0, pp=0, num=0, contact=False)
     category = MoveType[data['category'].upper()]
     physical = int(category) == int(MoveType.PHYSICAL)
-    effects = {'power_rule': jnp.array([POWER_RULES.get(name, PowerRule.FIXED)])}
+    effectiveness_rules = {'Freeze-Dry': EffectivenessRule.FREEZE_DRY,
+                           'Flying Press': EffectivenessRule.FLYING_PRESS}
+    effects = {'power_rule': jnp.array([POWER_RULES.get(name, PowerRule.FIXED)]),
+               'effectiveness_rule': jnp.array([effectiveness_rules.get(name, EffectivenessRule.DEFAULT)])}
     # Normalize Showdown condition IDs on the host, never inside traced code.
     weather_ids = {'raindance': WeatherEnum.RAIN, 'sunnyday': WeatherEnum.SUN,
                    'sandstorm': WeatherEnum.SANDSTORM, 'snowscape': WeatherEnum.SNOW}
@@ -195,10 +198,12 @@ def make_move(name):
 
 
 def make_sandbox_teams(reference):
-    """Preserve reference stats/types. Explicitly omit unsupported moves/items/abilities."""
+    """Project reference teams with Pokédex species IDs and explicit omissions.
+
+    Unknown species use ID zero; named battle mechanics rely on stable IDs.
+    """
     sides = []
     omissions = []
-    species_ids = {}
     for side in reference['initial']:
         mons = []
         for record in side:
@@ -207,7 +212,6 @@ def make_sandbox_teams(reference):
             species_key = ''.join(c for c in species.lower() if c.isalnum())
             species_data = dex.get(species_key, {})
             weight_hg = record.get('weight_hg', round(species_data.get('weightkg', 10) * 10))
-            species_ids.setdefault(species, len(species_ids) + 1)
             plus = record['nature']['plus']
             minus = record['nature']['minus']
             stats = StatTable(level=jnp.array([config['level']]),
@@ -224,7 +228,7 @@ def make_sandbox_teams(reference):
             omissions.append({'species': species, 'moves': missing, 'ability': config.get('ability'), 'item': config.get('item')})
             types = [int(Type[t.upper()]) for t in record['types']]
             mons.append(Pokemon(type_list=jnp.array(types + [0]*(2-len(types))), moves=stack([make_move(n) for n in display]),
-                                stat_table=stats, species=jnp.array([species_ids[species]]), form=jnp.array([int(FORM_IDS.get(species_key, FormEnum.DEFAULT))]),
+                                stat_table=stats, species=jnp.array([species_data.get('num', 0)]), form=jnp.array([int(FORM_IDS.get(species_key, FormEnum.DEFAULT))]),
                                 weight_hg=jnp.array([weight_hg])))
         sides.append(stack(mons))
     return stack(sides), omissions

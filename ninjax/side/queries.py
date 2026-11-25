@@ -11,6 +11,7 @@ from ninjax.enums.field import TerrainEnum as T, WeatherEnum as W
 from ninjax.enums.items import ItemEnum as I, ItemEnum
 from ninjax.enums.moves import MoveType
 from ninjax.enums.pokemon import FormEnum, StatEnum as S, Status, Type
+from ninjax.item_rules import plate_type
 
 
 BURN_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE)
@@ -59,7 +60,7 @@ def move_immune_from_fields(defender_types, ability, item, move, gravity_active)
     types = jnp.where(jnp.asarray(gravity_active) & (move.type == Type.GROUND) &
                       (defender_types == Type.FLYING), Type.NONE, defender_types)
     checks_type = (move.move_type != MoveType.STATUS) | (move.identifier == 86)
-    type_immunity = (calculate_effectiveness_multiplier(move.type, types) == 0) & checks_type
+    type_immunity = (calculate_effectiveness_multiplier(move.type, types, move.effectiveness_rule) == 0) & checks_type
 
     levitate = ((ability == AbilityEnum.LEVITATE) | (item == ItemEnum.AIR_BALLOON)) & (move.type == Type.GROUND) & ~jnp.asarray(gravity_active) & checks_type
     return jnp.any(jnp.stack(jnp.broadcast_arrays(
@@ -116,7 +117,9 @@ def item_transfer_allowed(species, form, item):
     ogerpon = (species == 1017) | jnp.any(form == jnp.array([
         FormEnum.OGERPON_WELLSPRING, FormEnum.OGERPON_HEARTHFLAME, FormEnum.OGERPON_CORNERSTONE]))
     mask = (item == I.WELLSPRING_MASK) | (item == I.HEARTHFLAME_MASK) | (item == I.CORNERSTONE_MASK)
-    return known & ~(ogerpon & mask)
+    # Plates cannot move from or onto an Arceus, including inactive forms.
+    arceus_plate = (species == 493) & (plate_type(item) != Type.NONE)
+    return known & ~(ogerpon & mask) & ~arceus_plate
 
 
 def can_remove_item(state, holder, source):

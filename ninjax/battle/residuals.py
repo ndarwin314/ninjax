@@ -145,7 +145,8 @@ def step_side_conditions(
     state = state.replace(volatile_status=state.volatile_status.replace(
         protected=jnp.zeros_like(state.volatile_status.protected),
         protection_kind=jnp.zeros_like(state.volatile_status.protection_kind),
-        flinched=jnp.zeros_like(state.volatile_status.flinched)))
+        flinched=jnp.zeros_like(state.volatile_status.flinched),
+        embargo_turns=jnp.maximum(state.volatile_status.embargo_turns - 1, 0)))
 
     state = tick(state)
     return key, state

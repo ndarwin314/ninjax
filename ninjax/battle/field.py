@@ -100,6 +100,7 @@ def step_field(
         terrain=Terrain(new_terrain, terrain_duration),
         trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),
         gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
+        magic_room_duration=jnp.maximum(state.magic_room_duration - 1, 0),
         volatile_status=state.volatile_status.replace(roost=jnp.zeros_like(state.volatile_status.roost),
             previous_move_result=state.volatile_status.move_result, move_result=jnp.zeros_like(state.volatile_status.move_result)),
     )

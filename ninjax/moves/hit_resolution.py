@@ -17,6 +17,7 @@ from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
 from ninjax.enums.moves import MoveType, OffensiveStatOwner, MoveResult
 from ninjax.enums.pokemon import Status, Type
+from ninjax.item_rules import item_is_suppressed
 from ninjax.moves.effects import after_damage, after_every_hit, secondary_effects
 from ninjax.moves.model import Move
 from ninjax.moves.properties import substitute_intercepts
@@ -102,7 +103,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
 
     gravity = state.gravity_duration > 0
-    raw_effectiveness, damage_effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity)
+    raw_effectiveness, damage_effectiveness = hit_type_effectiveness(
+        move.type, defender.type_list, defender.ability, gravity, move.effectiveness_rule
+    )
     # Base power and held-item reactions receive the raw type matchup.
     user_speed = effective_speed(state, attacker_idx, weather)
     target_speed = effective_speed(state, 1-attacker_idx, weather)
@@ -117,6 +120,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
                         jnp.sum(jnp.maximum(state.boosts.acc_boosts[attacker_idx], 0)),
         previous_failed=state.volatile_status.previous_move_result[attacker_idx] == MoveResult.FAILED,
         target_charging_move=state.volatile_status.charging_move_id[1-attacker_idx, 0],
+        item_suppressed=item_is_suppressed(state.ability[attacker_idx], state.magic_room_duration,
+                                            state.volatile_status.embargo_turns[attacker_idx]),
     )
     key, one, two = random.split(key, num=3)
     # crit multiplier

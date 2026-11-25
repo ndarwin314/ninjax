@@ -90,6 +90,7 @@ class VolatileStatus(struct.PyTreeNode):
     encore_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     encore_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     taunt_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    embargo_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     entry_turn: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     pending_move: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     pending_move_type: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
@@ -205,6 +206,7 @@ class BattleState(struct.PyTreeNode):
     turn_number: int = 0
     trick_room_duration: int = 0
     gravity_duration: int = 0
+    magic_room_duration: int = 0
     turn_type: TurnType = TurnType.STANDARD
 
     def __getitem__(self, idx):
