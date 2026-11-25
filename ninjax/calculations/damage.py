@@ -294,12 +294,13 @@ def hit_type_effectiveness(move_type, defender_types, defender_ability, gravity_
     return raw, jnp.prod(damage_factors) * (1 - levitate)
 
 
-def apply_weather_damage(damage, move_type, weather):
+def apply_weather_damage(ident, damage, move_type, weather):
     """Apply the weather event before critical hits and the random roll."""
     sun = weather == WeatherEnum.SUN
     rain = weather == WeatherEnum.RAIN
-    boosted = (sun & (move_type == Type.FIRE)) | (rain & (move_type == Type.WATER))
-    weakened = (sun & (move_type == Type.WATER)) | (rain & (move_type == Type.FIRE))
+    hydro_steam = ident == 876
+    boosted = (sun & ((move_type == Type.FIRE) | hydro_steam)) | (rain & (move_type == Type.WATER))
+    weakened = (sun & ((move_type == Type.WATER) & ~hydro_steam)) | (rain & (move_type == Type.FIRE))
     return apply_modifier(damage, jnp.where(boosted, 6144, jnp.where(weakened, 2048, 4096)))
 
 
@@ -385,7 +386,7 @@ def compute_damage_multipliers(attacker, defender, weather, move, base_damage,
     """
     if effectiveness is None:
         _, effectiveness = hit_type_effectiveness(move.type, defender.type_list, defender.ability, gravity_active)
-    damage = apply_weather_damage(base_damage, move.type, weather)
+    damage = apply_weather_damage(move.identifier, base_damage, move.type, weather)
     damage = jnp.where(is_crit, damage * 3 // 2, damage)
     damage = jnp.floor(damage * damage_roll).astype(jnp.int32)
     damage = apply_modifier(damage, stab_damage_modifier(attacker.type_list,

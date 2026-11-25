@@ -192,7 +192,7 @@ def move_overrides(state, player, move):
     double_in_weather = (move.power_rule == PowerRule.DOUBLE_IN_WEATHER) & (weather != W.NONE)
     double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != W.NONE)
     power = jnp.where(double_in_weather | double_in_terrain, move.base_power * 2, move.base_power)
-    move_type = _override_type(state, player, ident, move.type, weather, terrain, types)
+    move_type = _override_type(state, player, ident, move.type, weather, terrain, types, item)
     priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
     return move.replace(base_power=power, type=move_type, priority=priority)
 
@@ -218,8 +218,53 @@ def form_move_type(identifier, default_type, form):
                               resolved_type, move_type)
     return move_type
 
+def judgement_move_type(item):
+    return jnp.select([
+        item == ItemEnum.FIST_PLATE,
+        item == ItemEnum.SKY_PLATE,
+        item == ItemEnum.TOXIC_PLATE,
+        item == ItemEnum.EARTH_PLATE,
+        item == ItemEnum.STONE_PLATE,
+        item == ItemEnum.INSECT_PLATE,
+        item == ItemEnum.SPOOKY_PLATE,
+        item == ItemEnum.IRON_PLATE,
+        item == ItemEnum.FLAME_PLATE,
+        item == ItemEnum.SPLASH_PLATE,
+        item == ItemEnum.MEADOW_PLATE,
+        item == ItemEnum.ZAP_PLATE,
+        item == ItemEnum.MIND_PLATE,
+        item == ItemEnum.ICICLE_PLATE,
+        item == ItemEnum.DRACO_PLATE,
+        item == ItemEnum.DREAD_PLATE,
+        item == ItemEnum.PIXIE_PLATE,
+    ], [
+        Type.FIGHTING,
+        Type.FLYING,
+        Type.POISON,
+        Type.GROUND,
+        Type.ROCK,
+        Type.BUG,
+        Type.GHOST,
+        Type.STEEL,
+        Type.FIRE,
+        Type.WATER,
+        Type.GRASS,
+        Type.ELECTRIC,
+        Type.PSYCHIC,
+        Type.ICE,
+        Type.DRAGON,
+        Type.DARK,
+        Type.FAIRY
+    ], Type.NORMAL)
 
-def _override_type(state, player, ident, move_type, weather, terrain, types):
+
+def _override_type(
+        state,
+        player,
+        ident,
+        move_type,
+        weather, terrain,
+        types, item):
     """Resolve weather, terrain, form and current-type callbacks."""
     weather_ball = (ident == 311) & (weather != W.NONE)
     move_type = jnp.where(weather_ball & (weather == W.SUN), Type.FIRE, move_type)
@@ -233,6 +278,7 @@ def _override_type(state, player, ident, move_type, weather, terrain, types):
     move_type = jnp.where(terrain_pulse & (terrain == T.PSYCHIC), Type.PSYCHIC, move_type)
 
     move_type = form_move_type(ident, move_type, state.active_field('form', player))
+    move_type = jnp.where(ident == 449, judgement_move_type(item), move_type)
     # Revelation Dance uses the first current type; ordinary Tera overrides it.
     first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], Type.NORMAL))
     tera_type = state.active_field('tera_type', player)[0]
