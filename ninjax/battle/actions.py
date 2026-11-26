@@ -13,7 +13,7 @@ from ninjax.enums.moves import MoveResult
 from ninjax.moves.execution import move_interrupted, move_used
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults
-from ninjax.restrictions import gravity_blocks_move, resolve_move
+from ninjax.restrictions import gravity_blocks_move, move_blocked_by_hit_restrictions, resolve_move
 from ninjax.side.faint_effects import clear_destiny_bond, resolve_faints
 from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
@@ -88,6 +88,7 @@ def step_move(
         _prepare_struggle_action,
         partial(_prepare_selected_or_continued, continued=continued, is_tera=is_tera), key, state, player_idx, index)
     selected_move = state.active_moves(player_idx, index)
+    restriction_blocked |= ~struggle & move_blocked_by_hit_restrictions(state, player_idx, selected_move)
     key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
         defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
     key, state = jax.lax.cond(

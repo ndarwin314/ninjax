@@ -17,6 +17,7 @@ from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.records.events import Cause, EventKind, emit
+from ninjax.restrictions import apply_hit_restriction
 from ninjax.side.field_conditions import set_terrain
 from ninjax.side.hp_effects import apply_indirect_hp_change, take_damage_percent
 from ninjax.side.item_effects import kings_rock_flinch
@@ -243,9 +244,17 @@ def _apply_secondary(key, state, player, move, ability):
     key, state = jax.lax.cond(move.secondary_confusion[0],
         _secondary_confusion, _unchanged_secondary, key, state, target, move)
     state = stat_changes(state, target, move.secondary_stat, move.secondary_stages, True)
+    identifier = move.identifier[0]
+    state = jax.lax.cond((identifier == 675) | (identifier == 917),
+        apply_hit_restriction, _skip_hit_restriction, state, target, move, ability)
     v = state.volatile_status
     flinch = move.secondary_flinch[0] & (ability != A.INNER_FOCUS)
     return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
+
+
+def _skip_hit_restriction(state, target, move, ability):
+    """Keep the turn counters when a secondary applies no move restriction."""
+    return state
 
 
 def secondary_effects(key, state, player, move):

@@ -24,7 +24,7 @@ from ninjax.enums.pokemon import Type
 from ninjax.observations import Observation, observation_spec, observe
 from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventBuffer
-from ninjax.restrictions import allowed_moves
+from ninjax.restrictions import active_restriction_mask
 from ninjax.side.item_effects import refresh_paradox
 from ninjax.side.queries import is_choice_item, is_floating_fields
 from ninjax.side.state import BattleState
@@ -163,18 +163,7 @@ class Battle(Environment):
         categories = battle.active_move_field('move_type')[..., 0]
         moves = (battle.active_move_field('current_pp')[..., 0] > 0) & ~battle.active_move_field('disabled')[..., 0]
 
-        moves &= allowed_moves(battle.active_move_field('identifier')[..., 0], categories,
-            disabled_move_id=battle.volatile_status.disabled_move_id,
-            disable_turns=battle.volatile_status.disable_turns,
-            taunt_turns=battle.volatile_status.taunt_turns,
-            encore_move_id=battle.volatile_status.encore_move_id,
-            encore_turns=battle.volatile_status.encore_turns,
-            gravity_duration=battle.gravity_duration,
-            throat_chop_turns=battle.volatile_status.throat_chop_turns,
-            psychic_noise_turns=battle.volatile_status.psychic_nouse_turns,
-            is_sound=moves.sound,
-            is_healing=moves.healing)
-
+        moves &= active_restriction_mask(battle)
 
         choice = is_choice_item(items)
         lock = battle.volatile_status.choice_lock[:, 0]

@@ -11,9 +11,9 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, including **450** with represented singles
-effects and **235** unavailable or unreviewed. The pinned random-battle inventory
-has **270 of 348** moves supported, leaving **78** gaps.
+The catalogue contains **685 moves**, including **452** with represented singles
+effects and **233** unavailable or unreviewed. The pinned random-battle inventory
+has **272 of 348** moves supported, leaving **76** gaps.
 These are implementation counts, not exhaustive interaction-parity counts.
 
 The current inventory includes Judgment, Freeze-Dry and Flying Press, as well as
@@ -370,7 +370,7 @@ Some moves need several of these capabilities.
 | [Multiple/custom secondaries](#multiple-and-custom-secondaries) | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
 | [Residual conditions and trapping](#residual-conditions-and-trapping) | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
 | [Delayed effects](#delayed-effects) | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
-| [Restrictions and prerequisites](#restrictions-and-prerequisites) | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
+| [Restrictions and prerequisites](#restrictions-and-prerequisites) | Torment, Imprison, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
 | [Charge/recharge/locked sequences](#charge-recharge-and-locked-sequences) | Sky Drop, Giga Impact, Outrage, Rollout | Extend shared continuations for carrying a target and other locked sequences. |
 | [Preparation and semi-invulnerability](#preparation-and-semi-invulnerability) | Focus Punch, Beak Blast, Sky Drop | Preparation timing, pre-execution reactions and carried-target rules. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the shared charge pipeline. |
 | [Damage/action/team history](#damage-action-and-team-history) | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
@@ -450,11 +450,12 @@ effect can be represented there.
 
 #### Restrictions and prerequisites
 
-- Extend `restrictions` with shared eligibility checks for action masks and
-  execution. Keep volatile restrictions such as Torment, Imprison, Throat Chop
-  and Psychic Noise's healing restriction separate from per-Pokémon history
-  such as Belch's berry condition. Check Psychic Noise at healing entry points
-  and Imprison against the source's current move bank.
+- Throat Chop and Psychic Noise apply two-turn restrictions through the
+  secondary hit path. Selection and execution consult the same move flags.
+  Heal Block prevents indirect recovery and automatic Sitrus consumption,
+  including when Psychic Noise itself crosses the Berry threshold.
+- Extend these checks for Torment and Imprison, using the source's current move
+  bank for Imprison. Store Belch's berry prerequisite in per-Pokémon history.
 - Record the history Gigaton Hammer and Last Resort require alongside the
   relevant move-use events. Verify changes between queueing and execution,
   expired effects, switch cleanup, and the fallback when no ordinary attack

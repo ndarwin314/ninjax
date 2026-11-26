@@ -33,11 +33,11 @@ def proportional_hp_base_power(scale, current_hp, max_hp):
     return jnp.maximum(scale * current_hp // jnp.maximum(max_hp, 1), 1)
 
 def low_hp_base_power(current_hp, max_hp):
+    """Resolve Flail and Reversal power from the user's remaining HP."""
     hp_factor = (48 * current_hp) // jnp.maximum(max_hp, 1)
-    jnp.select(
-        [hp_factor <= 48, hp_factor <= 32, hp_factor <= 16, hp_factor <= 9, hp_factor <= 4, hp_factor <= 1],
-        [20, 40, 80, 100, 150, 200],
-    )
+    return jnp.select(
+        (hp_factor < 2, hp_factor < 5, hp_factor < 10, hp_factor < 17, hp_factor < 33),
+        (200, 150, 100, 80, 40), default=20)
 
 
 def target_hp_base_power(scale, current_hp, max_hp):

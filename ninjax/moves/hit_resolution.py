@@ -24,7 +24,7 @@ from ninjax.moves.properties import substitute_intercepts
 from ninjax.records.events import EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_value
-from ninjax.side.item_effects import after_hit, consume, remove_item
+from ninjax.side.item_effects import after_hit, after_hp_change, consume, remove_item
 from ninjax.side.queries import (
     ability_against_move,
     effective_weather,
@@ -49,10 +49,10 @@ def _damage_substitute(s, *, target_idx, damage):
     return s
 
 
-def _damage_hit_target(s, *, target_idx, damage, attacker_idx, defender_ability):
+def _damage_hit_target(s, *, target_idx, damage, attacker_idx, defender_ability, activate_items):
     """Commit calculated hit damage with its attacker's source attribution."""
     return take_damage_value(s, target_idx, damage, True, source=attacker_idx,
-                             attack_defender_ability=defender_ability)
+                             attack_defender_ability=defender_ability, activate_items=activate_items)
 
 
 def _apply_drain(s, *, attacker_idx, defender_ability, healing):
@@ -206,6 +206,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
             damage=damage,
             attacker_idx=attacker_idx,
             defender_ability=hit_defender.ability,
+            activate_items=ident != 917,
         ),
         state,
     )
@@ -261,6 +262,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         key,
         state,
     )
+    # Psychic Noise's secondary takes effect before threshold-based berries.
+    state = jax.lax.cond((ident == 917) & ~intercepted,
+        partial(after_hp_change, player=target_idx), _identity, state)
     # Explicit target thawing runs after secondaries, so Scald cannot burn a
     # frozen target on the same hit that thaws it. Substitute blocks the thaw.
     target_status = state.active_field('status', target_idx)

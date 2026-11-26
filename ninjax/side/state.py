@@ -92,7 +92,7 @@ class VolatileStatus(struct.PyTreeNode):
     encore_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     taunt_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     throat_chop_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    psychic_noise_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    heal_block_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     embargo_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     entry_turn: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     pending_move: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))

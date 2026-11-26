@@ -24,19 +24,21 @@ def _damage_fraction_for_player(i, s, *, fractions):
 
 
 def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, source=-1,
-                      *, attack_defender_ability=None) -> BattleState:
+                      *, attack_defender_ability=None, activate_items=True) -> BattleState:
     """Apply signed damage, with negative amounts healing the active Pokémon.
 
     Attack damage must already include all calculation modifiers. Callers
     passing Python False use the indirect path. An array flag remains
     dynamic under JIT and gates attack protections at runtime.
-    The hit can supply a move-scoped ability for attack survival checks.
+    The hit can supply a move-scoped ability and defer reactive items until
+    after a healing restriction has had a chance to apply.
     """
     if is_attack_damage is False:
         return apply_indirect_hp_change(state, defender_idx, damage, source)
     if attack_defender_ability is None:
         attack_defender_ability = state.ability[defender_idx]
-    return _apply_attack_hp_change(state, defender_idx, damage, is_attack_damage, source, attack_defender_ability)
+    return _apply_attack_hp_change(state, defender_idx, damage, is_attack_damage, source,
+                                   attack_defender_ability, activate_items)
 
 
 def _active_hp_fields(state, player):
@@ -52,7 +54,14 @@ def _indirect_cause(state):
 
 @jax.jit
 def apply_indirect_hp_change(state, player, damage, source=-1):
-    """Apply indirect damage or healing with the usual item and faint reactions."""
+    """Apply an indirect HP change unless Heal Block prevents recovery."""
+    blocked = (jnp.asarray(damage).reshape(()) < 0) & (state.volatile_status.heal_block_turns[player, 0] > 0)
+    return jax.lax.cond(blocked, _keep_hp_state, _commit_indirect_hp_change, state, player, damage, source)
+
+
+@jax.jit
+def _commit_indirect_hp_change(state, player, damage, source=-1):
+    """Commit an allowed indirect HP change with item and faint reactions."""
     _, old_hp, max_hp = _active_hp_fields(state, player)
     # HP changes truncate fractional damage toward zero before clamping.
     damage = jnp.asarray(damage, dtype=old_hp.dtype)
@@ -62,7 +71,7 @@ def apply_indirect_hp_change(state, player, damage, source=-1):
 
 
 @jax.jit
-def _apply_attack_hp_change(state, player, damage, attack, source, ability):
+def _apply_attack_hp_change(state, player, damage, attack, source, ability, activate_items):
     """Apply attack protections, commit HP and check reactive items."""
     slot, old_hp, max_hp = _active_hp_fields(state, player)
     item = state.team.item[player, slot]
@@ -78,12 +87,25 @@ def _apply_attack_hp_change(state, player, damage, attack, source, ability):
     state = update_active_fields(state, player, item=jnp.where(sash, ItemEnum.NONE, item))
     state = commit_hp_change(state, player, old_hp, new_hp, max_hp, source,
                              jnp.where(attack, Cause.MOVE, _indirect_cause(state)), attack)
-    return after_hp_change(state, player)
+    return jax.lax.cond(activate_items, after_hp_change, _keep_hp_state, state, player)
+
+
+def _apply_percent_hp_change(state, player, percent):
+    """Convert a signed HP fraction to an indirect HP change."""
+    amount = state.active_stats(player)[0] * percent
+    damage = (jnp.sign(amount) * jnp.maximum(1, jnp.floor(jnp.abs(amount)))).astype(jnp.int32)
+    return _commit_indirect_hp_change(state, player, damage)
+
+
+def _keep_hp_state(state, *unused):
+    """Preserve state when Heal Block prevents the recovery attempt."""
+    return state
 
 
 def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array, cause=None) -> BattleState:
     """Apply a signed fraction of max HP as indirect damage or healing.
 
+    Heal Block skips negative fractions before HP changes or item reactions.
     Nonzero fractions use at least one HP after rounding the magnitude down.
     An array of indices invokes a fixed JAX loop over both sides, sharing the
     HP-update graph instead of expanding it twice during compilation.
@@ -96,6 +118,7 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array, c
         fractions = jnp.broadcast_to(percent, (2, 1))
         return jax.lax.fori_loop(0, 2,
             partial(_damage_fraction_for_player, fractions=fractions), state)
-    amount = state.active_stats(defender_idx)[0] * percent
-    damage = (jnp.sign(amount) * jnp.maximum(1, jnp.floor(jnp.abs(amount)))).astype(jnp.int32)
-    return apply_indirect_hp_change(state, defender_idx, damage)
+    healing = jnp.asarray(percent).reshape(()) < 0
+    heal_blocked = healing & (state.volatile_status.heal_block_turns[defender_idx, 0] > 0)
+    return jax.lax.cond(heal_blocked, _keep_hp_state, _apply_percent_hp_change,
+                        state, defender_idx, percent)

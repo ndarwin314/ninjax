@@ -13,7 +13,7 @@ from flax import struct
 from jumanji import specs
 
 from ninjax.records.events import CAPACITY, TransitionEvents
-from ninjax.restrictions import allowed_moves
+from ninjax.restrictions import active_restriction_mask
 
 
 class _Block:
@@ -57,6 +57,8 @@ class ActiveObservation(_Block):
     encore_move_id: jax.Array
     encore_turns: jax.Array
     taunt_turns: jax.Array
+    throat_chop_turns: jax.Array
+    heal_block_turns: jax.Array
     confused: jax.Array
     substitute: jax.Array
     charging_move_id: jax.Array
@@ -136,13 +138,7 @@ def observe(env, state):
 
     disabled = t.moves.disabled[..., 0]
     disabled = disabled.at[jnp.arange(2), b.active_index[:, 0]].set(
-        disabled[jnp.arange(2), b.active_index[:, 0]] | ~allowed_moves(b.active_move_field('identifier')[..., 0], b.active_move_field('move_type')[..., 0],
-            disabled_move_id=b.volatile_status.disabled_move_id,
-            disable_turns=b.volatile_status.disable_turns,
-            taunt_turns=b.volatile_status.taunt_turns,
-            encore_move_id=b.volatile_status.encore_move_id,
-            encore_turns=b.volatile_status.encore_turns,
-            gravity_duration=b.gravity_duration))
+        disabled[jnp.arange(2), b.active_index[:, 0]] | ~active_restriction_mask(b))
     team = dict(species=masked(t.species[..., 0], species_known), species_known=species_known,
         form=masked(t.form[..., 0], species_known),
         hp_fraction=jnp.where(public, hp, 0), hp_known=public,
@@ -161,6 +157,8 @@ def observe(env, state):
                   encore_move_id=relative(jnp.where(b.volatile_status.encore_turns[:, 0] > 0, b.volatile_status.encore_move_id[:, 0], 0)),
                   encore_turns=relative(b.volatile_status.encore_turns[:, 0]),
                   taunt_turns=relative(b.volatile_status.taunt_turns[:, 0]),
+                  throat_chop_turns=relative(b.volatile_status.throat_chop_turns[:, 0]),
+                  heal_block_turns=relative(b.volatile_status.heal_block_turns[:, 0]),
                   confused=relative(b.volatile_status.confusion_turns[:, 0] > 0),
                   substitute=relative(b.volatile_status.substitute_hp[:, 0] > 0),
                   charging_move_id=relative(b.volatile_status.charging_move_id[:, 0]),
@@ -204,7 +202,7 @@ def observation_spec():
         'level', 'ability', 'ability_known', 'item', 'item_known', 'sheet_known', 'selected')}
     team.update(stats=(2, 2, 6, 6), types=(2, 2, 6, 2), nature=(2, 2, 6, 2))
     team.update({name: (2, 2, 6, 4) for name in ('moves', 'moves_known', 'move_pp', 'move_max_pp', 'move_disabled')})
-    active = {name: (2, 2) for name in ('slot', 'flash_fire', 'perish_turns', 'disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns', 'confused', 'substitute', 'charging_move_id', 'recharging', 'destiny_bond', 'roost', 'active_move_actions', 'previous_move_result')}
+    active = {name: (2, 2) for name in ('slot', 'flash_fire', 'perish_turns', 'disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns', 'throat_chop_turns', 'heal_block_turns', 'confused', 'substitute', 'charging_move_id', 'recharging', 'destiny_bond', 'roost', 'active_move_actions', 'previous_move_result')}
     active.update(boosts=(2, 2, 6), accuracy_evasion=(2, 2, 2))
     sides = {f.name: (2, 2) for f in fields(SideObservation)}
     field = {f.name: (2,) for f in fields(FieldObservation)}

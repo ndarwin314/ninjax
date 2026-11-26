@@ -17,6 +17,7 @@ from ninjax.battle.residuals import (
 )
 from ninjax.enums.field import Terrain, Weather
 from ninjax.records.events import Cause
+from ninjax.restrictions import tick_hit_restrictions
 from ninjax.side.faint_effects import direct_faint, resolve_faints
 from ninjax.side.item_effects import refresh_paradox, update_items
 from ninjax.side.state import BattleState
@@ -91,6 +92,7 @@ def step_field(
     state = run_hp_residuals(state, (ResidualHPPhase.WEATHER, ResidualHPPhase.GRASSY_TERRAIN), order)
     key, state = lax.cond(state.winner < 0, _before_status, _skip_ordered_group, key, state, order)
     state = run_hp_residuals(state, (ResidualHPPhase.POISON, ResidualHPPhase.BURN), order)
+    state = lax.cond(state.winner < 0, tick_hit_restrictions, _keep_hit_restrictions, state, order)
     key, state = lax.cond(state.winner < 0, _perish_residual, _skip_residual_effects, key, state)
     key, state = lax.cond(state.winner < 0, _late_residuals, _skip_ordered_group, key, state, order)
 
@@ -106,3 +108,8 @@ def step_field(
     )
 
     return key, refresh_paradox(state)
+
+
+def _keep_hit_restrictions(state, order):
+    """Leave move restriction timers alone once the battle is terminal."""
+    return state

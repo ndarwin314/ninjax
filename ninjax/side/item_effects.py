@@ -10,6 +10,7 @@ from ninjax.enums.field import TerrainEnum as T, WeatherEnum as W
 from ninjax.enums.items import ItemEnum as I
 from ninjax.enums.moves import MoveType
 from ninjax.enums.pokemon import StatEnum as S, Status, Type
+from ninjax.item_rules import item_is_suppressed
 from ninjax.knowledge import remember_item
 from ninjax.records.events import EventKind, emit
 from ninjax.side.queries import (
@@ -99,7 +100,8 @@ def cheek_pouch(state, player, eaten=True):
     """Heal after a represented berry's own effect, without recursive HP hooks."""
     current_hp = state.active_field('current_hp', player)
     max_hp = state.active_stats(player)[0]
-    hp = _cheek_pouch_hp(current_hp, max_hp, state.ability[player, 0], eaten)
+    can_heal = state.volatile_status.heal_block_turns[player, 0] == 0
+    hp = _cheek_pouch_hp(current_hp, max_hp, state.ability[player, 0], eaten & can_heal)
     state = _emit_hp_change(state, player, current_hp, hp, max_hp)
     return update_active_fields(state, player, current_hp=hp)
 
@@ -203,10 +205,12 @@ def _activate_received_item(state, holder):
     state = white_herb(status_berry(after_hp_change(state, holder), holder), holder)
     v = state.volatile_status
     herb = ((state.active_field('item', holder)[0] == I.MENTAL_HERB) & (state.active_field('current_hp', holder)[0] > 0) &
-            ((v.disable_turns[holder, 0] > 0) | (v.encore_turns[holder, 0] > 0) | (v.taunt_turns[holder, 0] > 0)))
+            ((v.disable_turns[holder, 0] > 0) | (v.encore_turns[holder, 0] > 0) |
+             (v.taunt_turns[holder, 0] > 0) | (v.heal_block_turns[holder, 0] > 0)) &
+            ~item_is_suppressed(state.ability[holder, 0], state.magic_room_duration, v.embargo_turns[holder, 0]))
     state = consume(state, holder, herb)
     v = state.volatile_status
-    for name in ('disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns'):
+    for name in ('disabled_move_id', 'disable_turns', 'encore_move_id', 'encore_turns', 'taunt_turns', 'heal_block_turns'):
         values = getattr(v, name)
         v = v.replace(**{name: values.at[holder, 0].set(jnp.where(herb, 0, values[holder, 0]))})
     return state.replace(volatile_status=v)
@@ -282,8 +286,11 @@ def after_hp_change(state, player):
     item = state.active_field('item', player)
     current_hp = state.active_field('current_hp', player)
     max_hp = state.active_stats(player)[0]
+    heal_block = state.volatile_status.heal_block_turns[player, 0] > 0
     berry = ((item[0] == I.SITRUS_BERRY) & (current_hp[0] > 0) &
-             ((current_hp[0] / max_hp) <= .5) & berry_allowed(state.ability[1-player, 0], state.active_field('current_hp', 1-player)[0]))
+             ((current_hp[0] / max_hp) <= .5) &
+             berry_allowed(state.ability[1-player, 0], state.active_field('current_hp', 1-player)[0]))
+    berry &= ~heal_block
     state = _consume_held_item(state, player, item, berry)
     berry_hp = jnp.minimum(max_hp, current_hp + jnp.where(berry, jnp.maximum(1, max_hp // 4), 0))
     final_hp = _cheek_pouch_hp(berry_hp, max_hp, state.ability[player, 0], berry)

@@ -22,6 +22,7 @@ from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import _apply_move_effects, move_misses
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults, record_hit
+from ninjax.restrictions import move_blocked_by_hit_restrictions
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
 from ninjax.side.item_effects import consume
 from ninjax.side.queries import effective_weather, is_choice_item
@@ -248,8 +249,9 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
 
     # Releases and Struggle bypass initial failure/charge checks. Preserve
     # that priority before selecting Explosion or Electro Shot preparation.
+    called_blocked = v.sleep_talk_active[attacker_index, 0] & move_blocked_by_hit_restrictions(state, attacker_index, move)
     branch = jnp.select(
-        (continued | struggle, fake_fails | sucker_fails, explosion, charge_move),
+        (continued | struggle, fake_fails | sucker_fails | called_blocked, explosion, charge_move),
         (0, 1, 2, 3), default=0)
     key, state, ready = jax.lax.switch(
         branch,

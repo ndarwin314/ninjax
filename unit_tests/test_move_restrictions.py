@@ -1,4 +1,4 @@
-"""Disable, Encore and Taunt state and queued-action behavior."""
+"""Move restriction state, hit effects, and queued-action behavior."""
 import jax
 import jax.numpy as jnp
 import pytest
@@ -10,12 +10,81 @@ from ninjax.enums.abilities import AbilityEnum as A
 from ninjax.enums.field import Terrain, TerrainEnum
 from ninjax.enums.items import ItemEnum as I
 from ninjax.enums.pokemon import Status
+from ninjax.moves.routing import move_not_drawn_in
 from ninjax.moves.status import do_status_move
-from ninjax.restrictions import allowed_moves, resolve_move
+from ninjax.restrictions import allowed_moves, resolve_move, tick_hit_restrictions
+from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.updates import clear_volatile_status, update_active
 from ninjax.teams.construction import make_move
 from unit_tests.test_battle import neutral_type
 from unit_tests.test_curated_moves import equip_move
+
+
+@pytest.fixture(scope='module')
+def route_restriction_hit():
+    """Compile the shared hit path for both restriction moves."""
+    return jax.jit(move_not_drawn_in)
+
+
+@pytest.mark.parametrize('name,blocked_move,timer', [
+    ('Throat Chop', 'Hyper Voice', 'throat_chop_turns'),
+    ('Psychic Noise', 'Recover', 'heal_block_turns'),
+])
+def test_damaging_restriction_is_visible_and_blocks_selection(
+        neutral_type, route_restriction_hit, name, blocked_move, timer):
+    """A successful hit sets the timer and disables just the affected move slots."""
+    key, state = neutral_type
+    state = equip_move(equip_move(state, name), blocked_move, 1)
+    env = Battle(teams=state.team)
+    episode, _ = env.reset(key)
+    assert env.legal_action_mask(episode)[1, 0]
+    _, out = route_restriction_hit(key, episode.battle, 0, 0, 0)
+    assert getattr(out.volatile_status, timer)[1, 0] == 2
+    restricted = episode.replace(battle=out)
+    mask = env.legal_action_mask(restricted)
+    assert not mask[1, 0] and mask[1, 1]
+    assert getattr(env.observe(restricted).active, timer)[1, 0] == 2
+    before_pp = out.active.moves.current_pp[1, 0, 0]
+    _, skipped = step_move(key, out, 1, 0, False)
+    assert skipped.active.moves.current_pp[1, 0, 0] == before_pp
+    assert getattr(clear_volatile_status(out, 1).volatile_status, timer)[1, 0] == 0
+
+
+@pytest.mark.parametrize('name,ability,item,sub_hp,expected', [
+    ('Psychic Noise', A.NONE, I.SITRUS_BERRY, 100, 2),
+    ('Psychic Noise', A.SHIELD_DUST, I.SITRUS_BERRY, 0, 0),
+    ('Psychic Noise', A.AROMA_VEIL, I.SITRUS_BERRY, 0, 0),
+    ('Psychic Noise', A.NONE, I.MENTAL_HERB, 0, 0),
+    ('Throat Chop', A.NONE, I.NONE, 100, 0),
+    ('Throat Chop', A.AROMA_VEIL, I.MENTAL_HERB, 0, 2),
+])
+def test_damaging_restriction_hit_gates(neutral_type, route_restriction_hit, name, ability, item, sub_hp, expected):
+    """Apply the secondary only when the hit and the target allow it."""
+    key, state = neutral_type
+    state = equip_move(state, name)
+    mon = state.active[1]
+    state = update_active(state, 1, mon.replace(
+        current_hp=jnp.asarray([mon.max_hp * 55 // 100]), ability=jnp.asarray([ability]), item=jnp.asarray([item])))
+    v = state.volatile_status
+    state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(sub_hp)))
+    _, out = route_restriction_hit(key, state, 0, 0, 0)
+    timer = out.volatile_status.heal_block_turns if name == 'Psychic Noise' else out.volatile_status.throat_chop_turns
+    assert timer[1, 0] == expected
+    if item == I.SITRUS_BERRY:
+        assert (out.active.item[1, 0] == I.SITRUS_BERRY) == bool(expected)
+        if expected:
+            hp = out.active.current_hp[1, 0]
+            assert hp * 2 <= mon.max_hp
+            assert take_damage_value(out, 1, jnp.array([-10]), False).active.current_hp[1, 0] == hp
+            order = jnp.arange(2)
+            out = tick_hit_restrictions(out, order)
+            assert out.volatile_status.heal_block_turns[1, 0] == 1
+            assert out.active.item[1, 0] == I.SITRUS_BERRY
+            out = tick_hit_restrictions(out, order)
+            assert out.active.item[1, 0] == I.NONE
+            assert out.active.current_hp[1, 0] > hp
+    if item == I.MENTAL_HERB:
+        assert (out.active.item[1, 0] == I.MENTAL_HERB) == (name == 'Throat Chop')
 
 
 def test_taunt_blocks_queued_status_without_pp(neutral_type):
