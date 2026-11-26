@@ -27,23 +27,22 @@ STAT_NAMES = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
 POWER_RULES = {
     'Acrobatics': PowerRule.DOUBLE_WITHOUT_ITEM,
     'Stomping Tantrum': PowerRule.DOUBLE_AFTER_FAILURE,
-    'Stored Power': PowerRule.POSITIVE_STAGES,
-    'Low Kick': PowerRule.TARGET_WEIGHT,
-    'Heavy Slam': PowerRule.WEIGHT_RATIO,
+    'Stored Power': PowerRule.POSITIVE_STAGES, 'Power Trip': PowerRule.POSITIVE_STAGES,
+    'Low Kick': PowerRule.TARGET_WEIGHT, 'Grass Knot': PowerRule.TARGET_WEIGHT,
+    'Heavy Slam': PowerRule.WEIGHT_RATIO, 'Heat Crash': PowerRule.WEIGHT_RATIO,
     'Weather Ball': PowerRule.DOUBLE_IN_WEATHER,
     'Knock Off': PowerRule.REMOVABLE_ITEM_BOOST,
     'Rising Voltage': PowerRule.DOUBLE_ON_GROUNDED_ELECTRIC_TARGET,
     'Hex': PowerRule.TARGET_STATUS, 'Infernal Parade': PowerRule.TARGET_STATUS,
-    'Eruption': PowerRule.USER_HP, 'Water Spout': PowerRule.USER_HP,
-    'Dragon Energy': PowerRule.USER_HP,
+    'Eruption': PowerRule.USER_HP, 'Water Spout': PowerRule.USER_HP, 'Dragon Energy': PowerRule.USER_HP,
     'Crush Grip': PowerRule.TARGET_HP_120, 'Hard Press': PowerRule.TARGET_HP_100,
     'Electro Ball': PowerRule.ELECTRO_BALL, 'Gyro Ball': PowerRule.GYRO_BALL,
     'Facade': PowerRule.USER_STATUS_MODIFIER,
     'Venoshock': PowerRule.TARGET_POISON_MODIFIER, 'Barb Barrage': PowerRule.TARGET_POISON_MODIFIER,
     'Brine': PowerRule.TARGET_HALF_HP_MODIFIER,
     'Psyblade': PowerRule.ELECTRIC_TERRAIN_MODIFIER,
-    'Collision Course': PowerRule.SUPER_EFFECTIVE_MODIFIER,
-    'Electro Drift': PowerRule.SUPER_EFFECTIVE_MODIFIER,
+    'Collision Course': PowerRule.SUPER_EFFECTIVE_MODIFIER, 'Electro Drift': PowerRule.SUPER_EFFECTIVE_MODIFIER,
+    'Terrain Pulse': PowerRule.DOUBLE_IN_TERRAIN
 }
 
 # Showdown's Terastallized form names use the same Ivy Cudgel typing.

@@ -230,7 +230,7 @@ def move_overrides(state, player, move):
     # Weather Ball's power is a ModifyMove effect, coupled to its type change.
     # All BasePower callbacks are evaluated later from live hit-time inputs.
     double_in_weather = (move.power_rule == PowerRule.DOUBLE_IN_WEATHER) & (weather != W.NONE)
-    double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != W.NONE)
+    double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != W.NONE) & (state.is_grounded(player))
     power = jnp.where(double_in_weather | double_in_terrain, move.base_power * 2, move.base_power)
     move_type = _override_type(state, player, ident, move.type, weather, terrain, types, item)
     priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
@@ -277,7 +277,7 @@ def _override_type(
     move_type = jnp.where(weather_ball & (weather == W.RAIN), Type.WATER, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SANDSTORM), Type.ROCK, move_type)
     move_type = jnp.where(weather_ball & (weather == W.SNOW), Type.ICE, move_type)
-    terrain_pulse = (ident == 805) & (terrain != T.NONE)
+    terrain_pulse = (ident == 805) & (terrain != T.NONE) & state.is_grounded(player)
     move_type = jnp.where(terrain_pulse & (terrain == T.ELECTRIC), Type.ELECTRIC, move_type)
     move_type = jnp.where(terrain_pulse & (terrain == T.GRASSY), Type.GRASS, move_type)
     move_type = jnp.where(terrain_pulse & (terrain == T.MISTY), Type.FAIRY, move_type)

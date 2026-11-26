@@ -32,6 +32,13 @@ def proportional_hp_base_power(scale, current_hp, max_hp):
     """Resolve base power for moves that deal damage based on proportion of HP remaining"""
     return jnp.maximum(scale * current_hp // jnp.maximum(max_hp, 1), 1)
 
+def low_hp_base_power(current_hp, max_hp):
+    hp_factor = (48 * current_hp) // jnp.maximum(max_hp, 1)
+    jnp.select(
+        [hp_factor <= 48, hp_factor <= 32, hp_factor <= 16, hp_factor <= 9, hp_factor <= 4, hp_factor <= 1],
+        [20, 40, 80, 100, 150, 200],
+    )
+
 
 def target_hp_base_power(scale, current_hp, max_hp):
     """Resolve base power for moves that deal damage based on the proportion of opponent's hp remaining"""
@@ -88,7 +95,8 @@ def resolve_hit_base_power(base_power, rule, user_hp=1, user_max_hp=1, target_hp
          rule == PowerRule.POSITIVE_STAGES, rule == PowerRule.TARGET_WEIGHT,
          rule == PowerRule.WEIGHT_RATIO,
          (rule == PowerRule.DOUBLE_ON_GROUNDED_ELECTRIC_TARGET) &
-         (terrain_type == TerrainEnum.ELECTRIC) & grounded_target),
+         (terrain_type == TerrainEnum.ELECTRIC) & grounded_target,
+         rule == PowerRule.LOW_HP_POWER),
         (status_base_power(base_power, target_status, target_ability),
          proportional_hp_base_power(base_power, user_hp, user_max_hp),
          target_hp_base_power(120, target_hp, target_max_hp),
@@ -96,7 +104,7 @@ def resolve_hit_base_power(base_power, rule, user_hp=1, user_max_hp=1, target_hp
          electro_ball_base_power(user_speed, target_speed),
          gyro_ball_base_power(user_speed, target_speed), base_power * 2,
          base_power * 2, base_power + 20 * positive_stages, weight_power,
-         ratio_power, base_power * 2), default=base_power).astype(jnp.int32)
+         ratio_power, base_power * 2, low_hp_base_power(user_hp, user_max_hp)), default=base_power).astype(jnp.int32)
 
 
 def compute_base_power(

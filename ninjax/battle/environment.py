@@ -169,7 +169,11 @@ class Battle(Environment):
             taunt_turns=battle.volatile_status.taunt_turns,
             encore_move_id=battle.volatile_status.encore_move_id,
             encore_turns=battle.volatile_status.encore_turns,
-            gravity_duration=battle.gravity_duration)
+            gravity_duration=battle.gravity_duration,
+            throat_chop_turns=battle.volatile_status.throat_chop_turns,
+            psychic_noise_turns=battle.volatile_status.psychic_nouse_turns,
+            is_sound=moves.sound,
+            is_healing=moves.healing)
 
 
         choice = is_choice_item(items)

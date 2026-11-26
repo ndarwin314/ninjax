@@ -1,4 +1,5 @@
 """Switch-cleared restrictions on move selection and execution."""
+from os import POSIX_SPAWN_CLOSE
 
 import jax.numpy as jnp
 
@@ -10,6 +11,8 @@ from ninjax.side.item_effects import consume
 
 # Scarlet/Violet move durations, separated from residual timing adjustments so
 # a future ruleset can supply different values at a single boundary.
+THROAT_CHOP_TURNS = 2
+PSYCHIC_NOISE_TURNS = 2
 DISABLE_TURNS = 4
 ENCORE_TURNS = 3
 TAUNT_TURNS = 3
@@ -20,8 +23,10 @@ def gravity_blocks_move(identifier, gravity_duration):
     return (gravity_duration > 0) & ((identifier == 136) | (identifier == 19) | (identifier == 340))
 
 
-def allowed_moves(move_ids, move_types, *, disabled_move_id, disable_turns,
-                  taunt_turns, encore_move_id, encore_turns, gravity_duration):
+def allowed_moves(
+        move_ids, move_types, is_sound, is_healing, *, disabled_move_id, disable_turns,
+        taunt_turns, encore_move_id, encore_turns,
+        throat_chop_turns, psychic_noise_turns, gravity_duration):
     """Return restriction eligibility (2, 4) from active move/volatile arrays.
 
     Move IDs/categories have shape (2, 4), restriction arrays (2, 1), and
@@ -30,7 +35,9 @@ def allowed_moves(move_ids, move_types, *, disabled_move_id, disable_turns,
     return (~((disable_turns > 0) & (move_ids == disabled_move_id)) &
             ~((taunt_turns > 0) & (move_types == MoveType.STATUS)) &
             ~gravity_blocks_move(move_ids, gravity_duration) &
-            ((encore_turns <= 0) | (move_ids == encore_move_id)))
+            ((encore_turns <= 0) | (move_ids == encore_move_id)) &
+            ((throat_chop_turns > 0) & is_sound) &
+            ((psychic_noise_turns > 0) & is_healing))
 
 
 def resolve_move(move_ids, move_types, current_pp, index, *, disabled_move_id,
@@ -68,15 +75,21 @@ def apply_restriction(state, attacker, move):
     disable = (ident == 50) & eligible & (last != 0) & (v.disable_turns[target, 0] == 0) & ~protected
     encore = (ident == 227) & encore_ok & (last != 0) & (v.encore_turns[target, 0] == 0) & ~protected
     taunt = (ident == 269) & (v.taunt_turns[target, 0] == 0) & ~protected
+    throat_chop = (ident == 678) & (v.throat_chop_turns[target, 0] == 0) & ~protected
+    psychic_noise = (ident == 917) & (v.psychic_noise_turns[target, 0] == 0) & ~protected
     pending = v.pending_move[target, 0]
     # Showdown's residual countdown depends on whether the target can still act.
     disable_duration = DISABLE_TURNS + (~pending).astype(jnp.int32)
     encore_duration = ENCORE_TURNS + (~pending).astype(jnp.int32)
     taunt_duration = TAUNT_TURNS + (~pending & (v.entry_turn[target, 0] < state.turn_number)).astype(jnp.int32)
+    throat_chop_duration = THROAT_CHOP_TURNS + (~pending & (v.entry_turn[target, 0] < state.turn_number)).astype(jnp.int32)
+    psychic_noise_duration = PSYCHIC_NOISE_TURNS + (~pending & (v.entry_turn[target, 0] < state.turn_number)).astype(jnp.int32)
     v = v.replace(disabled_move_id=v.disabled_move_id.at[target, 0].set(jnp.where(disable, last, v.disabled_move_id[target, 0])),
         disable_turns=v.disable_turns.at[target, 0].set(jnp.where(disable, disable_duration, v.disable_turns[target, 0])),
         encore_move_id=v.encore_move_id.at[target, 0].set(jnp.where(encore, last, v.encore_move_id[target, 0])),
         encore_turns=v.encore_turns.at[target, 0].set(jnp.where(encore, encore_duration, v.encore_turns[target, 0])),
+        throat_chop_turns=v.encore_turns.at[target, 0].set(jnp.where(throat_chop, throat_chop_duration, v.encore_turns[target, 0])),
+        psychic_noise=v.encore_turns.at[target, 0].set(jnp.where(psychic_noise, psychic_noise_duration, v.encore_turns[target, 0])),
         taunt_turns=v.taunt_turns.at[target, 0].set(jnp.where(taunt, taunt_duration, v.taunt_turns[target, 0])))
     state = state.replace(volatile_status=v)
     herb = (disable | encore | taunt) & (state.active_field('item', target)[0] == I.MENTAL_HERB)
@@ -102,6 +115,8 @@ def tick(state):
         disabled_move_id=jnp.where(disable_turns > 0, v.disabled_move_id, 0),
         disable_turns=disable_turns,
         taunt_turns=jnp.maximum(v.taunt_turns-1, 0),
+        throat_chop_turns=jnp.maximum(v.throat_chop_turns - 1, 0),
+        psychic_noise_turns=jnp.maximum(v.psychic_noise_turns - 1, 0),
         encore_move_id=jnp.where(encore_turns > 0, v.encore_move_id, 0),
         encore_turns=encore_turns,
         pending_move=jnp.zeros_like(v.pending_move),

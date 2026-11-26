@@ -6,6 +6,9 @@ import jax.numpy as jnp
 
 from ninjax.enums.base import JaxEnum
 
+class SecondaryEffectType:
+    DEFAULT = 0
+    EXCLUSIVE = 1
 
 class EffectivenessRule(JaxEnum):
     DEFAULT = 0
@@ -40,6 +43,7 @@ class PowerRule(JaxEnum):
     ELECTRIC_TERRAIN_MODIFIER = 18
     SUPER_EFFECTIVE_MODIFIER = 19
     DOUBLE_IN_TERRAIN = 20
+    LOW_HP_POWER = 21
 
 
 class HitRule(JaxEnum):
