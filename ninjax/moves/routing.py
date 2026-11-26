@@ -20,14 +20,17 @@ from ninjax.enums.pokemon import StatEnum, Type, Status
 from ninjax.knowledge import remember_item
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
-from ninjax.moves.properties import absorption_from_fields, effective_move, is_poison_type_user, move_accuracy, substitute_intercepts
+from ninjax.moves.properties import (
+    absorption_from_fields, effective_move, is_poison_type_user, move_accuracy,
+    resolve_move_category, substitute_intercepts,
+)
 from ninjax.moves.status import _status_move_effects, create_shed_tail_substitute
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.field_conditions import clear_target_screens
 from ninjax.side.hp_effects import take_damage_percent
-from ninjax.side.queries import contact_reactions_allowed, is_floating_fields, move_immune_from_fields
+from ninjax.side.queries import ability_against_move, contact_reactions_allowed, is_floating_fields, move_immune_from_fields
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
@@ -80,8 +83,8 @@ def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx,
 
 def _apply_move_effects(key, state, attacker_index, move_index):
     """Skip Struggle accuracy while sharing the downstream hit executor."""
-    move = _selected_hit_move(state, attacker_index, move_index)
-    absorption = absorption_from_fields(move, state.ability[1 - attacker_index])
+    key, move = prepare_hit_move(key, state, attacker_index, state.active_moves(attacker_index, move_index))
+    absorption = absorption_from_fields(move, ability_against_move(state, 1-attacker_index, move))
     # Forced Struggle already uses -1 as its action-local public move marker.
     # Accuracy can write events but does not change the resolved move.
     key, state, ready = jax.lax.cond(
@@ -183,21 +186,33 @@ def move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move_i
 
 def _resolve_and_hit(key, state, attacker_index, move):
     """Resolve a selected move for callers that already checked accuracy."""
-    move = _resolve_hit_move(state, attacker_index, move)
-    absorption = absorption_from_fields(move, state.ability[1 - attacker_index])
+    key, move = prepare_hit_move(key, state, attacker_index, move)
+    absorption = absorption_from_fields(move, ability_against_move(state, 1-attacker_index, move))
     return jax.lax.cond(semi_invulnerable_to_move(state, attacker_index, move),
         _record_move_miss, partial(_move_hits, absorption=absorption),
         key, state, attacker_index, move)
 
 
-def _selected_hit_move(state, player, index):
-    """Read the selected move and resolve its effective hit metadata."""
-    return _resolve_hit_move(state, player, state.active_moves(player, index))
+def _resolve_hit_category(key, state, player, move):
+    """Gather ordinary staged stats before the move is checked for a hit."""
+    stats = state.raw_boosted_stats.astype(jnp.int32)
+    user, target = stats[player], stats[1-player]
+    return resolve_move_category(key, move, state.active_field('level', player)[0],
+        user[StatEnum.ATTACK], user[StatEnum.SPECIAL_ATTACK],
+        target[StatEnum.DEFENSE], target[StatEnum.SPECIAL_DEFENSE])
 
 
-def _resolve_hit_move(state, player, move):
-    """Use synthetic Struggle or resolve an ordinary move exactly once."""
-    return jax.lax.cond(state.event_move == -1, _struggle_move, effective_move, state, player, move)
+def _keep_hit_category(key, state, player, move):
+    """Preserve the move and key for fixed-category attacks."""
+    return key, move
+
+
+def prepare_hit_move(key, state, player, move):
+    """Prepare a transient move once for accuracy, hit routing and damage."""
+    move = jax.lax.cond(state.event_move == -1, _struggle_move, effective_move, state, player, move)
+    identifier = move.identifier[0]
+    return jax.lax.cond(move.implemented[0] & ((identifier == 722) | (identifier == 801)),
+        _resolve_hit_category, _keep_hit_category, key, state, player, move)
 
 
 def apply_pre_damage_move_effects(state, player, move, damaging_hit):
@@ -337,7 +352,7 @@ def _prepare_normal_hit(key, state, attacker_index, move, *, absorption=None):
         protected=v.protected.at[defender_idx, 0].set(jnp.where(breaks, False, v.protected[defender_idx, 0])),
         protection_kind=v.protection_kind.at[defender_idx, 0].set(jnp.where(breaks, ProtectionKind.NONE, v.protection_kind[defender_idx, 0])),
         protect_chain=v.protect_chain.at[defender_idx, 0].set(jnp.where(breaks, 0, v.protect_chain[defender_idx, 0]))))
-    ability = state.ability[defender_idx]
+    ability = ability_against_move(state, defender_idx, move)
     defender_types = state.effective_types(defender_idx)
     defender_item = state.active_field('item', defender_idx)
     defender_hp = state.active_field('current_hp', defender_idx)[0]

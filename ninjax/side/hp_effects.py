@@ -23,16 +23,20 @@ def _damage_fraction_for_player(i, s, *, fractions):
     return take_damage_percent(s, i, fractions[i])
 
 
-def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, source=-1) -> BattleState:
+def take_damage_value(state: BattleState, defender_idx: int, damage: Array, is_attack_damage, source=-1,
+                      *, attack_defender_ability=None) -> BattleState:
     """Apply signed damage, with negative amounts healing the active Pokémon.
 
     Attack damage must already include all calculation modifiers. Callers
     passing Python False use the indirect path. An array flag remains
     dynamic under JIT and gates attack protections at runtime.
+    The hit can supply a move-scoped ability for attack survival checks.
     """
     if is_attack_damage is False:
         return apply_indirect_hp_change(state, defender_idx, damage, source)
-    return _apply_attack_hp_change(state, defender_idx, damage, is_attack_damage, source)
+    if attack_defender_ability is None:
+        attack_defender_ability = state.ability[defender_idx]
+    return _apply_attack_hp_change(state, defender_idx, damage, is_attack_damage, source, attack_defender_ability)
 
 
 def _active_hp_fields(state, player):
@@ -58,10 +62,9 @@ def apply_indirect_hp_change(state, player, damage, source=-1):
 
 
 @jax.jit
-def _apply_attack_hp_change(state, player, damage, attack, source):
+def _apply_attack_hp_change(state, player, damage, attack, source, ability):
     """Apply attack protections, commit HP and check reactive items."""
     slot, old_hp, max_hp = _active_hp_fields(state, player)
-    ability = state.ability[player]
     item = state.team.item[player, slot]
     full = old_hp == max_hp
     # Damage modifiers, including Multiscale, are resolved before HP commits.

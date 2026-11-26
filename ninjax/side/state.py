@@ -15,6 +15,7 @@ from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventBuffer
 from ninjax.records.hits import HitResults
 from ninjax.side.queries import (
+    ability_against_move,
     BURN_IMMUNE_ABILITIES,
     FREEZE_IMMUNE_ABILITIES,
     PARALYSIS_IMMUNE_ABILITIES,
@@ -321,11 +322,12 @@ class BattleState(struct.PyTreeNode):
         remove = (roost if player is None else roost[player]) & ~self.active_field('is_terastallized', player)
         return _roost_types(original_types, remove)
 
-    def is_status_immune(self, player, status):
+    def is_status_immune(self, player, status, *, ability=None):
         """Check status immunity using active types, ability, item and field."""
         types = self.effective_types(player)
         abilities = self.ability
-        ability = abilities[player]
+        if ability is None:
+            ability = abilities[player]
         item = self.active_field('item', player)
         sunny = effective_weather(self.weather.weather, abilities, self.active_field('current_hp')) == WeatherEnum.SUN
 
@@ -349,7 +351,7 @@ class BattleState(struct.PyTreeNode):
 
     def is_immune_to_move(self, player, move):
         """Check an active player's move immunity in the current field."""
-        return move_immune_from_fields(self.effective_types(player), self.ability[player],
+        return move_immune_from_fields(self.effective_types(player), ability_against_move(self, player, move),
                                        self.active_field('item', player), move, self.gravity_duration > 0)
 
     @property

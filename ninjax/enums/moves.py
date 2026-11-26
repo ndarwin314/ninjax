@@ -108,6 +108,8 @@ class MoveFlags(IntFlag):
     BYPASS_SUBSTITUTE = auto()
     SLICING = auto()
     WIND = auto()
+    THAWS_TARGET = auto()
+    IGNORE_ABILITY = auto()
 
     def __eq__(self, other):
         """Compare an enum value with a scalar or traced array value."""

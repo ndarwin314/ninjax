@@ -11,9 +11,9 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, including **445** with represented singles
-effects and **240** unavailable or unreviewed. The pinned random-battle inventory
-has **265 of 348** moves supported, leaving **83** gaps.
+The catalogue contains **685 moves**, including **450** with represented singles
+effects and **235** unavailable or unreviewed. The pinned random-battle inventory
+has **270 of 348** moves supported, leaving **78** gaps.
 These are implementation counts, not exhaustive interaction-parity counts.
 
 The current inventory includes Judgment, Freeze-Dry and Flying Press, as well as
@@ -148,8 +148,10 @@ The existing `secondaries` list describes Fire Fang, Ice Fang, Thunder Fang and
 Triple Arrows, but construction still reads only singular `secondary`. These
 moves still need multiple-effect representation and independent rolls. Tri
 Attack and Dire Claw require custom status-selection rules beyond those lists.
-Similarly, `thawsTarget` is present in the catalogue but is not projected into
-the current Fire-type-only target-thaw path.
+
+Construction projects `thawsTarget` separately from the user's `defrost` flag.
+Hydro Steam, Matcha Gotcha, Scald, Scorching Sands and Steam Eruption thaw a
+surviving frozen target after secondary effects when the hit reaches it.
 
 Freeze-Dry and Flying Press now use shared move-aware effectiveness rules; Wish
 and Future Sight still need pending-effect state, and Seismic Toss still needs
@@ -251,8 +253,9 @@ execution boundary. Extend rule metadata only when implementing its consumers.
 | Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break and is enabled for singles. Aura Wheel has typing for the supplied form. Its species eligibility and Hunger Switch lifecycle remain open. |
 | Item-dependent type override | Judgment | **Implemented:** shared Plate lookup resolves Judgment's type and the matching-type BasePower modifier. Klutz and the represented Magic Room/Embargo timers suppress these Plate effects. Arceus Plate transfer restrictions are checked. |
 | Special effectiveness | Freeze-Dry, Flying Press | **Implemented:** `type_effectiveness_factors` applies the move rule per defending type. Early immunity, hit-time matchup and fallback damage calculation consume the rule; Ground, Gravity and Levitate remain contextual checks. |
-| Weather damage exception | Hydro Steam | Extend **existing** `damage.apply_weather_damage(damage, move_type, weather)` with a move-rule input. Replace the usual sun/Water reduction with Hydro Steam's 1.5 bonus, retaining weather-stage rounding and one call from `compute_damage_multipliers`. |
-| Category selection | Photon Geyser, Shell Side Arm | **New** `properties.resolve_move_category(key, move, level, user_atk, user_spa, target_def, target_spd)` returns `(key, resolved_move)`. Delegate to **new** `properties.photon_geyser_category(atk, spa)` and `properties.shell_side_arm_category(key, level, atk, spa, defense, sp_defense)`; the latter returns `(key, category)` and draws only for a tie. Set category, stat selectors and conditional contact together via **new** `properties.with_damage_category(move, category, physical_contact)`. Gather inputs with **new** `queries.category_stat_fields(state, player)`, preserving stage adjustments while excluding ordinary item/ability stat modifiers. |
+| Weather damage exception | Hydro Steam | **Implemented.** `apply_weather_damage` boosts Hydro Steam by 1.5 in sun and applies the ordinary Water boost in rain. Both use weather-stage rounding. |
+| Category selection | Photon Geyser, Shell Side Arm | `properties.resolve_move_category` sets category, stat selectors and conditional contact together. Both moves are supported. |
+| Ability bypass | Moongeist Beam, Photon Geyser, Sunsteel Strike | Move metadata bypasses represented breakable abilities during accuracy, damage and hit reactions. Ability Shield preserves the holder's ability while the item is active. |
 | Transformation-dependent type/category | Tera Blast, Tera Starstorm | **New** `properties.transformed_move_type(type_rule, default_type, tera_type, is_terastallized, form)` integrates through `_override_type`. Extend `resolve_move_category` for Tera Blast and use **new** `properties.transformation_move_properties(move, tera_type, is_terastallized, form)` for power, target and self-effect changes. Implement these only with the transformation lifecycle and eligibility checks; the existing type/category fields do not unlock complete moves. |
 
 ### Proposed helper contracts and orchestration
@@ -291,24 +294,14 @@ Weather Ball and fixed hit-plan contributions pass through without reapplication
 Terrain Pulse will likewise resolve type and ModifyMove doubling together during
 property preparation, not from a later terrain snapshot.
 
-For keyed category selection, introduce **new**
+Both hit entry points use
 `routing.prepare_hit_move(key, state, player, move) -> (key, resolved_move)`.
-It calls **existing** `effective_move`, gathers category-comparison inputs, and
-calls `properties.resolve_move_category`. Both **existing** `_apply_move_effects`
-and `_resolve_and_hit` use this preparation entry point on their alternative
-execution paths. Preparation occurs once per executed move, after its target is
-known and before accuracy/hit routing; multi-hit execution reuses the resolved
-move. `resolve_damaging_hit` accepts that resolved move and never rerolls category.
-Do not import `execution` from `routing`, which would reverse the current
-module dependency. Pure bookkeeping/priority calls to `effective_move` must
-remain free of random draws.
-
-`category_stat_fields` should use the ordinary stored stat stages without the
-critical-hit/Unaware masks from `raw_boosted_stats`, and exclude ordinary
-stat-modifier events from the comparison. Photon Geyser keeps Special on a tie;
-Shell Side Arm uses its integer physical/special estimates and an explicit keyed
-tie. The actual damage calculation still applies its normal ability/item and
-critical-hit rules after category selection.
+It calls `effective_move` and resolves the category once before accuracy and hit
+routing. Damage and contact checks consume the same transient move. The resolver
+uses the ordinary staged stats from `BattleState.raw_boosted_stats`. Photon
+Geyser keeps Special on a tie. Shell Side Arm compares integer damage estimates
+and draws from the supplied key only on ties. Damage calculation applies its
+normal ability, item and critical-hit rules after category selection.
 
 For effectiveness, add `Move.effectiveness_rule` with a host-assigned enum.
 The shared factor helper accepts that rule alongside the resolved type; it does
@@ -330,11 +323,10 @@ Its priority-0 power boost still belongs to
 `chain_conditional_move_power_modifiers`. Showdown's power callback excludes
 sleep; use the checked callback rather than inferring eligibility from prose.
 
-Photon Geyser also needs its ability-ignoring behavior audited before enabling
-the complete move. Shell Side Arm's random category choice must not be rerolled
-when accuracy, hit routing or damage reads the resolved move. Aura Wheel's
-species and form lifecycle, and transformation side effects remain
-separate requirements.
+Moongeist Beam, Photon Geyser and Sunsteel Strike read a move-scoped defender
+ability. Type immunities, Focus Sash and unbreakable abilities such as Rough
+Skin still apply. Aura Wheel's species and form lifecycle and transformation
+side effects remain separate requirements.
 
 Raging Bull and Brick Break share the `apply_pre_damage_move_effects` hook.
 The pinned Showdown callbacks run after the accuracy, protection and immunity
@@ -373,31 +365,259 @@ Some moves need several of these capabilities.
 
 | Missing support | Example moves | Required extension |
 | --- | --- | --- |
-| Wiring existing primitives | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
-| Conditional damage/type rules | Hydro Steam, Terrain Pulse, Photon Geyser, Shell Side Arm | Complete and review contextual power, category, typing and effectiveness before enabling moves. Freeze-Dry and Flying Press are enabled. |
-| Multiple/custom secondaries | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
-| Residual conditions and trapping | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
-| Delayed effects | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
-| Restrictions and prerequisites | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
-| Charge/recharge/locked sequences | Sky Drop, Giga Impact, Outrage, Rollout | Extend shared continuations for carrying a target and other locked sequences. |
-| Preparation and semi-invulnerability | Focus Punch, Beak Blast, Sky Drop | Preparation timing, pre-execution reactions and carried-target rules. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the shared charge pipeline. |
-| Damage/action/team history | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
-| Protection and survival | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Finish activation, retaliation, bypass and survival rules. Several retaliation branches exist; these move names remain unavailable. Detect shares ordinary Protect. |
-| Switching composition and state transfer | Dragon Tail, Circle Throw, Parting Shot, Revival Blessing | Add damaging forced-switch continuations, Parting Shot's reflection and success rules, and a fainted-party selection for revival. Teleport, Chilly Reception, Baton Pass and Shed Tail use the replacement flow. |
-| Item lifecycle | Thief, Bug Bite, Incinerate, Fling, Recycle, Stuff Cheeks, Teatime | Theft/consumption operations, provenance and recoverable-item history. |
-| Ability/type/form/moveset mutation | Skill Swap, Gastro Acid, Soak, Conversion, Transform, Mimic, Sketch | Eligibility, lifecycle hooks, restoration, copied PP and public knowledge. |
-| Custom stats, healing and costs | Belly Drum, Guard Split, Power Trick, Stockpile, Strength Sap, Synthesis, Revival Blessing | Direct assignments, HP costs, counters, contextual healing and party selection. |
-| Special damage outcomes | Seismic Toss, Final Gambit, Fissure, False Swipe, Present, Steel Beam, Supercell Slam | Fixed/OHKO damage, HP floors, direct costs, randomized outcomes and crash rules. |
-| Field/accuracy conditions | Gravity, Magic Room, Wonder Room, Safeguard, Mist, Magnet Rise, Lock-On, Focus Energy | Application plus lifecycle and consumers for each condition. |
-| Calls and queue manipulation | Metronome, Copycat, Instruct, After You, Quash, Upper Hand, Thunderclap | Call eligibility/history, queued prerequisites and action reordering. |
-| Doubles targeting/combinations | Follow Me, Rage Powder, Ally Switch, Helping Hand, Wide Guard, Dragon Darts, pledges | Target coordinates, redirection, spread plans, per-active queues and combinations. |
-| Transformations | Tera Blast, Tera Starstorm | Eligibility and transformation lifecycle; requests are currently rejected. |
+| [Wiring existing primitives](#wiring-existing-primitives) | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
+| [Conditional damage/type rules](#conditional-damage-and-type-rules) | Terrain Pulse | Complete and review Terrain Pulse's contextual power and type. |
+| [Multiple/custom secondaries](#multiple-and-custom-secondaries) | Fire Fang, Ice Fang, Thunder Fang, Triple Arrows, Tri Attack, Dire Claw | Fixed-shape effect lists, independent rolls and custom status selection. |
+| [Residual conditions and trapping](#residual-conditions-and-trapping) | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Bind, Magma Storm, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
+| [Delayed effects](#delayed-effects) | Wish, Future Sight, Doom Desire, Yawn, Healing Wish | Pending records with side/slot semantics that survive the appropriate switches. |
+| [Restrictions and prerequisites](#restrictions-and-prerequisites) | Torment, Imprison, Throat Chop, Psychic Noise, Gigaton Hammer, Belch, Last Resort | Shared selection/execution checks, timers and relevant history. |
+| [Charge/recharge/locked sequences](#charge-recharge-and-locked-sequences) | Sky Drop, Giga Impact, Outrage, Rollout | Extend shared continuations for carrying a target and other locked sequences. |
+| [Preparation and semi-invulnerability](#preparation-and-semi-invulnerability) | Focus Punch, Beak Blast, Sky Drop | Preparation timing, pre-execution reactions and carried-target rules. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the shared charge pipeline. |
+| [Damage/action/team history](#damage-action-and-team-history) | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
+| [Protection and survival](#protection-and-survival) | Baneful Bunker, Burning Bulwark, Silk Trap, Endure, Feint | Finish activation, retaliation, bypass and survival rules. Several retaliation branches exist; these move names remain unavailable. Detect shares ordinary Protect. |
+| [Switching composition and state transfer](#switching-composition-and-state-transfer) | Dragon Tail, Circle Throw, Parting Shot, Revival Blessing | Add damaging forced-switch continuations, Parting Shot's reflection and success rules, and a fainted-party selection for revival. Teleport, Chilly Reception, Baton Pass and Shed Tail use the replacement flow. |
+| [Item lifecycle](#item-lifecycle) | Thief, Bug Bite, Incinerate, Fling, Recycle, Stuff Cheeks, Teatime | Theft/consumption operations, provenance and recoverable-item history. |
+| [Ability/type/form/moveset mutation](#ability-type-form-and-moveset-mutation) | Skill Swap, Gastro Acid, Soak, Conversion, Transform, Mimic, Sketch | Eligibility, lifecycle hooks, restoration, copied PP and public knowledge. |
+| [Custom stats, healing and costs](#custom-stats-healing-and-costs) | Belly Drum, Guard Split, Power Trick, Stockpile, Strength Sap, Synthesis, Revival Blessing | Direct assignments, HP costs, counters, contextual healing and party selection. |
+| [Special damage outcomes](#special-damage-outcomes) | Seismic Toss, Final Gambit, Fissure, False Swipe, Present, Steel Beam, Supercell Slam | Fixed/OHKO damage, HP floors, direct costs, randomized outcomes and crash rules. |
+| [Field/accuracy conditions](#field-and-accuracy-conditions) | Gravity, Magic Room, Wonder Room, Safeguard, Mist, Magnet Rise, Lock-On, Focus Energy | Application plus lifecycle and consumers for each condition. |
+| [Calls and queue manipulation](#calls-and-queue-manipulation) | Metronome, Copycat, Instruct, After You, Quash, Upper Hand, Thunderclap | Call eligibility/history, queued prerequisites and action reordering. |
+| [Doubles targeting/combinations](#doubles-targeting-and-combinations) | Follow Me, Rage Powder, Ally Switch, Helping Hand, Wide Guard, Dragon Darts, pledges | Target coordinates, redirection, spread plans, per-active queues and combinations. |
+| [Transformations](#transformations) | Tera Blast, Tera Starstorm | Eligibility and transformation lifecycle; requests are currently rejected. |
+
+Use the outlines below as implementation slices. Each slice identifies where to
+store state, when to apply the effect, and what to verify before updating the
+support inventory. Project catalogue descriptors to numeric rules on the host.
+Keep battle data in fixed-shape arrays and advance PRNG keys only for rules
+that require a draw. Use singles as the first checkpoint wherever the full
+effect can be represented there.
+
+#### Wiring existing primitives
+
+- Map Grass Knot to the existing target-weight rule, Heat Crash to the weight
+  ratio rule, and Power Trip to the positive-stage rule in team construction.
+  Read each input at the hit boundary and keep type, category, contact and
+  protection metadata independent of the power rule.
+- Verify weight thresholds and effective weight modifiers. For Power Trip,
+  check positive stages, including accuracy and evasion, and show that
+  negative stages contribute nothing. Compare the wired moves against the
+  existing moves that share their formulas.
+
+#### Conditional damage and type rules
+
+- Resolve Terrain Pulse in `moves.properties` from the effective terrain and
+  the user's grounding at move preparation. Apply the type and power change
+  together. Pass the resolved move to accuracy, immunity and damage so the
+  terrain rule is evaluated once. Keep the ordinary terrain power bonus in
+  its existing damage stage.
+- Verify clear terrain, all four terrains, and airborne and grounded users.
+  Include a case where the resolved type changes an immunity and a case where
+  an item, ability or Gravity changes grounding.
+
+#### Multiple and custom secondaries
+
+- Project `secondaries` into a fixed-capacity effect list with one chance per
+  entry. Reuse the existing status, stage and flinch handlers. Give Tri Attack
+  and Dire Claw a separate selection rule that chooses among the specified
+  statuses after the shared chance succeeds.
+- Run the list in reference order after a hit reaches the Pokémon. Check
+  independent rolls for the Fang moves and Triple Arrows, one status choice
+  per successful custom roll, and the effect of Substitute, Shield Dust,
+  Serene Grace and immunity to the selected status.
+
+#### Residual conditions and trapping
+
+- Add source and recipient identifiers where a condition needs them. Store
+  duration and payload on the affected active slot or side according to the
+  move. Start with Aqua Ring and Salt Cure, then add Leech Seed's paired HP
+  changes and the legal-switch restrictions for Ingrain and partial trapping.
+- Apply healing and damage in the ordered residual phases and use the existing
+  HP and faint path. Give each condition its own switch, faint and transfer
+  policy. Verify expiry, source or target replacement, Salt Cure's type-dependent
+  damage, and when a trapped Pokémon can leave by each supported means.
+
+#### Delayed effects
+
+- Give pending effects a due turn or trigger, an owner and a fixed-capacity
+  payload. Wish follows the target position and stores the healing amount from
+  its user. Future Sight and Doom Desire need a target position and a source
+  reference with the values the eventual hit can still read. Keep Yawn on the
+  affected active Pokémon. Handle Healing Wish as a switch-entry effect.
+- Add scheduling and resolution hooks in the field and switch lifecycles.
+  Deferred hits should reuse hit and faint handling with their original
+  attribution. Test occupied and empty positions, switches on either side,
+  duplicate scheduling, source replacement and entry hazard ordering.
+
+#### Restrictions and prerequisites
+
+- Extend `restrictions` with shared eligibility checks for action masks and
+  execution. Keep volatile restrictions such as Torment, Imprison, Throat Chop
+  and Psychic Noise's healing restriction separate from per-Pokémon history
+  such as Belch's berry condition. Check Psychic Noise at healing entry points
+  and Imprison against the source's current move bank.
+- Record the history Gigaton Hammer and Last Resort require alongside the
+  relevant move-use events. Verify changes between queueing and execution,
+  expired effects, switch cleanup, and the fallback when no ordinary attack
+  remains. Include interrupted and called moves when deciding what counts as
+  use for each prerequisite.
+
+#### Charge, recharge and locked sequences
+
+- Extend the existing `CONTINUED` path with a typed continuation for move ID,
+  actor identity, target and turns or substep. Generalize Hyper Beam's recharge
+  trigger for Giga Impact first. Give Outrage and Rollout separate progression,
+  interruption and completion policies. Store any randomly selected duration
+  once when the sequence starts.
+- Verify PP payment, target selection on continuation, and which outcomes
+  start, advance or end the sequence. Cover protection, misses, fainting,
+  forced switches, and the final confusion or power reset. Sky Drop needs the
+  paired state described in the next outline and a ruleset that includes it.
+
+#### Preparation and semi-invulnerability
+
+- Add preparation hooks after the scheduler has the committed choices and
+  before the action queue executes. Bind preparation to the queued actor slot.
+  Focus Punch checks qualifying damage before its own execution. Beak Blast
+  needs a contact reaction that runs only while the actor is prepared.
+- Reuse the charge lifecycle for existing concealment. For Sky Drop in a
+  historical ruleset, bind carrier and carried target, check each one's action
+  and target eligibility, and release both from every cleanup path. Test
+  Substitute interception, priority, interrupted execution and cleanup when
+  either participant leaves.
+
+#### Damage, action and team history
+
+- Keep separate records for per-hit damage, per-turn action facts and
+  per-Pokémon counters. Extend hit attribution with source and recipient
+  identity, resolved category and damage cause where a consumer needs them.
+  Feed Counter and Mirror Coat from eligible received damage in the same turn.
+- Count Rage Fist hits and Last Respects faints at their respective hit and
+  faint checkpoints. Feed Assurance, Lash Out and Fusion Bolt from the events
+  that qualify for each move during the current turn. Verify multiple hits,
+  Substitute, indirect damage, switch and revival behavior, and turn resets.
+  Public event history can expose selected facts from these records.
+
+#### Protection and survival
+
+- Extend the shared Protect path for activation, consecutive-use rules and
+  expiry. Store the protection kind on the correct active slot or side. Route
+  Baneful Bunker, Burning Bulwark and Silk Trap through their corresponding
+  contact reactions. Resolve Feint's removal before damage and apply Endure in
+  the HP commit path.
+- Verify status versus damage, contact versus non-contact, priority versus
+  spread, repeated uses and bypasses. Check Endure alongside Focus Sash and
+  Sturdy, including multi-hit damage and subsequent residual damage.
+
+#### Switching composition and state transfer
+
+- Have Dragon Tail and Circle Throw submit a forced-switch request after a
+  qualifying hit. Reuse the existing preparation and commitment path. Pass
+  the actual recipient and target survival so Substitute and knockouts can
+  resolve correctly. Parting Shot needs a resolved target after reflection and
+  a success result from stage changes before the departure request.
+- Give Revival Blessing a party-selection request whose mask selects eligible
+  fainted members. Restore HP to the selected party slot and resume the queue
+  from the saved cursor. Verify no-target and no-bench cases, reflection,
+  blocked switches, queued actor replacement and terminal checks.
+
+#### Item lifecycle
+
+- Build theft, destruction, forced consumption and recovery from the item
+  assignment and removal helpers in `side.item_effects`. Record recoverable
+  items by Pokémon and retain the cause of removal to determine eligibility
+  for Recycle. Validate transfer before committing Thief, and route Bug Bite,
+  Fling and Stuff Cheeks through their own consumption or effect trigger.
+- For Teatime, resolve eligible holders in the reference order and apply each
+  item's effect to the proper recipient. Verify item binding, Sticky Hold,
+  suppression, Substitute, fainting and event disclosure. Include a sequence
+  where an item changes hands before a recovery attempt.
+
+#### Ability, type, form and moveset mutation
+
+- Define which identity fields belong to the base Pokémon and which can be
+  overridden during battle. Reuse the effective ability and type readers.
+  Give Skill Swap eligibility checks and ability exit and entry hooks. Route
+  Gastro Acid through suppression and Soak and Conversion through type
+  overrides with explicit cleanup.
+- Keep a bounded overlay for copied stats, types, abilities and move slots.
+  Give Transform, Mimic and Sketch their own lifetime and PP rules. Verify
+  copied versus original slots, switch restoration, suppression and resumption
+  of ability effects, and public information after each mutation.
+
+#### Custom stats, healing and costs
+
+- Separate raw stat overrides from stage changes. Use raw overrides for Guard
+  Split and Power Trick, and record how Stockpile's count relates to its stage
+  changes. Apply Belly Drum's eligibility and HP cost before its Attack change.
+- Keep Strength Sap's heal amount and stat-drop result explicit. Resolve
+  Synthesis's weather at execution, and route Revival Blessing through the
+  party request. Test odd maximum HP, full HP, Heal Block, prevention of stat
+  changes, weather suppression and switch cleanup.
+
+#### Special damage outcomes
+
+- Select the damage rule before committing HP. Share fixed damage for Seismic
+  Toss and Final Gambit while keeping Final Gambit's source HP snapshot and
+  self-faint trigger separate. Give Fissure an OHKO-specific eligibility check
+  and accuracy rule. Apply False Swipe's survival floor only to the recipient
+  covered by its rule.
+- Choose Present's damage or heal result with the battle key. Route Steel
+  Beam's direct cost and Supercell Slam's crash through their attempt
+  finalization triggers. Verify immunity, protection, Substitute, Sturdy,
+  faint attribution and costs on all relevant failed or interrupted attempts.
+
+#### Field and accuracy conditions
+
+- Give each condition an owner, start and end hooks, and a timer where needed.
+  Use field state for Gravity, Magic Room and Wonder Room, side state for
+  Safeguard and Mist, and active state for Magnet Rise and Focus Energy. Store
+  the intended target identity for Lock-On.
+- Pass each live condition into the relevant grounding, item, defense, status,
+  stat, accuracy or critical-hit query. Verify starting and ending mid-turn,
+  reapplication, switch cleanup and interaction with already-queued actions.
+  Include Gravity canceling airborne continuations and Magic Room restoring
+  previously suppressed item effects when it ends.
+
+#### Calls and queue manipulation
+
+- Build called moves on a shared execution entry point with explicit caller,
+  selected move, PP policy, targeting and recursion limits. Resolve Metronome
+  from a reviewed eligibility pool, Copycat from move history, and Instruct
+  from the affected actor's eligible prior action.
+- Keep queue edits in `battle.scheduler`. After You and Quash should change
+  the order of pending actions while preserving actor identity and the
+  execution cursor. Upper Hand and Thunderclap need predicates over the
+  target's queued action. Verify ties, acted and replaced targets, called
+  moves that fail, PP use and the ordering of subsequently queued actions.
+
+#### Doubles targeting and combinations
+
+- Extend active indices and queued actors to include a fixed active-position
+  axis. Add target coordinates and player-relative action masks with one
+  choice per active position. Keep independent battles on the external
+  `vmap` axis.
+- Resolve retargeting and redirection before generating the hit plan. Keep
+  per-target hit results and apply spread reduction and Wide Guard where
+  they belong. Add Helping Hand, Ally Switch, Dragon Darts and coordinated
+  pledges after targeting works. Verify side symmetry, fainted or switched
+  targets, ally protection and singles behavior with one active position.
+
+#### Transformations
+
+- Start with Terastallization. Record per-side use and per-Pokémon
+  transformation state. Use the same eligibility rule for action validation
+  and masks. Schedule transformation at the ruleset's action boundary and
+  publish the appropriate state in observations.
+- Resolve defensive typing, STAB and effective move properties from the
+  transformed snapshot before hit routing. Add Tera Blast's type and category
+  behavior and Tera Starstorm's form and target behavior. Verify once-per-battle
+  eligibility, switching, Stellar interactions and public information. Keep
+  Mega, Z-Move and Dynamax policies behind their own ruleset support.
 
 Supported means the represented singles effect exists, not that every exception
 is complete. Known cross-cutting gaps include status-failure classification,
-protection failure timing, residual ordering, non-Fire target-thaw metadata,
-ability/item interactions and full-environment batching acceptance. In particular,
-the existing Matcha Gotcha implementation does not establish target-thaw parity.
+protection failure timing, residual ordering, ability/item interactions and
+full-environment batching acceptance.
 
 Actions now use `BattleAction(index, move_type)` with `ActionType.ATTACK`,
 `SWITCH`, `CONTINUED`, and `NO_OP`. Queued actions retain this PyTree. The

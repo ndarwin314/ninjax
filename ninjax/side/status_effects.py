@@ -81,17 +81,19 @@ def _unchanged_status(key, old_status, old_sleep, status):
     return key, old_status, old_sleep
 
 
-def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, activate_items=True) -> Tuple[chex.PRNGKey, BattleState]:
+def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, activate_items=True,
+               *, target_ability=None) -> Tuple[chex.PRNGKey, BattleState]:
     """Attempt a major status, returning the key and updated battle state.
 
     Existing status, represented terrain/type/ability immunities, and a NONE status
     prevent the update. Rest delays item activation until its healing completes.
     A key is consumed only when the status is applied.
+    Hit reactions can supply a move-scoped ability for the immunity check.
     """
     old_status = state.active_field('status', side_idx)
     old_sleep = state.active_field('sleep_counter', side_idx)
     already_statused = old_status != Status.NONE
-    is_immune = state.is_status_immune(side_idx, status)
+    is_immune = state.is_status_immune(side_idx, status, ability=target_ability)
     fainted = state.active_field('current_hp', side_idx) <= 0
     # Keep the conditional operands limited to the fields changed by status.
     key, new_status, new_sleep = jax.lax.cond(

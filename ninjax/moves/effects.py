@@ -20,7 +20,7 @@ from ninjax.records.events import Cause, EventKind, emit
 from ninjax.side.field_conditions import set_terrain
 from ninjax.side.hp_effects import apply_indirect_hp_change, take_damage_percent
 from ninjax.side.item_effects import kings_rock_flinch
-from ninjax.side.queries import contact_reactions_allowed, is_powder_immune_fields
+from ninjax.side.queries import ability_against_move, contact_reactions_allowed, is_powder_immune_fields
 from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import apply_confusion, set_status
@@ -87,7 +87,7 @@ def after_every_hit(
     defender_idx = 1 - attacker_idx
     # Keep the pre-contact ability and item snapshots for Aftermath.
     abilities = state.ability
-    defender_ability = abilities[defender_idx]
+    defender_ability = ability_against_move(state, defender_idx, move)
     attacker_ability = abilities[attacker_idx]
     defender_alive = state.active_field('is_alive', defender_idx)
     attacker_item = state.active_field('item', attacker_idx)[0]
@@ -127,11 +127,14 @@ def after_every_hit(
     state = conditional_add_boosts(state, defender_idx, alive & (defender_ability[0] == AbilityEnum.RATTLED) & rattled, StatEnum.SPEED, 1)
     # do on contact effects
     makes_contact = jnp.logical_and(move.contact,  attacker_ability!=AbilityEnum.LONG_REACH)
-    key, state = jax.lax.cond(makes_contact[0], do_contact, _after_every_hit_update_field, key, state, attacker_idx)
+    key, state = jax.lax.cond(makes_contact[0],
+        partial(do_contact, target_ability=defender_ability), _after_every_hit_update_field,
+        key, state, attacker_idx)
     # Aftermath is contact retaliation after the holder faints. Damp prevents
     # it, and Pads/Long Reach/Magic Guard protect the surviving attacker.
 
-    damp = jnp.any((state.ability[:, 0] == AbilityEnum.DAMP) & (state.active_field('current_hp')[:, 0] > 0))
+    damp = ((attacker_ability[0] == AbilityEnum.DAMP) & (state.active_field('current_hp', attacker_idx)[0] > 0) |
+            (defender_ability[0] == AbilityEnum.DAMP) & (state.active_field('current_hp', defender_idx)[0] > 0))
     aftermath = ((defender_ability[0] == AbilityEnum.AFTERMATH) & ~defender_alive[0] & (hit_damage > 0) &
         move.contact[0] & contact_reactions_allowed(attacker_ability[0], attacker_item) & ~damp &
         (attacker_ability[0] != AbilityEnum.MAGIC_GUARD) & (state.active_field('current_hp', attacker_idx)[0] > 0))
@@ -155,7 +158,8 @@ def effect_spore_status(r):
             in_range(0.19, r, 0.3) * Status.SLEEP)
 
 
-def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[chex.PRNGKey, BattleState]:
+def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx,
+               *, target_ability=None) -> Tuple[chex.PRNGKey, BattleState]:
     """Apply contact effects, preserving Pads' protection and public reveals."""
     abilities = state.ability
     defender_ability = abilities[1-attacker_idx]
@@ -211,7 +215,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx) -> Tuple[che
     is_gooey = (defender_ability==AbilityEnum.GOOEY)[0] & reacts
     state = conditional_reduce_boosts(state, attacker_idx, is_gooey, StatEnum.SPEED, 1, True)
 
-    key, state = set_status(key, state, 1 - attacker_idx, status)
+    key, state = set_status(key, state, 1 - attacker_idx, status, target_ability=target_ability)
     return key, state
 
 
@@ -248,7 +252,7 @@ def secondary_effects(key, state, player, move):
     """Roll one supported secondary effect, respecting Shield Dust and survival."""
     key, roll_key = jax.random.split(key)
     target = 1-player
-    ability = state.ability[target, 0]
+    ability = ability_against_move(state, target, move)[0]
     chance = move.secondary_chance[0] * jnp.where(state.ability[player, 0] == A.SERENE_GRACE, 2., 1.)
     triggered = (jax.random.uniform(roll_key) < chance) & (ability != A.SHIELD_DUST) & (state.active_field('current_hp', target)[0] > 0)
     key, state = jax.lax.cond(triggered, _apply_secondary, _unchanged_secondary,

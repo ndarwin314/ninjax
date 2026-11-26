@@ -10782,6 +10782,7 @@
   },
   "Moongeist Beam": {
     "id": "moongeistbeam",
+    "ignoreAbility": true,
     "num": 714,
     "type": "Ghost",
     "category": "Special",
@@ -11726,6 +11727,7 @@
   },
   "Photon Geyser": {
     "id": "photongeyser",
+    "ignoreAbility": true,
     "num": 722,
     "type": "Psychic",
     "category": "Special",
@@ -16669,6 +16671,7 @@
   },
   "Sunsteel Strike": {
     "id": "sunsteelstrike",
+    "ignoreAbility": true,
     "num": 713,
     "type": "Steel",
     "category": "Physical",

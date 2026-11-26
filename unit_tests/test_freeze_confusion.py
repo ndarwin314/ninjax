@@ -11,6 +11,7 @@ from ninjax.enums.pokemon import Status, Type
 from ninjax.moves.effects import secondary_effects
 from ninjax.moves.hit_resolution import resolve_damaging_hit
 from ninjax.moves.properties import move_accuracy
+from ninjax.records.hits import HitRecipient
 from ninjax.side.status_effects import apply_confusion
 from ninjax.side.updates import update_active
 from ninjax.teams.construction import make_move
@@ -96,6 +97,40 @@ def test_freeze_thaw_and_fire_hit(neutral_type):
     fire = make_move('Flamethrower').replace(secondary_chance=jnp.array([0.]))
     _, out, _, _ = resolve_damaging_hit(key, state, 0, fire)
     assert out.active.status[1, 0] == Status.NONE
+
+
+@pytest.fixture(scope='module')
+def resolve_thawing_hit():
+    """Share a compiled hit path for the target thaw cases."""
+    return jax.jit(resolve_damaging_hit)
+
+
+@pytest.mark.parametrize('name', [
+    'Hydro Steam', 'Matcha Gotcha', 'Scald', 'Scorching Sands', 'Steam Eruption',
+])
+def test_explicit_target_thaw_follows_secondaries(neutral_type, resolve_thawing_hit, name):
+    """Every flagged move thaws a frozen target without burning it on that hit."""
+    key, state = neutral_type
+    state = update_active(state, 1, state.active[1].replace(status=jnp.array([Status.FREEZE])))
+    move = make_move(name)
+    assert move.current_pp[0] > 0 and move.thaws_target[0]
+    # Force the burn roll to expose a thaw that happens too early.
+    move = move.replace(secondary_chance=jnp.ones_like(move.secondary_chance))
+    _, out, _, _ = resolve_thawing_hit(key, state, 0, move)
+    assert out.hit_results[0].recipient == HitRecipient.POKEMON
+    assert out.active.status[1, 0] == Status.NONE
+
+
+def test_breaking_substitute_does_not_thaw_target(neutral_type, resolve_thawing_hit):
+    """Hydro Steam leaves the target frozen when its hit breaks Substitute."""
+    key, state = neutral_type
+    state = update_active(state, 1, state.active[1].replace(status=jnp.array([Status.FREEZE])))
+    volatile = state.volatile_status
+    state = state.replace(volatile_status=volatile.replace(substitute_hp=volatile.substitute_hp.at[1, 0].set(1)))
+    _, out, _, _ = resolve_thawing_hit(key, state, 0, make_move('Hydro Steam'))
+    assert out.hit_results[0].recipient == HitRecipient.SUBSTITUTE
+    assert out.volatile_status.substitute_hp[1, 0] == 0
+    assert out.active.status[1, 0] == Status.FREEZE
 
 
 def test_confusion_immunities_and_countdown(neutral_type):

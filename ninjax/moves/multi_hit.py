@@ -92,7 +92,7 @@ def _attempt_multi_hit(args, *, per_hit, index, move, beat_up, attacker_idx, con
     """Check later-hit accuracy and apply its result."""
     key, state, total, hits = args
     # Read accuracy fields after the preceding hit, then roll only when needed.
-    fields = accuracy_fields(state, attacker_idx)
+    fields = accuracy_fields(state, attacker_idx, move)
     key, hit = jax.lax.cond(
         per_hit & (index > 0),
         partial(_check_multi_hit_accuracy, move=move, fields=fields),

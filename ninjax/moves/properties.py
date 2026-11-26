@@ -17,9 +17,47 @@ from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Type
 from ninjax.item_rules import item_is_suppressed, plate_type
 from ninjax.side.queries import (
+    ability_against_move,
     effective_weather,
     is_floating_fields,
 )
+
+
+def _shell_side_arm_tie(key):
+    """Choose a category with one random draw for an equal estimate."""
+    key, choice_key = jax.random.split(key)
+    return key, jax.random.bernoulli(choice_key)
+
+
+def _shell_side_arm_unequal(key):
+    """Skip randomness when one of Shell Side Arm's estimates wins."""
+    return key, jnp.bool_(False)
+
+
+def resolve_move_category(key, move, level, attack, special_attack, defense, special_defense):
+    """Resolve category, stat selectors and contact from staged battle stats.
+
+    The caller supplies stats before item, ability and critical-hit modifiers.
+    """
+    identifier = move.identifier[0]
+    shell_side_arm = identifier == 801
+    # Compare the integer estimates rather than the ratios. Rounding can tie
+    # two different ratios, and the move's estimate always uses 90 power.
+    numerator = (2 * level // 5 + 2) * 90
+    physical = numerator * attack // jnp.maximum(1, defense) // 50
+    special = numerator * special_attack // jnp.maximum(1, special_defense) // 50
+    key, physical_tie = jax.lax.cond(shell_side_arm & (physical == special),
+        _shell_side_arm_tie, _shell_side_arm_unequal, key)
+    use_physical = jnp.where(shell_side_arm, (physical > special) | physical_tie, attack > special_attack)
+    dynamic_category = shell_side_arm | (identifier == 722)
+    contact = int(MoveFlags.CONTACT)
+    flags = (move.move_flags & ~contact) | jnp.where(use_physical, contact, 0)
+    return key, move.replace(
+        move_type=jnp.where(dynamic_category, jnp.where(use_physical, MoveType.PHYSICAL, MoveType.SPECIAL), move.move_type),
+        offensive_stat=jnp.where(dynamic_category, jnp.where(use_physical, StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK), move.offensive_stat),
+        defensive_stat=jnp.where(dynamic_category, jnp.where(use_physical, StatEnum.DEFENSE, StatEnum.SPECIAL_DEFENSE), move.defensive_stat),
+        move_flags=jnp.where(shell_side_arm, flags, move.move_flags),
+    )
 
 
 def effective_move(state, attacker_index, move):
@@ -110,7 +148,7 @@ def absorption_from_fields(move, ability):
 
 def move_accuracy(state, attacker_index, move, absorption=None):
     """Calculate the currently represented accuracy for an individual attempt."""
-    return move_accuracy_from_fields(move, *accuracy_fields(state, attacker_index), absorption=absorption)
+    return move_accuracy_from_fields(move, *accuracy_fields(state, attacker_index, move), absorption=absorption)
 
 
 def is_poison_type_user(state, attacker_index):
@@ -121,12 +159,12 @@ def is_poison_type_user(state, attacker_index):
     return jnp.where(tera & (tera_type != Type.NONE), tera_type == Type.POISON, jnp.any(types == Type.POISON))
 
 
-def accuracy_fields(state, attacker_index):
+def accuracy_fields(state, attacker_index, move):
     """Read the current values needed to check a move's accuracy."""
     abilities = state.ability
     target = 1 - attacker_index
     poison_user = is_poison_type_user(state, attacker_index)
-    return (abilities[attacker_index], abilities[target], state.active_field('item', attacker_index),
+    return (abilities[attacker_index], ability_against_move(state, target, move), state.active_field('item', attacker_index),
             state.weather.weather, abilities, state.active_field('current_hp'),
             state.boosts.acc_boosts[attacker_index, 0], state.boosts.acc_boosts[target, 1],
             state.volatile_status.confusion_turns[target], poison_user)

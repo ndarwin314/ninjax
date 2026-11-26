@@ -130,6 +130,16 @@ class Move(ArrayTree):
         return (self.move_flags & MoveFlags.DEFROST) == MoveFlags.DEFROST
 
     @property
+    def thaws_target(self):
+        """Whether the move thaws a frozen target after secondary effects."""
+        return (self.move_flags & MoveFlags.THAWS_TARGET) == MoveFlags.THAWS_TARGET
+
+    @property
+    def ignore_ability(self):
+        """Whether the move bypasses breakable opposing abilities."""
+        return (self.move_flags & MoveFlags.IGNORE_ABILITY) == MoveFlags.IGNORE_ABILITY
+
+    @property
     def bypass_substitute(self):
         """Whether move metadata explicitly bypasses Substitute."""
         return (self.move_flags & MoveFlags.BYPASS_SUBSTITUTE) == MoveFlags.BYPASS_SUBSTITUTE

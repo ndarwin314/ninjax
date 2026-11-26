@@ -184,6 +184,11 @@ def make_move(name):
             flags |= int(flag)
     if 'flags' in data:
         effects['protectable'] = jnp.array([bool(data['flags'].get('protect'))])
+    # Target thawing is independent of the defrost flag for the user.
+    if data.get('thawsTarget'):
+        flags |= int(MoveFlags.THAWS_TARGET)
+    if data.get('ignoreAbility'):
+        flags |= int(MoveFlags.IGNORE_ABILITY)
     effects['encore_eligible'] = jnp.array([not bool(data.get('flags', {}).get('failencore'))])
     effects['sleep_talk_eligible'] = jnp.array([not bool(data.get('flags', {}).get('nosleeptalk') or data.get('flags', {}).get('charge'))])
     offensive = effects.pop('offensive_stat', jnp.array([1 if physical else 3]))

@@ -13,6 +13,7 @@ from ninjax.enums.pokemon import StatEnum as S, Status, Type
 from ninjax.knowledge import remember_item
 from ninjax.records.events import EventKind, emit
 from ninjax.side.queries import (
+    ability_against_move,
     berry_allowed,
     can_remove_item,
     effective_weather,
@@ -155,7 +156,7 @@ def kings_rock_flinch(key, state, player, move):
     """Roll an independent item secondary once per hit reaching the Pokémon."""
 
     target = 1-player
-    ability = state.ability[target, 0]
+    ability = ability_against_move(state, target, move)[0]
     eligible = ((state.active_field('item', player)[0] == I.KINGS_ROCK) &
         (move.move_type[0] != MoveType.STATUS) & ~move.secondary_flinch[0] &
         # Sheer Force runs before the item adds its secondary. Its later

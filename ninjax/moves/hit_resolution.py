@@ -26,6 +26,7 @@ from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.item_effects import after_hit, consume, remove_item
 from ninjax.side.queries import (
+    ability_against_move,
     effective_weather,
     effective_speed,
     stat_modifier,
@@ -48,9 +49,10 @@ def _damage_substitute(s, *, target_idx, damage):
     return s
 
 
-def _damage_hit_target(s, *, target_idx, damage, attacker_idx):
+def _damage_hit_target(s, *, target_idx, damage, attacker_idx, defender_ability):
     """Commit calculated hit damage with its attacker's source attribution."""
-    return take_damage_value(s, target_idx, damage, True, source=attacker_idx)
+    return take_damage_value(s, target_idx, damage, True, source=attacker_idx,
+                             attack_defender_ability=defender_ability)
 
 
 def _apply_drain(s, *, attacker_idx, defender_ability, healing):
@@ -97,6 +99,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     defender = active[1-attacker_idx]
     # Damage calculation reads the same weather before any HP changes.
     weather = effective_weather(state.weather.weather, active.ability, active.current_hp)
+    # Resolve a hit-local ability without affecting field weather or stored state.
+    hit_defender = defender.replace(ability=ability_against_move(state, 1-attacker_idx, move))
     # Explosion's user has already fainted, but damage uses its pre-faint HP.
     pre_faint_hp = state.volatile_status.explosion_hp[attacker_idx]
     attacker = attacker.replace(current_hp=jnp.where((move.identifier == 153) & (pre_faint_hp > 0), pre_faint_hp, attacker.current_hp))
@@ -104,14 +108,14 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     gravity = state.gravity_duration > 0
     raw_effectiveness, damage_effectiveness = hit_type_effectiveness(
-        move.type, defender.type_list, defender.ability, gravity, move.effectiveness_rule
+        move.type, defender.type_list, hit_defender.ability, gravity, move.effectiveness_rule
     )
     # Base power and held-item reactions receive the raw type matchup.
     user_speed = effective_speed(state, attacker_idx, weather)
     target_speed = effective_speed(state, 1-attacker_idx, weather)
     power = compute_base_power(
         attacker,
-        defender,
+        hit_defender,
         move,
         state.terrain, weather, gravity, raw_effectiveness=raw_effectiveness,
         user_speed=user_speed,
@@ -129,8 +133,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     crit_stage = (move.crit_stage+
                   (attacker.ability==AbilityEnum.SUPER_LUCK)[0] +
                   3*jnp.logical_and(attacker.ability==AbilityEnum.MERCILESS, defender.is_poisoned))
-    crit_chance = CRIT_STAGES[crit_stage] * (defender.ability != AbilityEnum.BATTLE_ARMOR)
-    is_crit = ((random.uniform(one) < crit_chance) | move.always_crit) & (defender.ability != AbilityEnum.BATTLE_ARMOR)
+    crit_chance = CRIT_STAGES[crit_stage] * (hit_defender.ability != AbilityEnum.BATTLE_ARMOR)
+    is_crit = ((random.uniform(one) < crit_chance) | move.always_crit) & (hit_defender.ability != AbilityEnum.BATTLE_ARMOR)
     state = emit(state, EventKind.CRITICAL, 1-attacker_idx, enabled=is_crit)
     damage_roll = random.randint(two, (), minval=85, maxval=101) / 100
 
@@ -143,17 +147,18 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         boosts,
         attacker_idx,
         (attacker.ability==AbilityEnum.UNAWARE) | move.ignore_defensive,
-        defender.ability==AbilityEnum.UNAWARE,
+        hit_defender.ability==AbilityEnum.UNAWARE,
         is_crit,
         offensive_owner=jnp.where(move.identifier[0] == 492, OffensiveStatOwner.TARGET, OffensiveStatOwner.USER)
     )
 
 
     offensive_modifier = stat_modifier(state, attacker_idx, move.offensive_stat, weather)
-    defensive_modifier = stat_modifier(state, 1 - attacker_idx, move.defensive_stat, weather)
+    defensive_modifier = stat_modifier(state, 1 - attacker_idx, move.defensive_stat, weather,
+                                       ability=hit_defender.ability[0])
     base_damage = compute_base_damage(
         attacker.ability,
-        defender.ability,
+        hit_defender.ability,
         attacker.hp_percent,
         attacker.level,
         attacker_stats,
@@ -175,7 +180,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     semi_bonus = ((charging == 19) & ((ident == 16) | (ident == 239))) | (
         (charging == 91) & ((ident == 89) | (ident == 222))) | (
         (charging == 291) & ((ident == 57) | (ident == 250)))
-    damage = compute_damage_multipliers(attacker, defender, weather, move,
+    damage = compute_damage_multipliers(attacker, hit_defender, weather, move,
         base_damage, is_crit, damage_roll, gravity,
         effectiveness=damage_effectiveness, screen=screen,
         user_speed=user_speed, target_speed=target_speed, semi_damage_boost=semi_bonus)
@@ -200,6 +205,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
             target_idx=target_idx,
             damage=damage,
             attacker_idx=attacker_idx,
+            defender_ability=hit_defender.ability,
         ),
         state,
     )
@@ -255,6 +261,12 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         key,
         state,
     )
+    # Explicit target thawing runs after secondaries, so Scald cannot burn a
+    # frozen target on the same hit that thaws it. Substitute blocks the thaw.
+    target_status = state.active_field('status', target_idx)
+    thaw = (move.thaws_target & ~intercepted & (actual_loss > 0) &
+            (state.active_field('current_hp', target_idx) > 0) & (target_status == Status.FREEZE))
+    state = update_active_fields(state, target_idx, status=jnp.where(thaw, Status.NONE, target_status))
     # These moves have explicit after-Substitute callbacks in Scarlet/Violet.
     after_sub = ((ident == 229) | (ident == 830) | (ident == 845)) & (state.active_field('current_hp', attacker_idx)[0] > 0)
     state = jax.lax.cond(

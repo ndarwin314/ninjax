@@ -11,7 +11,7 @@ from ninjax.enums.field import TerrainEnum as T, WeatherEnum as W
 from ninjax.enums.items import ItemEnum as I, ItemEnum
 from ninjax.enums.moves import MoveType
 from ninjax.enums.pokemon import FormEnum, StatEnum as S, Status, Type
-from ninjax.item_rules import plate_type
+from ninjax.item_rules import item_is_suppressed, plate_type
 
 
 BURN_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.WATER_VEIL, AbilityEnum.WATER_BUBBLE, AbilityEnum.THERMAL_EXCHANGE)
@@ -19,6 +19,33 @@ PARALYSIS_IMMUNE_ABILITIES = (AbilityEnum.LIMBER, AbilityEnum.PURIFYING_SALT)
 POISON_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.IMMUNITY)
 FREEZE_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.MAGMA_ARMOR)
 SLEEP_IMMUNE_ABILITIES = (AbilityEnum.PURIFYING_SALT, AbilityEnum.INSOMNIA, AbilityEnum.VITAL_SPIRIT)
+
+
+# Breakable abilities read by the represented hit, damage and reaction paths.
+# Ability IDs are shared by aliases such as Battle Armor and Shell Armor.
+BREAKABLE_HIT_ABILITIES = (
+    A.AURA_BREAK, A.BATTLE_ARMOR, A.BULLET_PROOF, A.DAMP, A.DRY_SKIN,
+    A.EARTH_EATER, A.FILTER, A.FLASH_FIRE, A.FLUFFY, A.FUR_COAT,
+    A.GOOD_AS_GOLD, A.GRASS_PELT, A.HEATPROOF, A.HEAVY_METAL, A.ICE_SCALES,
+    A.IMMUNITY, A.INNER_FOCUS, A.INSOMNIA, A.LEAF_GUARD,
+    A.LEVITATE, A.LIGHT_METAL, A.LIGHTNING_ROD, A.LIMBER, A.MAGMA_ARMOR, A.MARVEL_SCALE, A.MOTOR_DRIVE,
+    A.MULTISCALE, A.OVERCOAT, A.PUNK_ROCK, A.PURIFYING_SALT, A.QUEENLY_MAJESTY,
+    A.SAND_VEIL, A.SAP_SIPPER, A.SHIELD_DUST, A.SNOW_CLOAK, A.SOUNDPROOF,
+    A.STORM_DRAIN, A.STURDY, A.TANGLED_FEET, A.THERMAL_EXCHANGE, A.THICK_FAT,
+    A.UNAWARE, A.VITAL_SPIRIT, A.VOLT_ABSORB, A.WATER_ABSORB, A.WATER_BUBBLE,
+    A.WATER_VEIL, A.WELL_BAKED_BODY,
+    A.WIND_RIDER,
+)
+
+
+def ability_against_move(state, defender, move):
+    """Read the defender's ability for this hit, respecting active Ability Shield."""
+    ability = state.ability[defender]
+    item = state.active_field('item', defender)
+    shield = (item == I.ABILITY_SHIELD) & ~item_is_suppressed(
+        ability, state.magic_room_duration, state.volatile_status.embargo_turns[defender])
+    breakable = jnp.any(ability == jnp.array(BREAKABLE_HIT_ABILITIES, dtype=jnp.int32))
+    return jnp.where(move.ignore_ability & breakable & ~shield, A.NONE, ability)
 
 
 def is_floating(mon):
@@ -143,10 +170,12 @@ def effective_speed(state, player, weather):
         state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
 
 
-def stat_modifier(state, player, indices, weather):
+def stat_modifier(state, player, indices, weather, *, ability=None):
     """Read the shared item, field, and Speed factors for selected stats."""
+    if ability is None:
+        ability = state.ability[player, 0]
     return stat_modifier_from_fields(
-        indices, state.active_field('item', player)[0], state.ability[player, 0],
+        indices, state.active_field('item', player)[0], ability,
         state.active_field('species', player)[0], state.effective_types(player),
         state.active_field('status', player)[0], weather, state.terrain.terrain,
         state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
