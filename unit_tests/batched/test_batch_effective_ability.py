@@ -53,7 +53,7 @@ def test_effective_immunities_transform(neutral_type):
     _, state = neutral_type
     move = make_move('Earthquake')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(ability_override=v.ability_override.at[1, 0].set(A.LEVITATE)))
+    state = state.replace(volatile_status=v.replace(ability_state=v.ability_state.replace(ability_override=v.ability_state.ability_override.at[1, 0].set(A.LEVITATE))))
     batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
     def check(s):
         """Check Ground immunity from the active effective ability."""

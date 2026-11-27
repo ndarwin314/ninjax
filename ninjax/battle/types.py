@@ -40,6 +40,7 @@ class BattleAction(struct.PyTreeNode):
     """Indexed actions with player axis (2,); a selected player has scalar leaves.
 
     Attack indices 0..3 select moves; index 4 selects forced Struggle.
+    During revival, a switch index selects a fainted party member to restore.
     Selection remains a separate team-preview payload, shape (2, 6).
     """
     index: jax.Array
@@ -97,11 +98,12 @@ class BattleParams(struct.PyTreeNode):
 
 
 class Phase(IntEnum):
-    """Phase."""
+    """Decision phase, including a paused turn awaiting a revival target."""
     TEAM_SELECTION = 3
     TURN = 0
     REPLACEMENT = 1
     TERMINAL = 2
+    REVIVAL = 4
 
 
 class EpisodeState(struct.PyTreeNode):

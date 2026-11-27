@@ -21,18 +21,20 @@ def test_switch_transfer(neutral_type, policy, substitute, confusion, taunt, sta
     """Only passable effects and stages survive their matching policy."""
     _, state = neutral_type
     v = state.volatile_status
-    v = v.replace(substitute_hp=v.substitute_hp.at[0, 0].set(12),
-                  confusion_turns=v.confusion_turns.at[0, 0].set(3),
-                  taunt_turns=v.taunt_turns.at[0, 0].set(2),
-                  disable_turns=v.disable_turns.at[0, 0].set(2))
+    v = v.replace(
+        substitute_hp=v.substitute_hp.at[0, 0].set(12),
+        confusion_turns=v.confusion_turns.at[0, 0].set(3),
+        restrictions=v.restrictions.replace(
+            taunt_turns=v.restrictions.taunt_turns.at[0, 0].set(2),
+            disable_turns=v.restrictions.disable_turns.at[0, 0].set(2)))
     boosts = state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 1].set(2))
     state = state.replace(volatile_status=v, boosts=boosts,
                           perish_turns=state.perish_turns.at[0].set(3))
     out = jax.jit(reset_switch_effects)(state, 0, jnp.int32(policy))
     assert out.volatile_status.substitute_hp[0, 0] == substitute
     assert out.volatile_status.confusion_turns[0, 0] == confusion
-    assert out.volatile_status.taunt_turns[0, 0] == taunt
-    assert out.volatile_status.disable_turns[0, 0] == 0
+    assert out.volatile_status.restrictions.taunt_turns[0, 0] == taunt
+    assert out.volatile_status.restrictions.disable_turns[0, 0] == 0
     assert out.boosts.normal_boosts[0, 1] == stage
     assert out.perish_turns[0, 0] == perish
 

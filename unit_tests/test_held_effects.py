@@ -65,14 +65,14 @@ def test_booster_weather_and_switch_reset(neutral_type):
     refresh = jax.jit(refresh_paradox)
     sun = refresh(state.replace(weather=Weather(W.SUN, 5)))
     assert sun.active.item[0, 0] == I.BOOSTER_ENERGY
-    assert sun.volatile_status.paradox_stat[0, 0] == 1
+    assert sun.volatile_status.ability_state.paradox_stat[0, 0] == 1
     boosted = refresh(sun.replace(weather=Weather(W.NONE, 0)))
     assert boosted.active.item[0, 0] == I.NONE
-    assert boosted.volatile_status.paradox_booster[0, 0]
+    assert boosted.volatile_status.ability_state.paradox_booster[0, 0]
     cleared = clear_volatile_status(boosted, 0)
-    assert cleared.volatile_status.paradox_stat[0, 0] == -1
-    assert cleared.volatile_status.choice_lock[0, 0] == -1
-    assert not cleared.volatile_status.paradox_booster[0, 0]
+    assert cleared.volatile_status.ability_state.paradox_stat[0, 0] == -1
+    assert cleared.volatile_status.restrictions.choice_lock[0, 0] == -1
+    assert not cleared.volatile_status.ability_state.paradox_booster[0, 0]
     stats = jax.jit(modify_stats)(boosted, 0, jnp.full(6, 100))
     assert stats[S.ATTACK] == 130
     assert stats[S.DEFENSE] == 100

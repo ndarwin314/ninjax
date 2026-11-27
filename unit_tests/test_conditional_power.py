@@ -52,7 +52,7 @@ def test_live_target_hp(neutral_type, power, name, scale):
 def test_damage_uses_effective_speeds(neutral_type, name, expected_power):
     """Tailwind enters hit-time power independently of the damage-stat path."""
     key, state = neutral_type
-    state = state.replace(tailwind=state.tailwind.at[0, 0].set(4))
+    state = state.replace(side_conditions=state.side_conditions.replace(tailwind=state.side_conditions.tailwind.at[0, 0].set(4)))
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.UNAWARE])))
     move = make_move(name)
     resolve = jax.jit(resolve_damaging_hit)
@@ -114,7 +114,7 @@ def test_migrated_rules_read_hit_time_state(neutral_type, hit, name, expected_po
         ability=jnp.array([A.BATTLE_ARMOR])))
     state = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 1].set(3)))
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(previous_move_result=v.previous_move_result.at[0, 0].set(MoveResult.FAILED)))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(previous_move_result=v.move_history.previous_move_result.at[0, 0].set(MoveResult.FAILED))))
     _, actual, damage, _ = hit(key, state, 0, move)
     fixed = move.replace(power_rule=jnp.array([PowerRule.FIXED]), base_power=jnp.array([expected_power]))
     _, expected, fixed_damage, _ = hit(key, state, 0, fixed)

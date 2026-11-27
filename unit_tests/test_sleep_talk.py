@@ -42,8 +42,8 @@ def test_sleep_talk_calls_move_without_spending_called_pp(neutral_type):
     assert out.active.moves.current_pp[0, 0, 0] == state.active.moves.current_pp[0, 0, 0] - 1
     assert out.active.moves.current_pp[0, 1, 0] == 0
     assert out.active.sleep_counter[0, 0] == 2
-    assert out.volatile_status.called_move_id[0, 0] == make_move('Dragon Pulse').identifier[0]
-    assert out.volatile_status.move_result[0, 0] == MoveResult.SUCCEEDED
+    assert out.volatile_status.called_move.called_move_id[0, 0] == make_move('Dragon Pulse').identifier[0]
+    assert out.volatile_status.move_history.move_result[0, 0] == MoveResult.SUCCEEDED
 
 
 def test_sleep_talk_wakes_or_no_eligible_move(neutral_type):
@@ -71,7 +71,7 @@ def test_sleep_talk_succeeds_when_called_move_fails(neutral_type):
     state = asleep(equip_second(equip_move(state, 'Sleep Talk'), 'Rest'))
     _, out = step_move(key, state, 0, 0, False)
     assert out.hit_results[0].outcome == HitOutcome.FAILED
-    assert out.volatile_status.move_result[0, 0] == MoveResult.SUCCEEDED
+    assert out.volatile_status.move_history.move_result[0, 0] == MoveResult.SUCCEEDED
     assert out.active.moves.current_pp[0, 1, 0] == state.active.moves.current_pp[0, 1, 0]
 
 
@@ -107,7 +107,7 @@ def test_sleep_talk_libero_uses_called_move_type(neutral_type):
     state = update_active(state, 0, state.active[0].replace(ability=jnp.array([A.LIBERO]), type_list=jnp.array([Type.ROCK, Type.NONE])))
     _, out = step_move(key, state, 0, 0, False)
     assert out.active.type_list[0, 0] == Type.DRAGON
-    assert out.volatile_status.libero_used[0, 0]
+    assert out.volatile_status.ability_state.libero_used[0, 0]
 
 
 @pytest.mark.parametrize('old_override', [False, True])
@@ -120,16 +120,17 @@ def test_called_crash_restores_context(neutral_type, old_override):
     state = update_active(state, 0, mon.replace(moves=mon.moves.replace(
         accuracy=mon.moves.accuracy.at[1, 0].set(0.))))
     v = state.volatile_status
-    state = state.replace(event_move=jnp.int32(214), volatile_status=v.replace(
-        encore_overridden=v.encore_overridden.at[0, 0].set(old_override)))
+    state = state.replace(
+        event_context=state.event_context.replace(move_id=jnp.int32(214)),
+        volatile_status=v.replace(queued_move=v.queued_move.replace(encore_overridden=v.queued_move.encore_overridden.at[0, 0].set(old_override))))
     _, out = execute_sleep_talk(key, state, 0, 0)
     assert out.hit_results[0].outcome == HitOutcome.MISS
     assert out.active.current_hp[0, 0] == state.active.current_hp[0, 0] - state.active.max_hp[0] // 2
     assert jnp.array_equal(out.active.moves.current_pp, state.active.moves.current_pp)
-    assert out.event_move == 214
-    assert not out.volatile_status.sleep_talk_active[0, 0]
-    assert out.volatile_status.encore_overridden[0, 0] == old_override
-    assert out.volatile_status.sleep_talk_succeeded[0, 0]
+    assert out.event_context.move_id == 214
+    assert not out.volatile_status.called_move.sleep_talk_active[0, 0]
+    assert out.volatile_status.queued_move.encore_overridden[0, 0] == old_override
+    assert out.volatile_status.called_move.sleep_talk_succeeded[0, 0]
 
 
 @pytest.mark.parametrize('damp', [False, True])
@@ -142,9 +143,9 @@ def test_called_explosion_prepares_and_cleans_up(neutral_type, damp):
     _, out = step_move(key, state, 0, 0, False)
     assert bool(out.active.current_hp[0, 0] == 0) != damp
     assert out.volatile_status.explosion_hp[0, 0] == 0
-    assert not out.volatile_status.sleep_talk_active[0, 0]
-    assert out.event_move == 214
-    assert out.volatile_status.move_result[0, 0] == MoveResult.SUCCEEDED
+    assert not out.volatile_status.called_move.sleep_talk_active[0, 0]
+    assert out.event_context.move_id == 214
+    assert out.volatile_status.move_history.move_result[0, 0] == MoveResult.SUCCEEDED
     assert out.active.moves.current_pp[0, 0, 0] == state.active.moves.current_pp[0, 0, 0] - 1
     assert out.active.moves.current_pp[0, 1, 0] == state.active.moves.current_pp[0, 1, 0]
 

@@ -131,8 +131,8 @@ def observe(env, state):
     ability_known = sheet | relative(b.known_abilities >= 0)
     # The owner's active ability is always visible, even while suppressed.
     current = t.ability[..., 0].at[jnp.arange(2), b.active_index[:, 0]].set(
-        jnp.where(b.volatile_status.ability_override[:, 0] >= 0,
-                  b.volatile_status.ability_override[:, 0], b.active_field('ability')[:, 0]))
+        jnp.where(b.volatile_status.ability_state.ability_override[:, 0] >= 0,
+                  b.volatile_status.ability_state.ability_override[:, 0], b.active_field('ability')[:, 0]))
     abilities = jnp.where(own, relative(current), jnp.where(relative(b.known_abilities >= 0),
         jnp.maximum(relative(b.known_abilities), 0), jnp.where(sheet, relative(t.ability[..., 0]), 0)))
 
@@ -151,24 +151,27 @@ def observe(env, state):
         selected=masked(state.selected, own))
     active = dict(slot=relative(b.active_index[:, 0]), boosts=relative(b.boosts.normal_boosts),
                   accuracy_evasion=relative(b.boosts.acc_boosts),
-                  flash_fire=relative(b.volatile_status.flash_fire[:, 0]), perish_turns=relative(b.perish_turns[:, 0]),
-                  disabled_move_id=relative(jnp.where(b.volatile_status.disable_turns[:, 0] > 0, b.volatile_status.disabled_move_id[:, 0], 0)),
-                  disable_turns=relative(b.volatile_status.disable_turns[:, 0]),
-                  encore_move_id=relative(jnp.where(b.volatile_status.encore_turns[:, 0] > 0, b.volatile_status.encore_move_id[:, 0], 0)),
-                  encore_turns=relative(b.volatile_status.encore_turns[:, 0]),
-                  taunt_turns=relative(b.volatile_status.taunt_turns[:, 0]),
-                  throat_chop_turns=relative(b.volatile_status.throat_chop_turns[:, 0]),
-                  heal_block_turns=relative(b.volatile_status.heal_block_turns[:, 0]),
+                  flash_fire=relative(b.volatile_status.ability_state.flash_fire[:, 0]), perish_turns=relative(b.perish_turns[:, 0]),
+                  disabled_move_id=relative(jnp.where(b.volatile_status.restrictions.disable_turns[:, 0] > 0, b.volatile_status.restrictions.disabled_move_id[:, 0], 0)),
+                  disable_turns=relative(b.volatile_status.restrictions.disable_turns[:, 0]),
+                  encore_move_id=relative(jnp.where(b.volatile_status.restrictions.encore_turns[:, 0] > 0, b.volatile_status.restrictions.encore_move_id[:, 0], 0)),
+                  encore_turns=relative(b.volatile_status.restrictions.encore_turns[:, 0]),
+                  taunt_turns=relative(b.volatile_status.restrictions.taunt_turns[:, 0]),
+                  throat_chop_turns=relative(b.volatile_status.restrictions.throat_chop_turns[:, 0]),
+                  heal_block_turns=relative(b.volatile_status.restrictions.heal_block_turns[:, 0]),
                   confused=relative(b.volatile_status.confusion_turns[:, 0] > 0),
                   substitute=relative(b.volatile_status.substitute_hp[:, 0] > 0),
-                  charging_move_id=relative(b.volatile_status.charging_move_id[:, 0]),
-                  recharging=relative(b.volatile_status.recharging[:, 0]),
+                  charging_move_id=relative(b.volatile_status.continuation.charging_move_id[:, 0]),
+                  recharging=relative(b.volatile_status.continuation.recharging[:, 0]),
                   destiny_bond=relative(b.volatile_status.destiny_bond[:, 0]),
                   roost=relative(b.volatile_status.roost[:, 0]),
-                  active_move_actions=relative(b.volatile_status.active_move_actions[:, 0]),
-                  previous_move_result=relative(b.volatile_status.previous_move_result[:, 0]))
-    sides = {name: relative(getattr(b, name)[:, 0]) for name in
-        ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes', 'reflect', 'light_screen', 'aurora_veil', 'tailwind')}
+                  active_move_actions=relative(b.volatile_status.move_history.active_move_actions[:, 0]),
+                  previous_move_result=relative(b.volatile_status.move_history.previous_move_result[:, 0]))
+    hazards, conditions = b.hazards, b.side_conditions
+    sides = dict(stealth_rocks=relative(hazards.stealth_rocks[:, 0]), sticky_webs=relative(hazards.sticky_webs[:, 0]),
+                 spikes=relative(hazards.spikes[:, 0]), toxic_spikes=relative(hazards.toxic_spikes[:, 0]),
+                 reflect=relative(conditions.reflect[:, 0]), light_screen=relative(conditions.light_screen[:, 0]),
+                 aurora_veil=relative(conditions.aurora_veil[:, 0]), tailwind=relative(conditions.tailwind[:, 0]))
     field = {name: jnp.broadcast_to(jnp.asarray(value, jnp.int32), (2,)) for name, value in dict(
         turn=state.turn, weather=b.weather.weather, weather_duration=b.weather.duration,
         terrain=b.terrain.terrain, terrain_duration=b.terrain.duration,

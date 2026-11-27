@@ -69,20 +69,20 @@ def test_paradox_lifecycle_and_speed(neutral_type, ability, weather, terrain):
     # Stages participate in best-stat choice; HP never does.
     state = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, S.SPEED].set(2)))
     active = refresh_paradox(state)
-    assert active.volatile_status.paradox_stat[0, 0] == S.SPEED
+    assert active.volatile_status.ability_state.paradox_stat[0, 0] == S.SPEED
     assert active.active.item[0, 0] == I.BOOSTER_ENERGY
     assert modify_stats(active, 0, jnp.full(6, 100))[S.SPEED] == 150
     changed = active.replace(boosts=active.boosts.replace(normal_boosts=active.boosts.normal_boosts.at[0, S.ATTACK].set(6)))
-    assert refresh_paradox(changed).volatile_status.paradox_stat[0, 0] == S.SPEED
+    assert refresh_paradox(changed).volatile_status.ability_state.paradox_stat[0, 0] == S.SPEED
     nofield = changed.replace(weather=Weather(W.NONE, 0), terrain=Terrain(T.NONE, 0))
     booster = refresh_paradox(nofield)
     assert booster.active.item[0, 0] == I.NONE
-    assert booster.volatile_status.paradox_stat[0, 0] == S.ATTACK
+    assert booster.volatile_status.ability_state.paradox_stat[0, 0] == S.ATTACK
     assert modify_stats(booster, 0, jnp.full(6, 100))[S.ATTACK] == 130
-    assert refresh_paradox(booster).volatile_status.paradox_stat[0, 0] == S.ATTACK
+    assert refresh_paradox(booster).volatile_status.ability_state.paradox_stat[0, 0] == S.ATTACK
     ended = refresh_paradox(active.replace(weather=Weather(W.NONE, 0), terrain=Terrain(T.NONE, 0),
         team=active.team.replace(item=active.team.item.at[0, 0, 0].set(I.NONE))))
-    assert ended.volatile_status.paradox_stat[0, 0] == -1
+    assert ended.volatile_status.ability_state.paradox_stat[0, 0] == -1
 
 
 @pytest.mark.parametrize('attacker,defender,category,offense,defense,expected', [
@@ -114,15 +114,15 @@ def test_type_change_once_only_on_actual_change(neutral_type, ability):
     state = update_active(state, 0, mon)
     move = state.active[0].moves[0].replace(type=jnp.array([Type.FIRE]))
     same = prepare_type_change(state, 0, move)
-    assert not same.volatile_status.libero_used[0, 0]
+    assert not same.volatile_status.ability_state.libero_used[0, 0]
     changed = prepare_type_change(same, 0, move.replace(type=jnp.array([Type.GRASS])))
     assert changed.active.type_list[0, 0] == Type.GRASS
-    assert changed.volatile_status.libero_used[0, 0]
+    assert changed.volatile_status.ability_state.libero_used[0, 0]
     again = prepare_type_change(changed, 0, move)
     assert again.active.type_list[0, 0] == Type.GRASS
     switched = swap_out(key, changed, 0, 1)
     assert jnp.array_equal(switched.team.type_list[0, 0], jnp.array([Type.FIRE, Type.NONE]))
-    assert not switched.volatile_status.libero_used[0, 0]
+    assert not switched.volatile_status.ability_state.libero_used[0, 0]
     tera = update_active(state, 0, mon.replace(is_terastallized=jnp.array([True])))
     assert prepare_type_change(tera, 0, move.replace(type=jnp.array([Type.GRASS]))).active.type_list[0, 0] == Type.FIRE
 

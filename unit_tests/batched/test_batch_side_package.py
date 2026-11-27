@@ -33,9 +33,12 @@ def test_side_state_reset_compiles_and_batches(neutral_type):
     key, state = neutral_type
     env = Battle(state.team, BattleParams(max_steps_in_episode=1))
     episodes, timesteps = jax.jit(jax.vmap(env.reset))(jax.random.split(key, 2))
-    assert episodes.battle.team.current_hp.shape == (2, 2, 6, 1)
-    assert episodes.battle.volatile_status.ability_override.shape == (2, 2, 1)
-    assert jnp.all(episodes.battle.volatile_status.ability_override == -1)
+    battle = episodes.battle
+    assert battle.team.current_hp.shape == (2, 2, 6, 1)
+    assert battle.hazards.spikes.shape == (2, 2, 1)
+    assert battle.pending_faints.pending.shape == (2, 2)
+    assert battle.volatile_status.restrictions.heal_block_turns.shape == (2, 2, 1)
+    assert jnp.all(battle.volatile_status.ability_state.ability_override == -1)
     assert not jnp.any(timesteps.last())
 
 

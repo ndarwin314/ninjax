@@ -153,8 +153,8 @@ class EventBuffer:
 def emit(state, kind, target=-1, detail=0, before=0, after=0,
          hp_change=0, hp_fraction_change=0., enabled=True):
     """Append only actual events. Overflow is explicit and never overwrites history."""
-    events = _append_event(state.events, state.active_index, state.event_source,
-                           state.event_cause, state.event_move, kind, target, detail,
+    events = _append_event(state.events, state.active_index, state.event_context.source,
+                           state.event_context.cause, state.event_context.move_id, kind, target, detail,
                            before, after, hp_change, hp_fraction_change, enabled)
     return state.replace(events=events)
 
@@ -178,16 +178,18 @@ def _append_event(e, active_index, source, cause, move, kind, target, detail, be
     return e.replace(overflow=e.overflow | (enabled & ~room))
 
 
-_SIDE_CONDITIONS = ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes',
-                    'reflect', 'light_screen', 'aurora_veil', 'tailwind', 'perish_turns')
+_HAZARDS = ('stealth_rocks', 'sticky_webs', 'spikes', 'toxic_spikes')
+_SIDE_CONDITIONS = ('reflect', 'light_screen', 'aurora_veil', 'tailwind')
 
 
 def condition_values(state):
     """Read the field and side values used for scheduler condition events."""
     shared = jnp.array([state.weather.weather, state.terrain.terrain], jnp.int32)
-    sides = tuple(getattr(state, name)[:, 0] for name in _SIDE_CONDITIONS)
+    hazards = tuple(getattr(state.hazards, name)[:, 0] for name in _HAZARDS)
+    sides = tuple(getattr(state.side_conditions, name)[:, 0] for name in _SIDE_CONDITIONS)
     endings = jnp.array([state.trick_room_duration, state.gravity_duration], jnp.int32)
-    return jnp.concatenate((shared, *sides, state.volatile_status.flash_fire[:, 0], endings)).astype(jnp.int32)
+    return jnp.concatenate((shared, *hazards, *sides, state.perish_turns[:, 0],
+                            state.volatile_status.ability_state.flash_fire[:, 0], endings)).astype(jnp.int32)
 
 
 def capture_conditions(before, after):
@@ -199,12 +201,12 @@ def capture_conditions_from_values(old, after):
     """Record condition changes in their existing field and side order."""
     # Detail IDs 0–8 are side conditions, 9 is Flash Fire, and 10–11
     # are Trick Room and Gravity. Other volatile events are emitted elsewhere.
-    sides = len(_SIDE_CONDITIONS) + 1
+    sides = len(_HAZARDS) + len(_SIDE_CONDITIONS) + 2
     kinds = jnp.array([EventKind.WEATHER, EventKind.TERRAIN] + [EventKind.CONDITION] * (sides * 2 + 2))
     targets = jnp.array([-1, -1] + [0, 1] * sides + [-1, -1])
     details = jnp.array([0, 0] + [detail for detail in range(sides) for _ in range(2)] + [10, 11])
-    record = partial(_record_condition, active_index=after.active_index, source=after.event_source,
-                     cause=after.event_cause, move=after.event_move)
+    record = partial(_record_condition, active_index=after.active_index, source=after.event_context.source,
+                     cause=after.event_context.cause, move=after.event_context.move_id)
     events, _ = jax.lax.scan(record, after.events, (kinds, targets, details, old, condition_values(after)))
     return after.replace(events=events)
 

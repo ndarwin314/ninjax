@@ -28,3 +28,23 @@ def plate_type(item):
 def item_is_suppressed(ability, magic_room_duration=0, embargo_turns=0):
     """Check the represented ways an active holder ignores its held item."""
     return (ability == AbilityEnum.KLUTZ) | (magic_room_duration > 0) | (embargo_turns > 0)
+
+
+# Powers for the represented item IDs, grouped by Gen 9 Fling power.
+_FLING_POWERS = (
+    (10, (I.CHOICE_SPECS, I.LEFTOVERS, I.MENTAL_HERB, I.FOCUS_SASH, I.CHOICE_BAND,
+          I.SITRUS_BERRY, I.CHOICE_SCARF, I.WIDE_LENS, I.EXPERT_BELT, I.SILK_SCARF,
+          I.CHESTO_BERRY, I.LUM_BERRY, I.WHITE_HERB, I.AIR_BALLOON, I.POWER_HERB, I.SHED_SHELL)),
+    (30, (I.LIFE_ORB, I.LIGHT_CLAY, I.LOADED_DICE, I.BOOSTER_ENERGY, I.THROAT_SPRAY,
+          I.ABILITY_SHIELD, I.KINGS_ROCK, I.PROTECTIVE_PADS, I.ABSORB_BULB, I.LIGHT_BALL,
+          I.MAGNET, I.SOUL_DEW, I.FLAME_ORB, I.TOXIC_ORB, I.BINDING_BAND)),
+    (60, (I.ROCKY_HELMET, I.WELLSPRING_MASK, I.HEARTHFLAME_MASK, I.CORNERSTONE_MASK, I.LUSTROUS_ORB)),
+    (80, (I.HEAVY_DUTY_BOOTS, I.ASSAULT_VEST, I.WEAKNESS_POLICY)),
+    (90, (I.GRIP_CLAW,) + tuple(plate for plate, _ in PLATE_TYPES)),
+)
+
+
+def fling_power(item):
+    """Read the Gen 9 Fling power, with zero for absent or unknown items."""
+    return jnp.select([jnp.any(item == jnp.array(ids, jnp.int32)) for _, ids in _FLING_POWERS],
+                      [power for power, _ in _FLING_POWERS], default=0)

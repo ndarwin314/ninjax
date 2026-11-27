@@ -2,6 +2,7 @@
 
 Preparation preserves the explicit selection/entry key sequence. A prepared
 forced switch is committed after move routing, before the next actor proceeds."""
+from enum import IntFlag
 from functools import partial
 from typing import NamedTuple
 
@@ -23,7 +24,8 @@ from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.field_conditions import set_terrain, set_weather
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.item_effects import cure_status, update_items
-from ninjax.side.queries import is_floating
+from ninjax.side.queries import ability_against_move, is_floating
+from ninjax.side.trapping import clear_binding
 from ninjax.side.stat_effects import conditional_reduce_boosts
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
@@ -51,6 +53,23 @@ def _identity(x):
     return x
 
 
+class EntryRecovery(IntFlag):
+    """Pending recovery effects and the order to use when both are present."""
+    HEALING_WISH = 1
+    LUNAR_DANCE = 2
+    LUNAR_DANCE_FIRST = 4
+
+
+def queue_entry_recovery(state, player, lunar_dance, enabled):
+    """Queue recovery at the active position in the order it was created."""
+    before = state.entry_recovery[player]
+    new_wish = ~lunar_dance & ((before & EntryRecovery.HEALING_WISH) == 0)
+    dance_first = new_wish & ((before & EntryRecovery.LUNAR_DANCE) != 0)
+    effect = jnp.where(lunar_dance, EntryRecovery.LUNAR_DANCE, EntryRecovery.HEALING_WISH)
+    after = before | effect | jnp.where(dance_first, EntryRecovery.LUNAR_DANCE_FIRST, 0)
+    return state.replace(entry_recovery=state.entry_recovery.at[player].set(jnp.where(enabled, after, before)))
+
+
 class ForcedSwitchRequest(NamedTuple):
     """Local switch operands: scalar enabled/player/slot arrays and a PRNG key.
 
@@ -75,10 +94,18 @@ def forced_switch_move(move):
     return (identifier == 18) | (identifier == 46)
 
 
-def force_switch_target(key, state, attacker, *, wind=True, enabled=True):
+def reflected_switching_source(state, attacker, move):
+    """Return the resolved user of a reflectable switching move."""
+    target = 1 - attacker
+    reflects = (ability_against_move(state, target, move)[0] == AbilityEnum.MAGIC_BOUNCE) & (
+        state.volatile_status.continuation.semi_invulnerability[target, 0] == 0)
+    return jnp.where(reflects, target, attacker)
+
+
+def force_switch_target(key, state, attacker, *, wind=True, enabled=True, damaging=False):
     """Prepare and commit one drag request for either move entry point."""
     key, state, request = jax.lax.cond(
-        enabled, partial(prepare_forced_switch, wind=wind), _no_forced_switch,
+        enabled, partial(prepare_forced_switch, wind=wind, damaging=damaging), _no_forced_switch,
         key, state, attacker)
     return key, execute_forced_switch(state, request)
 
@@ -88,32 +115,35 @@ def _wind_rider_boost(s, *, target):
     return add_boosts(s, target, StatEnum.ATTACK, 1)
 
 
-def _fail_forced_switch(k, s, *, wind_rider, anchored, soundproof, allowed, target, ability, attacker):
+def _fail_forced_switch(k, s, *, wind_rider, anchored, immune, allowed, target, ability, attacker, damaging):
     """Record failure and reveal represented ability-based prevention."""
     s = jax.lax.cond(wind_rider, partial(_wind_rider_boost, target=target), _identity, s)
-    reveal = wind_rider | soundproof | (anchored & jnp.any(allowed))
+    reveal = wind_rider | immune | (anchored & jnp.any(allowed))
     slot = s.active_index[target, 0]
     s = s.replace(known_abilities=s.known_abilities.at[target, slot].set(jnp.where(reveal, ability, s.known_abilities[target, slot])))
     s = emit(s, EventKind.ABILITY, target, detail=ability, enabled=reveal)
     # Drag immunity returns NOT_FAIL when a replacement exists; unlike a
     # missing bench or Wind Rider, it does not boost Stomping Tantrum.
     drag_prevented = anchored & jnp.any(allowed) & ~wind_rider
-    s = record_hit(s, 0, target,
-        jnp.where(soundproof, HitOutcome.IMMUNE,
+    recorded = record_hit(s, 0, target,
+        jnp.where(immune, HitOutcome.IMMUNE,
                   jnp.where(drag_prevented, HitOutcome.HIT, HitOutcome.FAILED)),
         jnp.where(drag_prevented, HitRecipient.POKEMON, HitRecipient.NONE))
+    s = s.replace(hit_results=jax.tree.map(partial(jnp.where, damaging), s.hit_results, recorded.hit_results))
     return _no_forced_switch(k, s, attacker)
 
 
-def _sample_forced_switch(k, s, *, allowed, target):
+def _sample_forced_switch(k, s, *, allowed, target, damaging):
     """Uniformly select a legal replacement and retain its independent entry key."""
     k, select_key, entry_key = random.split(k, 3)
     slot = random.categorical(select_key, jnp.where(allowed, 0., -jnp.inf)).astype(jnp.int32)
     request = ForcedSwitchRequest(jnp.bool_(True), jnp.asarray(target, jnp.int32), slot, entry_key)
+    status_hit = record_hit(s, 0, target, HitOutcome.HIT, HitRecipient.POKEMON)
+    s = s.replace(hit_results=jax.tree.map(partial(jnp.where, damaging), s.hit_results, status_hit.hit_results))
     return k, s, request
 
 
-def prepare_forced_switch(key, state, attacker, *, wind=True):
+def prepare_forced_switch(key, state, attacker, *, wind=True, damaging=False):
     """Resolve drag immunity and sample a replacement without applying entry effects.
 
     Only a successful request splits the key, preserving the selection/entry
@@ -125,22 +155,24 @@ def prepare_forced_switch(key, state, attacker, *, wind=True):
     ability = state.ability[target, 0]
     wind_rider = (ability == AbilityEnum.WIND_RIDER) & wind
     anchored = (ability == AbilityEnum.SUCTION_CUPS) | (ability == AbilityEnum.GUARD_DOG)
-    soundproof = ~jnp.asarray(wind) & (ability == AbilityEnum.SOUNDPROOF)
+    immune = ~jnp.asarray(damaging) & ((ability == AbilityEnum.GOOD_AS_GOLD) |
+                                      (~jnp.asarray(wind) & (ability == AbilityEnum.SOUNDPROOF)))
     allowed = state.roster[target] & (state.team.current_hp[target, :, 0] > 0) & (jnp.arange(6) != state.active_index[target, 0])
-    blocked = wind_rider | anchored | soundproof | ~jnp.any(allowed)
+    blocked = wind_rider | anchored | immune | ~jnp.any(allowed)
     return jax.lax.cond(
         blocked,
         partial(
             _fail_forced_switch,
             wind_rider=wind_rider,
             anchored=anchored,
-            soundproof=soundproof,
+            immune=immune,
             allowed=allowed,
             target=target,
             ability=ability,
             attacker=attacker,
+            damaging=damaging,
         ),
-        partial(_sample_forced_switch, allowed=allowed, target=target),
+        partial(_sample_forced_switch, allowed=allowed, target=target, damaging=damaging),
         key,
         state,
     )
@@ -191,7 +223,7 @@ def reset_switch_effects(state, side_idx, transfer=0):
     volatile = volatile.replace(
         substitute_hp=volatile.substitute_hp.at[side_idx].set(jnp.where(substitute, old.substitute_hp[side_idx], 0)),
         confusion_turns=volatile.confusion_turns.at[side_idx].set(jnp.where(baton, old.confusion_turns[side_idx], 0)),
-        taunt_turns=volatile.taunt_turns.at[side_idx].set(jnp.where(baton, old.taunt_turns[side_idx], 0)))
+        restrictions=volatile.restrictions.replace(taunt_turns=volatile.restrictions.taunt_turns.at[side_idx].set(jnp.where(baton, old.restrictions.taunt_turns[side_idx], 0))))
     current = state.boosts
     current = current.replace(
         normal_boosts=current.normal_boosts.at[side_idx].set(jnp.where(baton, boosts.normal_boosts[side_idx], current.normal_boosts[side_idx])),
@@ -222,9 +254,14 @@ def swap_out(
     # 3. probably stuff im forgetting
     # 4. ahhh palafin, ahhh regenerator
 
-    state = state.replace(event_source=jnp.asarray(side_idx, jnp.int32), event_move=jnp.int32(0), event_cause=jnp.int32(Cause.SWITCH))
+    state = state.replace(
+        event_context=state.event_context.replace(
+            source=jnp.asarray(side_idx, jnp.int32),
+            move_id=jnp.int32(0),
+            cause=jnp.int32(Cause.SWITCH)))
     state = emit(state, EventKind.SWITCH, side_idx, before=state.active_index[side_idx, 0], after=new_active)
     outgoing = state.active[side_idx]
+    state = clear_binding(state, 1 - side_idx)
     state = jax.lax.cond(
         (state.ability[side_idx, 0] == AbilityEnum.NATURAL_CURE) & (outgoing.current_hp[0] > 0),
         partial(_cure_switch_status, side_idx=side_idx),
@@ -235,7 +272,7 @@ def swap_out(
     slot = state.active_index[side_idx, 0]
     known = state.known_abilities
     state = state.replace(known_abilities=known.at[side_idx, slot].set(jnp.where(
-        state.volatile_status.ability_override[side_idx, 0] >= 0, -1, known[side_idx, slot])))
+        state.volatile_status.ability_state.ability_override[side_idx, 0] >= 0, -1, known[side_idx, slot])))
     state = update_active_fields(state, side_idx, type_list=outgoing.base_types)
     state = take_damage_percent(state, side_idx, jnp.where(
         (state.ability[side_idx] == AbilityEnum.REGENERATOR) & (outgoing.current_hp > 0), -1/3, 0))
@@ -249,9 +286,11 @@ def swap_out(
     active = state.active_index.at[side_idx].set(new_active)
     toxic_counter = state.toxic_counter.at[side_idx].set(0)
     state = state.replace(active_index=active, toxic_counter=toxic_counter)
+    state = jax.lax.cond(state.entry_recovery[side_idx] != 0,
+                         partial(_apply_entry_recovery, player=side_idx), _identity, state)
 
     # hazards
-    active = state.effective_active[side_idx]
+    active = state.combat_active[side_idx]
 
     boots = active.item == ItemEnum.HEAVY_DUTY_BOOTS
     is_not_flying = (1 - is_floating(active)) * ~boots
@@ -262,28 +301,28 @@ def swap_out(
     state = take_damage_percent(
         state,
         side_idx,
-        state.stealth_rocks[side_idx] * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8 * is_not_hazard_immune
+        state.hazards.stealth_rocks[side_idx] * calculate_effectiveness_multiplier(Type.ROCK, active.type_list) / 8 * is_not_hazard_immune
     )
 
     # spikes
     state = take_damage_percent(
         state, side_idx,
-        (state.spikes[side_idx] != 0) / (10 - 2 * state.spikes[side_idx]) * is_not_flying * is_not_hazard_immune
+        (state.hazards.spikes[side_idx] != 0) / (10 - 2 * state.hazards.spikes[side_idx]) * is_not_flying * is_not_hazard_immune
     )
 
     # sticky webs
     # so apparently if a pokemon sets webs and a pokemon with mirror armor is effected by them
     # then it applies the stat reduction to that mon, but this only happens if they are on field
     state = conditional_reduce_boosts(state, side_idx,
-        (is_not_flying * state.sticky_webs[side_idx]).reshape(()) != 0, StatEnum.SPEED, 1, False)
+        (is_not_flying * state.hazards.sticky_webs[side_idx]).reshape(()) != 0, StatEnum.SPEED, 1, False)
 
     # toxic spikes
     # only remove is poison type and not floating
-    toxic_spikes = state.toxic_spikes[side_idx] * (1 - jnp.logical_and(is_poison, is_not_flying))
-    toxic_spikes = state.toxic_spikes.at[side_idx].set(toxic_spikes)
-    state = state.replace(toxic_spikes=toxic_spikes)
+    toxic_spikes = state.hazards.toxic_spikes[side_idx] * (1 - jnp.logical_and(is_poison, is_not_flying))
+    toxic_spikes = state.hazards.toxic_spikes.at[side_idx].set(toxic_spikes)
+    state = state.replace(hazards=state.hazards.replace(toxic_spikes=toxic_spikes))
     # this returns 0, 5, 6 for 0, 1, 2
-    status_ = (7 - state.toxic_spikes[side_idx]) * (state.toxic_spikes[side_idx] != 0)
+    status_ = (7 - state.hazards.toxic_spikes[side_idx]) * (state.hazards.toxic_spikes[side_idx] != 0)
     key, state = set_status(key, state, side_idx, status_ * (1-is_poison_immune) * is_not_flying)
 
     #check if switch in is still alive
@@ -297,11 +336,37 @@ def swap_out(
     return state
 
 
+def _apply_entry_recovery(state, *, player):
+    """Spend a Healing Wish or Lunar Dance when a living entrant needs it."""
+    hp = state.active_field('current_hp', player)[0]
+    maximum = state.active_stats(player)[0]
+    flag = state.entry_recovery[player]
+    slot = state.active_index[player, 0]
+    moves = state.team.moves
+    pp = moves.current_pp[player, slot]
+    max_pp = moves.max_pp[player, slot]
+    restore_hp = (hp < maximum) | (state.active_field('status', player)[0] != 0)
+    healing = (flag & EntryRecovery.HEALING_WISH) != 0
+    dancing = (flag & EntryRecovery.LUNAR_DANCE) != 0
+    dance_first = (flag & EntryRecovery.LUNAR_DANCE_FIRST) != 0
+    use_wish = (hp > 0) & healing & restore_hp & ~(dancing & dance_first)
+    use_dance = (hp > 0) & dancing & (jnp.any(pp < max_pp) | (restore_hp & ~use_wish))
+    use = use_wish | use_dance
+    state = take_damage_percent(state, player, jnp.where(use & (hp < maximum), -1., 0.))
+    state = jax.lax.cond(use, partial(cure_status, player=player), _identity, state)
+    moves = state.team.moves.replace(current_pp=state.team.moves.current_pp.at[player, slot].set(
+        jnp.where(use_dance, max_pp, pp)))
+    used = jnp.where(use_wish, EntryRecovery.HEALING_WISH, 0) | jnp.where(use_dance, EntryRecovery.LUNAR_DANCE, 0)
+    used |= jnp.where(use, EntryRecovery.LUNAR_DANCE_FIRST, 0)
+    return state.replace(team=state.team.replace(moves=moves),
+                         entry_recovery=state.entry_recovery.at[player].set(flag & ~used))
+
+
 def swap_is_alive(
     state: BattleState,
     side_idx) -> BattleState:
     """Apply represented weather, terrain, Intimidate and Frisk entry abilities."""
-    active = state.effective_active
+    active = state.combat_active
     attacker = active[side_idx]
     defender_ability = active[1-side_idx].ability
 
@@ -344,12 +409,12 @@ def swap_is_alive(
     download_stat = jnp.where(defenses[StatEnum.DEFENSE] < defenses[StatEnum.SPECIAL_DEFENSE], StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK)
     state = conditional_add_boosts(state, side_idx, (ability == AbilityEnum.DOWNLOAD) & (state.active.current_hp[1-side_idx, 0] > 0), download_stat, 1)
     state = conditional_add_boosts(state, side_idx,
-        (ability == AbilityEnum.WIND_RIDER) & (state.tailwind[side_idx, 0] > 0), StatEnum.ATTACK, 1)
-    old_source = state.event_source
-    state = state.replace(event_source=jnp.asarray(side_idx, jnp.int32))
+        (ability == AbilityEnum.WIND_RIDER) & (state.side_conditions.tailwind[side_idx, 0] > 0), StatEnum.ATTACK, 1)
+    old_source = state.event_context.source
+    state = state.replace(event_context=state.event_context.replace(source=jnp.asarray(side_idx, jnp.int32)))
     state = emit(state, EventKind.ABILITY, side_idx, detail=ability,
                  enabled=(state.weather.weather != previous_weather) | (state.terrain.terrain != previous_terrain))
-    state = state.replace(event_source=old_source)
+    state = state.replace(event_context=state.event_context.replace(source=old_source))
 
 
     balloon = attacker.item[0] == ItemEnum.AIR_BALLOON

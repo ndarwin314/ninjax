@@ -21,6 +21,7 @@ from ninjax.restrictions import tick_hit_restrictions
 from ninjax.side.faint_effects import direct_faint, resolve_faints
 from ninjax.side.item_effects import refresh_paradox, update_items
 from ninjax.side.state import BattleState
+from ninjax.side.trapping import tick_binding
 
 
 def _perish_faint(state, player):
@@ -92,6 +93,7 @@ def step_field(
     state = run_hp_residuals(state, (ResidualHPPhase.WEATHER, ResidualHPPhase.GRASSY_TERRAIN), order)
     key, state = lax.cond(state.winner < 0, _before_status, _skip_ordered_group, key, state, order)
     state = run_hp_residuals(state, (ResidualHPPhase.POISON, ResidualHPPhase.BURN), order)
+    state = run_hp_residuals(tick_binding(state), (ResidualHPPhase.BINDING,), order)
     state = lax.cond(state.winner < 0, tick_hit_restrictions, _keep_hit_restrictions, state, order)
     key, state = lax.cond(state.winner < 0, _perish_residual, _skip_residual_effects, key, state)
     key, state = lax.cond(state.winner < 0, _late_residuals, _skip_ordered_group, key, state, order)
@@ -103,8 +105,11 @@ def step_field(
         trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),
         gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
         magic_room_duration=jnp.maximum(state.magic_room_duration - 1, 0),
-        volatile_status=state.volatile_status.replace(roost=jnp.zeros_like(state.volatile_status.roost),
-            previous_move_result=state.volatile_status.move_result, move_result=jnp.zeros_like(state.volatile_status.move_result)),
+        volatile_status=state.volatile_status.replace(
+            roost=jnp.zeros_like(state.volatile_status.roost),
+            move_history=state.volatile_status.move_history.replace(
+                previous_move_result=state.volatile_status.move_history.move_result,
+                move_result=jnp.zeros_like(state.volatile_status.move_history.move_result))),
     )
 
     return key, refresh_paradox(state)

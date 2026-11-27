@@ -38,7 +38,10 @@ def test_fixed_damage_ignores_screens_and_resistance(neutral_type, name):
     """Fixed damage uses level, half current HP, or the HP difference."""
     key, state = neutral_type
     # Damage is checked directly; the dispatch tests separately cover immunities.
-    state = state.replace(reflect=jnp.ones((2, 1), jnp.int32), light_screen=jnp.ones((2, 1), jnp.int32))
+    state = state.replace(
+        side_conditions=state.side_conditions.replace(
+            reflect=jnp.ones((2, 1), jnp.int32),
+            light_screen=jnp.ones((2, 1), jnp.int32)))
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.MULTISCALE])))
     mon = state.active[0]
     state = update_active(state, 0, mon.replace(current_hp=mon.current_hp // 2))
@@ -61,7 +64,7 @@ def test_drain_uses_actual_loss_before_berry_healing(neutral_type):
     target = target.replace(item=jnp.array([I.SITRUS_BERRY]))
     state = update_active(state, 1, target)
     _, out, _, _ = resolve_damaging_hit(key, state, 0, make_move('Giga Drain').replace(base_power=jnp.array([20])))
-    loss = out.volatile_status.last_damage[1, 0]
+    loss = out.volatile_status.move_history.last_damage[1, 0]
     assert out.active.current_hp[0, 0] == 1+jnp.floor(loss*.5+.5)
 
 
@@ -92,13 +95,13 @@ def test_screens_weather_and_court_change(neutral_type):
     """Aurora Veil needs snow; Light Clay extends it; Court Change swaps it."""
     _, state = neutral_type
     move = make_move('Aurora Veil')
-    assert field_status(state, 0, move).aurora_veil[0, 0] == 0
+    assert field_status(state, 0, move).side_conditions.aurora_veil[0, 0] == 0
     state = state.replace(weather=Weather(W.SNOW, 5))
     state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.LIGHT_CLAY])))
     out = field_status(state, 0, move)
-    assert out.aurora_veil[0, 0] == 8
+    assert out.side_conditions.aurora_veil[0, 0] == 8
     out = field_status(out, 1, make_move('Court Change'))
-    assert out.aurora_veil[1, 0] == 8 and out.aurora_veil[0, 0] == 0
+    assert out.side_conditions.aurora_veil[1, 0] == 8 and out.side_conditions.aurora_veil[0, 0] == 0
 
 
 def test_conditional_move_overrides(neutral_type):
@@ -117,12 +120,15 @@ def test_conditional_move_overrides(neutral_type):
 def test_brick_break_and_hazard_callbacks(neutral_type):
     """Brick Break clears screens and Rapid Spin clears the user's hazards."""
     key, state = neutral_type
-    state = state.replace(reflect=state.reflect.at[1, 0].set(5), light_screen=state.light_screen.at[1, 0].set(5))
+    state = state.replace(
+        side_conditions=state.side_conditions.replace(
+            reflect=state.side_conditions.reflect.at[1, 0].set(5),
+            light_screen=state.side_conditions.light_screen.at[1, 0].set(5)))
     _, out = move_hits(key, equip_move(state, 'Brick Break'), 0, 0)
-    assert out.reflect[1, 0] == out.light_screen[1, 0] == 0
-    state = state.replace(spikes=state.spikes.at[0, 0].set(3))
+    assert out.side_conditions.reflect[1, 0] == out.side_conditions.light_screen[1, 0] == 0
+    state = state.replace(hazards=state.hazards.replace(spikes=state.hazards.spikes.at[0, 0].set(3)))
     _, out, _, _ = resolve_damaging_hit(key, state, 0, make_move('Rapid Spin'))
-    assert out.spikes[0, 0] == 0 and out.boosts.normal_boosts[0, 5] == 1
+    assert out.hazards.spikes[0, 0] == 0 and out.boosts.normal_boosts[0, 5] == 1
 
 
 def test_fixed_damage_still_respects_ghost_immunity(neutral_type):
@@ -165,9 +171,11 @@ def test_low_kick_weight_thresholds(neutral_type, weight, power):
 def test_defog_and_perish_song_soundproof(neutral_type):
     """Defog clears both sides' hazards; Soundproof prevents a Perish counter."""
     key, state = neutral_type
-    state = state.replace(spikes=jnp.ones((2, 1), jnp.int32), terrain=Terrain(T.PSYCHIC, 5))
+    state = state.replace(
+        hazards=state.hazards.replace(spikes=jnp.ones((2, 1), jnp.int32)),
+        terrain=Terrain(T.PSYCHIC, 5))
     _, out = do_status_move(key, state, 0, make_move('Defog'), 0, 0)
-    assert jnp.all(out.spikes == 0) and out.terrain.terrain == T.NONE
+    assert jnp.all(out.hazards.spikes == 0) and out.terrain.terrain == T.NONE
     assert out.boosts.acc_boosts[1, 1] == -1
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.SOUNDPROOF])))
     _, out = do_status_move(key, state, 0, make_move('Perish Song'), 0, 0)
@@ -180,7 +188,8 @@ def test_flinch_interrupts_and_expires(neutral_type):
 
     key, state = neutral_type
     # Force the existing secondary roll without relying on one seed's outcome.
-    move = make_move('Iron Head').replace(secondary_chance=jnp.array([1.]))
+    move = make_move('Iron Head')
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(1.)))
     key, state = secondary_effects(key, state, 0, move)
     assert state.volatile_status.flinched[1, 0]
     pp = state.active.moves.current_pp[1, 0, 0]
@@ -209,7 +218,7 @@ def test_trick_room_and_tailwind_order(neutral_type):
     """Trick Room reverses Speed only within a priority bracket."""
 
     key, state = neutral_type
-    state = state.replace(tailwind=state.tailwind.at[0, 0].set(4))
+    state = state.replace(side_conditions=state.side_conditions.replace(tailwind=state.side_conditions.tailwind.at[0, 0].set(4)))
     assert action_order(key, state, jnp.array([0, 0]))[0] == 0
     state = state.replace(trick_room_duration=5)
     assert action_order(key, state, jnp.array([0, 0]))[0] == 1

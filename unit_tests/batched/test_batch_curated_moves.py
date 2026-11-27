@@ -24,8 +24,8 @@ def test_new_callbacks_jit_vmap_scan(neutral_type):
         return s, move_overrides(s, 0, make_move('Stored Power')).base_power
     batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
     out, powers = jax.jit(jax.vmap(transition))(batch)
-    assert jnp.all(out.light_screen[:, 0, 0] == 5)
+    assert jnp.all(out.side_conditions.light_screen[:, 0, 0] == 5)
     assert jnp.all(out.boosts.normal_boosts[:, 0, 1:] == 1)
     final, _ = jax.jit(lambda s: jax.lax.scan(lambda s, _: transition(s), s, None, length=2))(state)
-    assert final.light_screen[0, 0] == 5
+    assert final.side_conditions.light_screen[0, 0] == 5
     assert jnp.all(final.boosts.normal_boosts[0, 1:] == 2)

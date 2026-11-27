@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from ninjax.calculations.logic import quad_and
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import MoveFlags
 from ninjax.enums.pokemon import StatEnum as S, StatEnum
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
@@ -32,11 +33,16 @@ def _apply_self_ko(s, *, attacker_idx):
 
 def _apply_recoil_damage(state, *, player, damage):
     """Commit recoil with the user's attribution and restore the action context."""
-    source, cause = state.event_source, state.event_cause
-    state = state.replace(event_source=jnp.asarray(player, jnp.int32),
-                          event_cause=jnp.int32(Cause.RECOIL))
+    source, cause = state.event_context.source, state.event_context.cause
+    state = state.replace(
+        event_context=state.event_context.replace(
+            source=jnp.asarray(player, jnp.int32),
+            cause=jnp.int32(Cause.RECOIL)))
     state = take_damage_value(state, player, damage, False, source=player)
-    return state.replace(event_source=source, event_cause=cause)
+    return state.replace(
+        event_context=state.event_context.replace(
+            source=source,
+            cause=cause))
 
 
 def _apply_move_recoil(state, player, move, hp_lost):
@@ -61,12 +67,12 @@ def finish_damaging_move(state: BattleState, attacker_idx, move: Move, hp_lost, 
 
     state = _apply_move_recoil(state, attacker_idx, move, hp_lost)
 
-    # Hyper Beam requires recharge after a successful hit, including a hit
+    # Recharge moves require a successful hit, including a hit
     # on Substitute or a knockout. Misses and blocked attempts never reach here.
     v = state.volatile_status
-    recharge = (move.identifier[0] == 63) & (state.active.current_hp[attacker_idx, 0] > 0)
-    state = state.replace(volatile_status=v.replace(recharging=v.recharging.at[attacker_idx, 0].set(
-        v.recharging[attacker_idx, 0] | recharge)))
+    recharge = ((move.move_flags[0] & MoveFlags.RECHARGE) != 0) & (state.active.current_hp[attacker_idx, 0] > 0)
+    state = state.replace(volatile_status=v.replace(continuation=v.continuation.replace(recharging=v.continuation.recharging.at[attacker_idx, 0].set(
+        v.continuation.recharging[attacker_idx, 0] | recharge))))
     state = emit(state, EventKind.CONDITION, attacker_idx, detail=15, before=0, after=1, enabled=recharge)
     state = jax.lax.cond(
         (state.active.current_hp[attacker_idx, 0] > 0) & self_effect,

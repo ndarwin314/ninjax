@@ -12,7 +12,10 @@ from ninjax.enums.items import ItemEnum as I
 from ninjax.enums.pokemon import Status
 from ninjax.moves.routing import move_not_drawn_in
 from ninjax.moves.status import do_status_move
-from ninjax.restrictions import allowed_moves, resolve_move, tick_hit_restrictions
+from ninjax.restrictions import (
+    active_restriction_mask, allowed_moves, move_blocked_at_execution, resolve_move,
+    tick_hit_restrictions,
+)
 from ninjax.side.hp_effects import take_damage_value
 from ninjax.side.updates import clear_volatile_status, update_active
 from ninjax.teams.construction import make_move
@@ -24,6 +27,38 @@ from unit_tests.test_curated_moves import equip_move
 def route_restriction_hit():
     """Compile the shared hit path for both restriction moves."""
     return jax.jit(move_not_drawn_in)
+
+
+def test_persistent_restrictions_use_the_current_move_bank(neutral_type):
+    """Both restrictions mask selection, and Imprison also blocks a queued move."""
+    key, state = neutral_type
+    state = equip_move(equip_move(state, 'Recover'), 'Recover', 1)
+    v = state.volatile_status
+    history = v.move_history.replace(last_move_id=v.move_history.last_move_id.at[1, 0].set(105))
+    state = state.replace(volatile_status=v.replace(move_history=history))
+    recover = make_move('Recover')
+    status = jax.jit(do_status_move)
+    _, tormented = status(key, state, 0, make_move('Torment'), 0, 0)
+    assert not active_restriction_mask(tormented)[1, 0]
+    assert not move_blocked_at_execution(tormented, 1, recover)
+    _, imprisoned = status(key, state, 0, make_move('Imprison'), 0, 0)
+    assert not active_restriction_mask(imprisoned)[1, 0]
+    assert move_blocked_at_execution(imprisoned, 1, recover)
+    assert not move_blocked_at_execution(imprisoned, 1, recover, called=True)
+    assert active_restriction_mask(clear_volatile_status(imprisoned, 0))[1, 0]
+
+
+@pytest.mark.parametrize('name', ['Gigaton Hammer', 'Blood Moon'])
+def test_cannot_repeat_moves_are_masked_after_use(neutral_type, name):
+    """A move-specific restriction masks only a repeat of the last move."""
+    _, state = neutral_type
+    state = equip_move(state, name)
+    assert active_restriction_mask(state)[0, 0]
+    v = state.volatile_status
+    last = v.move_history.last_move_id.at[0, 0].set(make_move(name).identifier[0])
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(last_move_id=last)))
+    assert not active_restriction_mask(state)[0, 0]
+    assert active_restriction_mask(state)[0, 1]
 
 
 @pytest.mark.parametrize('name,blocked_move,timer', [
@@ -39,7 +74,7 @@ def test_damaging_restriction_is_visible_and_blocks_selection(
     episode, _ = env.reset(key)
     assert env.legal_action_mask(episode)[1, 0]
     _, out = route_restriction_hit(key, episode.battle, 0, 0, 0)
-    assert getattr(out.volatile_status, timer)[1, 0] == 2
+    assert getattr(out.volatile_status.restrictions, timer)[1, 0] == 2
     restricted = episode.replace(battle=out)
     mask = env.legal_action_mask(restricted)
     assert not mask[1, 0] and mask[1, 1]
@@ -47,7 +82,7 @@ def test_damaging_restriction_is_visible_and_blocks_selection(
     before_pp = out.active.moves.current_pp[1, 0, 0]
     _, skipped = step_move(key, out, 1, 0, False)
     assert skipped.active.moves.current_pp[1, 0, 0] == before_pp
-    assert getattr(clear_volatile_status(out, 1).volatile_status, timer)[1, 0] == 0
+    assert getattr(clear_volatile_status(out, 1).volatile_status.restrictions, timer)[1, 0] == 0
 
 
 @pytest.mark.parametrize('name,ability,item,sub_hp,expected', [
@@ -68,7 +103,7 @@ def test_damaging_restriction_hit_gates(neutral_type, route_restriction_hit, nam
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(sub_hp)))
     _, out = route_restriction_hit(key, state, 0, 0, 0)
-    timer = out.volatile_status.heal_block_turns if name == 'Psychic Noise' else out.volatile_status.throat_chop_turns
+    timer = out.volatile_status.restrictions.heal_block_turns if name == 'Psychic Noise' else out.volatile_status.restrictions.throat_chop_turns
     assert timer[1, 0] == expected
     if item == I.SITRUS_BERRY:
         assert (out.active.item[1, 0] == I.SITRUS_BERRY) == bool(expected)
@@ -78,7 +113,7 @@ def test_damaging_restriction_hit_gates(neutral_type, route_restriction_hit, nam
             assert take_damage_value(out, 1, jnp.array([-10]), False).active.current_hp[1, 0] == hp
             order = jnp.arange(2)
             out = tick_hit_restrictions(out, order)
-            assert out.volatile_status.heal_block_turns[1, 0] == 1
+            assert out.volatile_status.restrictions.heal_block_turns[1, 0] == 1
             assert out.active.item[1, 0] == I.SITRUS_BERRY
             out = tick_hit_restrictions(out, order)
             assert out.active.item[1, 0] == I.NONE
@@ -93,55 +128,58 @@ def test_taunt_blocks_queued_status_without_pp(neutral_type):
     state = equip_move(state, 'Recover', 1)
     _, state = do_status_move(key, state, 0, make_move('Taunt'), 0, 0)
     assert not allowed_moves(state.active.moves.identifier[..., 0], state.active.moves.move_type[..., 0],
-        disabled_move_id=state.volatile_status.disabled_move_id,
-        disable_turns=state.volatile_status.disable_turns,
-        taunt_turns=state.volatile_status.taunt_turns,
-        encore_move_id=state.volatile_status.encore_move_id,
-        encore_turns=state.volatile_status.encore_turns,
+        disabled_move_id=state.volatile_status.restrictions.disabled_move_id,
+        disable_turns=state.volatile_status.restrictions.disable_turns,
+        taunt_turns=state.volatile_status.restrictions.taunt_turns,
+        encore_move_id=state.volatile_status.restrictions.encore_move_id,
+        encore_turns=state.volatile_status.restrictions.encore_turns,
         gravity_duration=state.gravity_duration)[1, 0]
     before = state.active.moves.current_pp[1, 0, 0]
     _, out = step_move(key, state, 1, 0, False)
     assert out.active.moves.current_pp[1, 0, 0] == before
-    assert out.volatile_status.taunt_turns[1, 0] == 3
-    assert clear_volatile_status(out, 1).volatile_status.taunt_turns[1, 0] == 0
+    assert out.volatile_status.restrictions.taunt_turns[1, 0] == 3
+    assert clear_volatile_status(out, 1).volatile_status.restrictions.taunt_turns[1, 0] == 0
 
 
 def test_encore_override_and_disable_conflict(neutral_type):
     """Encore redirects an already chosen move; Disable can block the result."""
     key, state = neutral_type
     state = equip_move(state, 'Recover', 1)
-    state = state.replace(volatile_status=state.volatile_status.replace(last_move_id=state.volatile_status.last_move_id.at[1, 0].set(105),
-        pending_move=state.volatile_status.pending_move.at[1, 0].set(True)))
+    state = state.replace(volatile_status=state.volatile_status.replace(
+        move_history=state.volatile_status.move_history.replace(last_move_id=state.volatile_status.move_history.last_move_id.at[1, 0].set(105)),
+        queued_move=state.volatile_status.queued_move.replace(pending_move=state.volatile_status.queued_move.pending_move.at[1, 0].set(True))))
     _, state = do_status_move(key, state, 0, make_move('Encore'), 0, 0)
     assert resolve_move(state.active.moves.identifier[1, :, 0], state.active.moves.move_type[1, :, 0], state.active.moves.current_pp[1, :, 0], 1,
-        disabled_move_id=state.volatile_status.disabled_move_id[1, 0],
-        disable_turns=state.volatile_status.disable_turns[1, 0],
-        taunt_turns=state.volatile_status.taunt_turns[1, 0],
-        encore_move_id=state.volatile_status.encore_move_id[1, 0],
-        encore_turns=state.volatile_status.encore_turns[1, 0],
+        disabled_move_id=state.volatile_status.restrictions.disabled_move_id[1, 0],
+        disable_turns=state.volatile_status.restrictions.disable_turns[1, 0],
+        taunt_turns=state.volatile_status.restrictions.taunt_turns[1, 0],
+        encore_move_id=state.volatile_status.restrictions.encore_move_id[1, 0],
+        encore_turns=state.volatile_status.restrictions.encore_turns[1, 0],
         gravity_duration=state.gravity_duration)[0] == 0
     assert jnp.array_equal(allowed_moves(state.active.moves.identifier[..., 0], state.active.moves.move_type[..., 0],
-        disabled_move_id=state.volatile_status.disabled_move_id,
-        disable_turns=state.volatile_status.disable_turns,
-        taunt_turns=state.volatile_status.taunt_turns,
-        encore_move_id=state.volatile_status.encore_move_id,
-        encore_turns=state.volatile_status.encore_turns,
+        disabled_move_id=state.volatile_status.restrictions.disabled_move_id,
+        disable_turns=state.volatile_status.restrictions.disable_turns,
+        taunt_turns=state.volatile_status.restrictions.taunt_turns,
+        encore_move_id=state.volatile_status.restrictions.encore_move_id,
+        encore_turns=state.volatile_status.restrictions.encore_turns,
         gravity_duration=state.gravity_duration)[1], jnp.array([True, False, False, False]))
-    state = state.replace(volatile_status=state.volatile_status.replace(disabled_move_id=state.volatile_status.disabled_move_id.at[1, 0].set(105),
-        disable_turns=state.volatile_status.disable_turns.at[1, 0].set(3)))
+    state = state.replace(volatile_status=state.volatile_status.replace(
+        restrictions=state.volatile_status.restrictions.replace(
+            disabled_move_id=state.volatile_status.restrictions.disabled_move_id.at[1, 0].set(105),
+            disable_turns=state.volatile_status.restrictions.disable_turns.at[1, 0].set(3))))
     assert resolve_move(state.active.moves.identifier[1, :, 0], state.active.moves.move_type[1, :, 0], state.active.moves.current_pp[1, :, 0], 1,
-        disabled_move_id=state.volatile_status.disabled_move_id[1, 0],
-        disable_turns=state.volatile_status.disable_turns[1, 0],
-        taunt_turns=state.volatile_status.taunt_turns[1, 0],
-        encore_move_id=state.volatile_status.encore_move_id[1, 0],
-        encore_turns=state.volatile_status.encore_turns[1, 0],
+        disabled_move_id=state.volatile_status.restrictions.disabled_move_id[1, 0],
+        disable_turns=state.volatile_status.restrictions.disable_turns[1, 0],
+        taunt_turns=state.volatile_status.restrictions.taunt_turns[1, 0],
+        encore_move_id=state.volatile_status.restrictions.encore_move_id[1, 0],
+        encore_turns=state.volatile_status.restrictions.encore_turns[1, 0],
         gravity_duration=state.gravity_duration)[1]
     assert not jnp.any(allowed_moves(state.active.moves.identifier[..., 0], state.active.moves.move_type[..., 0],
-        disabled_move_id=state.volatile_status.disabled_move_id,
-        disable_turns=state.volatile_status.disable_turns,
-        taunt_turns=state.volatile_status.taunt_turns,
-        encore_move_id=state.volatile_status.encore_move_id,
-        encore_turns=state.volatile_status.encore_turns,
+        disabled_move_id=state.volatile_status.restrictions.disabled_move_id,
+        disable_turns=state.volatile_status.restrictions.disable_turns,
+        taunt_turns=state.volatile_status.restrictions.taunt_turns,
+        encore_move_id=state.volatile_status.restrictions.encore_move_id,
+        encore_turns=state.volatile_status.restrictions.encore_turns,
         gravity_duration=state.gravity_duration)[1])
     before = state.active.moves.current_pp[1, 0, 0]
     _, out = step_move(key, state, 1, 1, False)
@@ -152,25 +190,28 @@ def test_disable_history_and_mental_herb(neutral_type):
     """Disable needs a usable last move and Mental Herb cures all restrictions."""
     key, state = neutral_type
     _, failed = do_status_move(key, state, 0, make_move('Disable'), 0, 0)
-    assert failed.volatile_status.disable_turns[1, 0] == 0
+    assert failed.volatile_status.restrictions.disable_turns[1, 0] == 0
     state = equip_move(state, 'Recover', 1)
-    state = state.replace(volatile_status=state.volatile_status.replace(last_move_id=state.volatile_status.last_move_id.at[1, 0].set(105)))
+    state = state.replace(volatile_status=state.volatile_status.replace(move_history=state.volatile_status.move_history.replace(last_move_id=state.volatile_status.move_history.last_move_id.at[1, 0].set(105))))
     _, disabled = do_status_move(key, state, 0, make_move('Disable'), 0, 0)
-    assert disabled.volatile_status.disabled_move_id[1, 0] == 105
+    assert disabled.volatile_status.restrictions.disabled_move_id[1, 0] == 105
     assert not allowed_moves(disabled.active.moves.identifier[..., 0], disabled.active.moves.move_type[..., 0],
-        disabled_move_id=disabled.volatile_status.disabled_move_id,
-        disable_turns=disabled.volatile_status.disable_turns,
-        taunt_turns=disabled.volatile_status.taunt_turns,
-        encore_move_id=disabled.volatile_status.encore_move_id,
-        encore_turns=disabled.volatile_status.encore_turns,
+        disabled_move_id=disabled.volatile_status.restrictions.disabled_move_id,
+        disable_turns=disabled.volatile_status.restrictions.disable_turns,
+        taunt_turns=disabled.volatile_status.restrictions.taunt_turns,
+        encore_move_id=disabled.volatile_status.restrictions.encore_move_id,
+        encore_turns=disabled.volatile_status.restrictions.encore_turns,
         gravity_duration=disabled.gravity_duration)[1, 0]
     state = update_active(state, 1, state.active[1].replace(item=jnp.array([I.MENTAL_HERB])))
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(taunt_turns=v.taunt_turns.at[1, 0].set(2),
-        encore_turns=v.encore_turns.at[1, 0].set(2), encore_move_id=v.encore_move_id.at[1, 0].set(105)))
+    state = state.replace(volatile_status=v.replace(
+        restrictions=v.restrictions.replace(
+            taunt_turns=v.restrictions.taunt_turns.at[1, 0].set(2),
+            encore_turns=v.restrictions.encore_turns.at[1, 0].set(2),
+            encore_move_id=v.restrictions.encore_move_id.at[1, 0].set(105))))
     _, cured = do_status_move(key, state, 0, make_move('Disable'), 0, 0)
-    assert cured.volatile_status.disable_turns[1, 0] == 0
-    assert cured.volatile_status.taunt_turns[1, 0] == cured.volatile_status.encore_turns[1, 0] == 0
+    assert cured.volatile_status.restrictions.disable_turns[1, 0] == 0
+    assert cured.volatile_status.restrictions.taunt_turns[1, 0] == cured.volatile_status.restrictions.encore_turns[1, 0] == 0
     assert cured.active.item[1, 0] == I.NONE
     assert cured.known_items[1, 0] == I.NONE
 
@@ -179,14 +220,16 @@ def test_duration_and_encore_pp_expiry(neutral_type):
     """Timers account for a pending action and Encore ends when PP is gone."""
     key, state = neutral_type
     state = equip_move(state, 'Recover', 1)
-    v = state.volatile_status.replace(last_move_id=state.volatile_status.last_move_id.at[1, 0].set(105), pending_move=state.volatile_status.pending_move.at[1, 0].set(True))
+    v = state.volatile_status.replace(
+        move_history=state.volatile_status.move_history.replace(last_move_id=state.volatile_status.move_history.last_move_id.at[1, 0].set(105)),
+        queued_move=state.volatile_status.queued_move.replace(pending_move=state.volatile_status.queued_move.pending_move.at[1, 0].set(True)))
     state = state.replace(volatile_status=v)
     _, state = do_status_move(key, state, 0, make_move('Encore'), 0, 0)
-    assert state.volatile_status.encore_turns[1, 0] == 3
+    assert state.volatile_status.restrictions.encore_turns[1, 0] == 3
     mon = state.active[1]
     state = update_active(state, 1, mon.replace(moves=mon.moves.replace(current_pp=mon.moves.current_pp.at[0, 0].set(0))))
     _, state = step_side_conditions(key, state)
-    assert state.volatile_status.encore_turns[1, 0] == 0
+    assert state.volatile_status.restrictions.encore_turns[1, 0] == 0
 
 
 def test_environment_masks_and_public_observation(neutral_type):
@@ -197,7 +240,7 @@ def test_environment_masks_and_public_observation(neutral_type):
     env = Battle(teams=state.team)
     episode, _ = env.reset(key)
     v = episode.battle.volatile_status
-    v = v.replace(taunt_turns=v.taunt_turns.at[0, 0].set(2))
+    v = v.replace(restrictions=v.restrictions.replace(taunt_turns=v.restrictions.taunt_turns.at[0, 0].set(2)))
     episode = episode.replace(battle=episode.battle.replace(volatile_status=v))
     mask = env.legal_action_mask(episode)
     assert not mask[0, 0] and jnp.any(mask[0, 1:4]) and jnp.any(mask[0, 8:14])
@@ -218,16 +261,16 @@ def test_faster_restriction_changes_pending_action(neutral_type, restriction, ch
     env = Battle(teams=state.team)
     episode, _ = env.reset(key)
     v = episode.battle.volatile_status
-    episode = episode.replace(battle=episode.battle.replace(volatile_status=v.replace(last_move_id=v.last_move_id.at[1, 0].set(105))))
+    episode = episode.replace(battle=episode.battle.replace(volatile_status=v.replace(move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[1, 0].set(105)))))
     before = episode.battle.active.moves.current_pp[1, :, 0]
     episode, _ = env.step(episode, jnp.array([0, chosen], jnp.int32))
     after = episode.battle.active.moves.current_pp[1, :, 0]
     if restriction == 'Taunt':
         assert jnp.array_equal(before, after)
-        assert episode.battle.volatile_status.taunt_turns[1, 0] == 2
+        assert episode.battle.volatile_status.restrictions.taunt_turns[1, 0] == 2
     elif restriction == 'Disable':
         assert jnp.array_equal(before, after)
-        assert episode.battle.volatile_status.disable_turns[1, 0] == 3
+        assert episode.battle.volatile_status.restrictions.disable_turns[1, 0] == 3
     else:
         assert after[0] == before[0] - 1 and after[1] == before[1]
         assert episode.revealed_moves[1, 0, 0]
@@ -237,18 +280,18 @@ def test_restriction_application_timing_and_immunities(neutral_type):
     """Durations account for pending actions; immunity prevents application."""
     key, state = neutral_type
     state = equip_move(state, 'Recover', 1)
-    v = state.volatile_status.replace(last_move_id=state.volatile_status.last_move_id.at[1, 0].set(105))
+    v = state.volatile_status.replace(move_history=state.volatile_status.move_history.replace(last_move_id=state.volatile_status.move_history.last_move_id.at[1, 0].set(105)))
     state = state.replace(volatile_status=v, turn_number=2)
     for name, field, fast, slow in [('Disable', 'disable_turns', 4, 5), ('Encore', 'encore_turns', 3, 4), ('Taunt', 'taunt_turns', 3, 4)]:
-        with_pending = state.replace(volatile_status=v.replace(pending_move=v.pending_move.at[1, 0].set(True)))
+        with_pending = state.replace(volatile_status=v.replace(queued_move=v.queued_move.replace(pending_move=v.queued_move.pending_move.at[1, 0].set(True))))
         _, first = do_status_move(key, with_pending, 0, make_move(name), 0, 0)
         _, second = do_status_move(key, state, 0, make_move(name), 0, 0)
-        assert getattr(first.volatile_status, field)[1, 0] == fast
-        assert getattr(second.volatile_status, field)[1, 0] == slow
+        assert getattr(first.volatile_status.restrictions, field)[1, 0] == fast
+        assert getattr(second.volatile_status.restrictions, field)[1, 0] == slow
     mon = state.active[1].replace(ability=jnp.array([A.OBLIVIOUS]))
     immune = update_active(state, 1, mon)
     _, immune = do_status_move(key, immune, 0, make_move('Taunt'), 0, 0)
-    assert immune.volatile_status.taunt_turns[1, 0] == 0
+    assert immune.volatile_status.restrictions.taunt_turns[1, 0] == 0
 
 
 def test_encore_preserves_original_priority_for_psychic_terrain(neutral_type):
@@ -261,7 +304,9 @@ def test_encore_preserves_original_priority_for_psychic_terrain(neutral_type):
     state = update_active(state, 0, mon.replace(moves=jax.tree.map(lambda bank, move: bank.at[1].set(move), mon.moves, quick)))
     v = state.volatile_status
     state = state.replace(terrain=Terrain(TerrainEnum.PSYCHIC, 5), volatile_status=v.replace(
-        encore_turns=v.encore_turns.at[0, 0].set(3), encore_move_id=v.encore_move_id.at[0, 0].set(406)))
+        restrictions=v.restrictions.replace(
+            encore_turns=v.restrictions.encore_turns.at[0, 0].set(3),
+            encore_move_id=v.restrictions.encore_move_id.at[0, 0].set(406))))
     hp = state.active.current_hp[1, 0]
     pp = state.active.moves.current_pp[0, 0, 0]
     _, out = step_move(key, state, 0, 1, False)
@@ -274,13 +319,13 @@ def test_encore_rejects_ineligible_last_move(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'Encore', 1)
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(last_move_id=v.last_move_id.at[1, 0].set(227)))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[1, 0].set(227))))
     _, out = do_status_move(key, state, 0, make_move('Encore'), 0, 0)
-    assert out.volatile_status.encore_turns[1, 0] == 0
+    assert out.volatile_status.restrictions.encore_turns[1, 0] == 0
     mon = state.active[1]
     state = update_active(state, 1, mon.replace(moves=mon.moves.replace(current_pp=mon.moves.current_pp.at[0, 0].set(0))))
     _, out = do_status_move(key, state, 0, make_move('Disable'), 0, 0)
-    assert out.volatile_status.disable_turns[1, 0] == 0
+    assert out.volatile_status.restrictions.disable_turns[1, 0] == 0
 
 
 def test_forced_struggle_respects_flinch_and_history(neutral_type):
@@ -288,11 +333,12 @@ def test_forced_struggle_respects_flinch_and_history(neutral_type):
 
     key, state = neutral_type
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(flinched=v.flinched.at[0, 0].set(True),
-        last_move_id=v.last_move_id.at[0, 0].set(105)))
+    state = state.replace(volatile_status=v.replace(
+        flinched=v.flinched.at[0, 0].set(True),
+        move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[0, 0].set(105))))
     _, out = step_action(key, state, 4, 0)
     assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
-    assert out.volatile_status.last_move_id[0, 0] == 105
+    assert out.volatile_status.move_history.last_move_id[0, 0] == 105
 
     state = state.replace(volatile_status=state.volatile_status.replace(flinched=state.volatile_status.flinched.at[0, 0].set(False)))
     state = update_active(state, 0, state.active[0].replace(status=jnp.array([Status.SLEEP]), sleep_counter=jnp.array([2])))

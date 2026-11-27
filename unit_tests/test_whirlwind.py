@@ -31,8 +31,10 @@ def test_forced_switch_request_defers_entry_effects(neutral_type, player):
     roster = state.roster.at[target].set(jnp.array([True, False, True, False, False, False]))
     team = state.team.replace(current_hp=state.team.current_hp.at[target, 2, 0].set(1),
                               ability=state.team.ability.at[target, 2, 0].set(A.DROUGHT))
-    state = state.replace(team=team, roster=roster,
-                          stealth_rocks=state.stealth_rocks.at[target, 0].set(True))
+    state = state.replace(
+        team=team,
+        roster=roster,
+        hazards=state.hazards.replace(stealth_rocks=state.hazards.stealth_rocks.at[target, 0].set(True)))
     next_key, prepared, request = prepare_forced_switch(key, state, jnp.int32(player))
     assert request.enabled and request.player == target and request.slot == 2
     assert prepared.active_index[target, 0] == 0
@@ -57,7 +59,7 @@ def test_hit_dispatch_forced_switch_outcomes(neutral_type, compiled_hit_dispatch
     state = state.replace(roster=roster)
     if case == 'protected':
         v = state.volatile_status
-        state = state.replace(volatile_status=v.replace(protected=v.protected.at[target, 0].set(True)))
+        state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[target, 0].set(True))))
     if case == 'no_bench':
         state = state.replace(roster=roster.at[target, 2].set(False))
     if case in ('anchored', 'wind_rider', 'immune'):
@@ -83,10 +85,10 @@ def test_whirlwind_chooses_legal_replacement_and_resets(neutral_type):
     key, state = neutral_type
     roster = state.roster.at[1].set(jnp.array([True, False, True, False, False, False]))
     v = state.volatile_status
-    state = state.replace(roster=roster, volatile_status=v.replace(taunt_turns=v.taunt_turns.at[1, 0].set(3)))
+    state = state.replace(roster=roster, volatile_status=v.replace(restrictions=v.restrictions.replace(taunt_turns=v.restrictions.taunt_turns.at[1, 0].set(3))))
     next_key, out = do_status_move(key, state, 0, make_move('Whirlwind'), 0, 0)
     assert out.active_index[1, 0] == 2
-    assert out.volatile_status.taunt_turns[1, 0] == 0
+    assert out.volatile_status.restrictions.taunt_turns[1, 0] == 0
     assert not jnp.array_equal(jax.random.key_data(next_key), jax.random.key_data(key))
 
 

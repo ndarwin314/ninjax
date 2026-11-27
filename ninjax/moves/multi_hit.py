@@ -142,7 +142,7 @@ def _multi_hit_scan(
     key, state, alive, total, hits = carry
     # Contact can induce sleep between hits; a move called by Sleep Talk
     # is allowed to continue while its user is asleep.
-    awake = (index == 0) | (state.active_field('status', attacker_idx)[0] != Status.SLEEP) | state.volatile_status.sleep_talk_active[attacker_idx, 0]
+    awake = (index == 0) | (state.active_field('status', attacker_idx)[0] != Status.SLEEP) | state.volatile_status.called_move.sleep_talk_active[attacker_idx, 0]
     can_hit = (state.active_field('current_hp', attacker_idx)[0] > 0) & (state.active_field('current_hp', 1-attacker_idx)[0] > 0) & awake
     valid = alive & (index < target_hits) & (((move.hit_rule[0] == HitRule.SINGLE) & ~beat_up) | can_hit)
     return jax.lax.cond(
@@ -177,7 +177,7 @@ def resolve_multi_hit(key, state: BattleState, attacker_idx, move: Move):
     """Resolve up to ten hits and finalize using their total actual HP loss."""
     ability = state.ability[attacker_idx, 0]
     item = state.active_field('item', attacker_idx)[0]
-    defender = state.effective_active[1-attacker_idx]
+    defender = state.combat_active[1-attacker_idx]
     beat_up = move.identifier[0] == 251
     # Beat Up includes the user even when statused; eligible teammates must
     # be selected, alive and status-free. Preserve party order for its hits.

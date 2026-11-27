@@ -65,7 +65,7 @@ def configure(state, config, source=None, target=None):
     if config.get('stage'):
         state = state.replace(boosts=state.boosts.replace(normal_boosts=state.boosts.normal_boosts.at[0, 5].set(config['stage'])))
     if config.get('tailwind'):
-        state = state.replace(tailwind=state.tailwind.at[0, 0].set(4))
+        state = state.replace(side_conditions=state.side_conditions.replace(tailwind=state.side_conditions.tailwind.at[0, 0].set(4)))
     if config.get('ability') == 'Speed Boost':
         # Match Battle.reset's initial lead, which enters before turn zero.
         state = state.replace(volatile_status=state.volatile_status.replace(
@@ -158,9 +158,9 @@ def test_choice_scarf_locks_clears_and_orders(neutral_type):
     mask = env.legal_action_mask(episode.replace(battle=locked))
     assert mask[0, 1] and not mask[0, 0] and not mask[0, 2]
     switched = swap_out(key, locked, 0, 1)
-    assert switched.volatile_status.choice_lock[0, 0] == -1
+    assert switched.volatile_status.restrictions.choice_lock[0, 0] == -1
     exchanged, success = swap_items(locked, 0, 1)
-    assert success and exchanged.volatile_status.choice_lock[0, 0] == -1
+    assert success and exchanged.volatile_status.restrictions.choice_lock[0, 0] == -1
 
 
 def test_wide_lens_accuracy(neutral_type):
@@ -311,7 +311,8 @@ def test_projected_secondary_abilities(neutral_type):
     _, out = secondary_effects(key, dust, 0, make_move('Lumina Crash'))
     assert out.boosts.normal_boosts[1, 4] == 0
     focus = configure(state, {'defender': 'Inner Focus'})
-    move = make_move('Iron Head').replace(secondary_chance=jnp.array([1.]))
+    move = make_move('Iron Head')
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(1.)))
     _, out = secondary_effects(key, focus, 0, move)
     assert not out.volatile_status.flinched[1, 0]
     grace = configure(state, {'ability': 'Serene Grace'})
@@ -383,7 +384,7 @@ def test_prankster_dark_and_good_as_gold_field_targets(neutral_type):
     _, out = move_hits(key, equip_move(gold, 'Will-O-Wisp'), 0, 0)
     assert out.active.status[1, 0] == Status.NONE
     _, out = move_hits(key, equip_move(gold, 'Spikes'), 0, 0)
-    assert out.spikes[1, 0] == 1
+    assert out.hazards.spikes[1, 0] == 1
 
 
 def test_stage_protections_and_contrary(neutral_type):
@@ -432,7 +433,7 @@ def test_unnerve_release_and_flash_fire(neutral_type):
     assert released.active.current_hp[0, 0] == 100 + state.active.max_hp[0] // 4
     fire = configure(state, {'defender': 'Flash Fire'})
     _, out = move_hits(key, equip_move(fire, 'Flamethrower'), 0, 0)
-    assert out.volatile_status.flash_fire[1, 0]
+    assert out.volatile_status.ability_state.flash_fire[1, 0]
     assert out.active.current_hp[1, 0] == fire.active.current_hp[1, 0]
 
 
@@ -471,7 +472,7 @@ def test_early_bird_and_restriction_immunities(neutral_type):
     assert out.active.status[0, 0] == Status.NONE and not blocked
     for ability in ('Aroma Veil', 'Oblivious'):
         protected = configure(state, {'defender': ability})
-        assert apply_restriction(protected, 0, make_move('Taunt')).volatile_status.taunt_turns[1, 0] == 0
+        assert apply_restriction(protected, 0, make_move('Taunt')).volatile_status.restrictions.taunt_turns[1, 0] == 0
     own = configure(state, {'defender': 'Own Tempo'})
     _, out = apply_confusion(key, own, 1)
     assert out.volatile_status.confusion_turns[1, 0] == 0

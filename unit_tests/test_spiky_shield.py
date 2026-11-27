@@ -19,15 +19,15 @@ def test_shared_counter_and_end_turn(neutral_type):
     """Alternating Protect variants uses one failure chain and clears the variant."""
     key, state = neutral_type
     key, state = do_status_move(key, state, 1, make_move('Protect'), 0, 0)
-    assert state.volatile_status.protect_chain[1, 0] == 1
+    assert state.volatile_status.protection.protect_chain[1, 0] == 1
     key, state = step_side_conditions(key, state)
-    assert state.volatile_status.protection_kind[1, 0] == ProtectionKind.NONE
+    assert state.volatile_status.protection.protection_kind[1, 0] == ProtectionKind.NONE
     _, roll_key = jax.random.split(key)
     succeeds = bool(jax.random.uniform(roll_key) < 1/3)
     _, out = do_status_move(key, state, 1, make_move('Spiky Shield'), 0, 0)
-    assert bool(out.volatile_status.protected[1, 0]) == succeeds
-    assert out.volatile_status.protect_chain[1, 0] == (2 if succeeds else 0)
-    assert out.volatile_status.protection_kind[1, 0] == (ProtectionKind.SPIKY_SHIELD if succeeds else ProtectionKind.NONE)
+    assert bool(out.volatile_status.protection.protected[1, 0]) == succeeds
+    assert out.volatile_status.protection.protect_chain[1, 0] == (2 if succeeds else 0)
+    assert out.volatile_status.protection.protection_kind[1, 0] == (ProtectionKind.SPIKY_SHIELD if succeeds else ProtectionKind.NONE)
 
 
 @pytest.mark.parametrize('ability,move,retaliates,bypasses', [

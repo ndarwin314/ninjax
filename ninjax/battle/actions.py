@@ -13,9 +13,10 @@ from ninjax.enums.moves import MoveResult
 from ninjax.moves.execution import move_interrupted, move_used
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults
-from ninjax.restrictions import gravity_blocks_move, move_blocked_by_hit_restrictions, resolve_move
+from ninjax.restrictions import gravity_blocks_move, move_blocked_at_execution, resolve_move
 from ninjax.side.faint_effects import clear_destiny_bond, resolve_faints
 from ninjax.side.state import BattleState
+from ninjax.side.trapping import voluntary_switch_blocked
 from ninjax.side.updates import update_active_fields
 
 
@@ -37,9 +38,9 @@ def _execute_prepared_move(k, s, p, i, *, continued, struggle):
     return move_used(k, s, p, i, continued, struggle)
 
 
-def _execute_ordinary_callback(k, b, *, action, player_index):
+def _execute_ordinary_callback(k, b, *, action, player_index, switch_committed):
     """Dispatch the bound ordinary action after transformation validation."""
-    return _ordinary_action(k, b, action, player_index)
+    return _ordinary_action(k, b, action, player_index, switch_committed=switch_committed)
 
 
 def _keep_key_state(k, b):
@@ -88,7 +89,7 @@ def step_move(
         _prepare_struggle_action,
         partial(_prepare_selected_or_continued, continued=continued, is_tera=is_tera), key, state, player_idx, index)
     selected_move = state.active_moves(player_idx, index)
-    restriction_blocked |= ~struggle & move_blocked_by_hit_restrictions(state, player_idx, selected_move)
+    restriction_blocked |= ~struggle & move_blocked_at_execution(state, player_idx, selected_move)
     key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
         defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
     key, state = jax.lax.cond(
@@ -98,24 +99,23 @@ def step_move(
     # The release may hit, miss or be interrupted; in every case the user
     # becomes targetable again once that action has ended.
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(semi_invulnerability=
-        v.semi_invulnerability.at[player_idx, 0].set(jnp.where(continued, 0, v.semi_invulnerability[player_idx, 0]))))
-    # Protect and Spiky Shield return NOT_FAIL in Gen 9; other blocks can fail.
+    state = state.replace(volatile_status=v.replace(continuation=v.continuation.replace(semi_invulnerability=
+        v.continuation.semi_invulnerability.at[player_idx, 0].set(jnp.where(continued, 0, v.continuation.semi_invulnerability[player_idx, 0])))))
+    # Protection has its own outcome and does not count as a failed attempt.
     result = state.hit_results[0].outcome
     failed = is_interrupted | (result == HitOutcome.MISS) | (result == HitOutcome.IMMUNE) | (result == HitOutcome.FAILED) | (result == HitOutcome.BLOCKED)
     failed = jnp.where(struggle, is_interrupted, failed)
     # Sleep Talk succeeds once it selects a move, even if that called move fails.
-    failed = jnp.where(~struggle & ~jnp.asarray(continued) & (selected_move.identifier[0] == 214) & state.volatile_status.sleep_talk_succeeded[player_idx, 0] & ~is_interrupted, False, failed)
+    failed = jnp.where(~struggle & ~jnp.asarray(continued) & (selected_move.identifier[0] == 214) & state.volatile_status.called_move.sleep_talk_succeeded[player_idx, 0] & ~is_interrupted, False, failed)
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(move_result=v.move_result.at[player_idx, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED))))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(move_result=v.move_history.move_result.at[player_idx, 0].set(jnp.where(failed, MoveResult.FAILED, MoveResult.SUCCEEDED)))))
     return key, resolve_faints(state)
 
 
 def _prepare_struggle_action(key, state, player, unused_index):
     """Count a forced attempt without applying Encore or paying move-slot PP."""
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(
-        active_move_actions=v.active_move_actions.at[player, 0].add(1)))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(active_move_actions=v.move_history.active_move_actions.at[player, 0].add(1))))
     return key, state, jnp.int32(0), jnp.bool_(False)
 
 
@@ -127,19 +127,20 @@ def _prepare_selected_action(key, state, player_idx, index, is_tera):
     index, restriction_blocked = resolve_move(
         state.active_move_field('identifier', player_idx)[:, 0], state.active_move_field('move_type', player_idx)[:, 0],
         state.active_move_field('current_pp', player_idx)[:, 0], index,
-        disabled_move_id=v.disabled_move_id[player_idx, 0],
-        disable_turns=v.disable_turns[player_idx, 0],
-        taunt_turns=v.taunt_turns[player_idx, 0],
-        encore_move_id=v.encore_move_id[player_idx, 0],
-        encore_turns=v.encore_turns[player_idx, 0],
+        disabled_move_id=v.restrictions.disabled_move_id[player_idx, 0],
+        disable_turns=v.restrictions.disable_turns[player_idx, 0],
+        taunt_turns=v.restrictions.taunt_turns[player_idx, 0],
+        encore_move_id=v.restrictions.encore_move_id[player_idx, 0],
+        encore_turns=v.restrictions.encore_turns[player_idx, 0],
         gravity_duration=state.gravity_duration)
-    v = v.replace(active_move_actions=v.active_move_actions.at[player_idx, 0].add(1))
+    v = v.replace(move_history=v.move_history.replace(active_move_actions=v.move_history.active_move_actions.at[player_idx, 0].add(1)))
     # Encore replaces an already ordered action without changing its priority.
-    priority = jnp.where(v.queued_priority_valid[player_idx, 0], v.queued_priority[player_idx, 0],
+    priority = jnp.where(v.queued_move.queued_priority_valid[player_idx, 0], v.queued_move.queued_priority[player_idx, 0],
                          state.active_move_field('priority', player_idx)[original_index, 0])
     state = state.replace(volatile_status=v.replace(
-        queued_priority=v.queued_priority.at[player_idx, 0].set(priority),
-        encore_overridden=v.encore_overridden.at[player_idx, 0].set(index != original_index)))
+        queued_move=v.queued_move.replace(
+            queued_priority=v.queued_move.queued_priority.at[player_idx, 0].set(priority),
+            encore_overridden=v.queued_move.encore_overridden.at[player_idx, 0].set(index != original_index))))
     state = update_active_fields(state, player_idx,
         is_terastallized=state.active_field('is_terastallized', player_idx) | jnp.bool([is_tera]))
     return key, state, jnp.asarray(index, jnp.int32), restriction_blocked
@@ -149,19 +150,21 @@ def _prepare_charge_release(key, state, player, unused_index):
     """Clear the stored charge and ignore Encore/PP while honoring Disable."""
 
     v = state.volatile_status
-    identifier = v.charging_move_id[player, 0]
+    identifier = v.continuation.charging_move_id[player, 0]
     matches = (state.active_move_field('identifier', player)[:, 0] == identifier) & (identifier != 0)
     index = jnp.argmax(matches).astype(jnp.int32)
-    state = state.replace(hit_results=HitResults.empty(), event_move=identifier,
+    state = state.replace(
+        hit_results=HitResults.empty(),
+        event_context=state.event_context.replace(move_id=identifier),
         volatile_status=v.replace(
-            active_move_actions=v.active_move_actions.at[player, 0].add(1),
-            charging_move_id=v.charging_move_id.at[player, 0].set(0),
-            charge_target_side=v.charge_target_side.at[player, 0].set(0),
-            charge_target_position=v.charge_target_position.at[player, 0].set(0),
-            protect_chain=v.protect_chain.at[player, 0].set(0),
-            encore_overridden=v.encore_overridden.at[player, 0].set(False)))
+            move_history=v.move_history.replace(active_move_actions=v.move_history.active_move_actions.at[player, 0].add(1)),
+            continuation=v.continuation.replace(
+                charging_move_id=v.continuation.charging_move_id.at[player, 0].set(0),
+                charge_target_side=v.continuation.charge_target_side.at[player, 0].set(0),
+                charge_target_position=v.continuation.charge_target_position.at[player, 0].set(0)),
+            queued_move=v.queued_move.replace(encore_overridden=v.queued_move.encore_overridden.at[player, 0].set(False))))
     state = emit(state, EventKind.CONDITION, player, detail=14, before=identifier, after=0)
-    blocked = ~jnp.any(matches) | ((v.disable_turns[player, 0] > 0) & (v.disabled_move_id[player, 0] == identifier)) | gravity_blocks_move(identifier, state.gravity_duration)
+    blocked = ~jnp.any(matches) | ((v.restrictions.disable_turns[player, 0] > 0) & (v.restrictions.disabled_move_id[player, 0] == identifier)) | gravity_blocks_move(identifier, state.gravity_duration)
     return key, state, index, blocked
 
 
@@ -185,28 +188,40 @@ def step_action(
     key: chex.PRNGKey,
     state: BattleState,
     action: int | jax.Array | BattleAction,
-    player_index: int | jax.Array
+    player_index: int | jax.Array,
+    *, switch_committed=False,
 ) -> tuple[jax.Array, BattleState]:
-    """Execute a selected move, switch, or forced Struggle for one player."""
+    """Execute a choice, validating new voluntary switches against trapping.
+
+    Schedulers pass a static `switch_committed=True` after validating both
+    switch choices against the same starting state.
+    """
     if not isinstance(action, BattleAction):
         action = BattleAction.from_legacy(action)
-    state = state.replace(event_source=jnp.asarray(player_index, jnp.int32),
-        event_cause=jnp.int32(Cause.MOVE), event_move=jnp.int32(0))
+    state = state.replace(
+        event_context=state.event_context.replace(
+            source=jnp.asarray(player_index, jnp.int32),
+            cause=jnp.int32(Cause.MOVE),
+            move_id=jnp.int32(0)))
     return lax.cond(action.transformation == Transformation.NONE,
-        partial(_execute_ordinary_callback, action=action, player_index=player_index),
+        partial(_execute_ordinary_callback, action=action, player_index=player_index,
+                switch_committed=switch_committed),
         _keep_key_state, key, state)
 
 
-def _ordinary_action(key, state, action, player_index):
+def _ordinary_action(key, state, action, player_index, *, switch_committed=False):
     """Dispatch an attack, charge release, switch, recharge or explicit no-op."""
     v = state.volatile_status
     continued = action.move_type == ActionType.CONTINUED
-    release = continued & ~v.recharging[player_index, 0] & (v.charging_move_id[player_index, 0] != 0)
+    release = continued & ~v.continuation.recharging[player_index, 0] & (v.continuation.charging_move_id[player_index, 0] != 0)
+    switching = action.move_type == ActionType.SWITCH
+    if not switch_committed:
+        switching &= ~voluntary_switch_blocked(state)[player_index]
     # A charge release uses the move path; other continuations only recharge.
     branch = jnp.select(
         ((action.move_type == ActionType.ATTACK) | release,
-         action.move_type == ActionType.SWITCH,
-         continued & v.recharging[player_index, 0]),
+         switching,
+         continued & v.continuation.recharging[player_index, 0]),
         (0, 1, 2), default=3)
     return lax.switch(branch,
         (partial(_execute_move_callback, player_index=player_index, action=action, release=release),
@@ -217,7 +232,7 @@ def _ordinary_action(key, state, action, player_index):
 def step_continued(key, state, player):
     """Spend recharge or attempt the stored charge move without another PP cost."""
     action = BattleAction(jnp.int32(0), jnp.int32(ActionType.CONTINUED))
-    return _ordinary_action(key, state, action, player)
+    return _ordinary_action(key, state, action, player, switch_committed=True)
 
 
 def _spend_recharge(key, state, player):
@@ -226,8 +241,8 @@ def _spend_recharge(key, state, player):
     state = clear_destiny_bond(state, player)
     v = state.volatile_status
     state = state.replace(hit_results=HitResults.empty(), volatile_status=v.replace(
-        active_move_actions=v.active_move_actions.at[player, 0].add(1),
-        move_result=v.move_result.at[player, 0].set(MoveResult.SKIPPED),
-        recharging=v.recharging.at[player, 0].set(False),
-        protect_chain=v.protect_chain.at[player, 0].set(0)))
+        move_history=v.move_history.replace(
+            active_move_actions=v.move_history.active_move_actions.at[player, 0].add(1),
+            move_result=v.move_history.move_result.at[player, 0].set(MoveResult.SKIPPED)),
+        continuation=v.continuation.replace(recharging=v.continuation.recharging.at[player, 0].set(False))))
     return key, emit(state, EventKind.CONDITION, player, detail=15, before=1, after=0)

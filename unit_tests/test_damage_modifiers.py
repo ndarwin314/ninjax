@@ -67,7 +67,7 @@ def test_multiscale_applies_once_to_both_recipients(neutral_type, hit, substitut
     _, _, normal_damage, _ = hit(key, state, 0, move)
     _, reduced, reduced_damage, _ = hit(key, guarded, 0, move)
     assert reduced_damage[0] == normal_damage[0] // 2
-    assert reduced.volatile_status.last_damage[1, 0] == reduced_damage[0]
+    assert reduced.volatile_status.move_history.last_damage[1, 0] == reduced_damage[0]
     if substitute:
         assert reduced.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     else:

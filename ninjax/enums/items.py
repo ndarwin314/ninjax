@@ -63,4 +63,7 @@ class ItemEnum(JaxEnum):
     DRACO_PLATE = auto()
     DREAD_PLATE = auto()
     PIXIE_PLATE = auto()
+    SHED_SHELL = auto()
+    GRIP_CLAW = auto()
+    BINDING_BAND = auto()
 

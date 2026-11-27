@@ -7,12 +7,12 @@ import jax.numpy as jnp
 
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
-from ninjax.knowledge import remember_item
-from ninjax.records.events import Cause, EventKind, emit
+from ninjax.enums.moves import ProtectionKind
+from ninjax.item_rules import item_is_suppressed
+from ninjax.records.events import Cause
 from ninjax.side.faint_effects import commit_hp_change
-from ninjax.side.item_effects import after_hp_change
+from ninjax.side.item_effects import after_hp_change, consume
 from ninjax.side.state import BattleState
-from ninjax.side.updates import update_active_fields
 
 
 Array = jax.Array
@@ -49,13 +49,13 @@ def _active_hp_fields(state, player):
 
 def _indirect_cause(state):
     """Keep indirect effects distinct from the move that initiated them."""
-    return jnp.where(state.event_cause == Cause.MOVE, Cause.INDIRECT, state.event_cause)
+    return jnp.where(state.event_context.cause == Cause.MOVE, Cause.INDIRECT, state.event_context.cause)
 
 
 @jax.jit
 def apply_indirect_hp_change(state, player, damage, source=-1):
     """Apply an indirect HP change unless Heal Block prevents recovery."""
-    blocked = (jnp.asarray(damage).reshape(()) < 0) & (state.volatile_status.heal_block_turns[player, 0] > 0)
+    blocked = (jnp.asarray(damage).reshape(()) < 0) & (state.volatile_status.restrictions.heal_block_turns[player, 0] > 0)
     return jax.lax.cond(blocked, _keep_hp_state, _commit_indirect_hp_change, state, player, damage, source)
 
 
@@ -78,13 +78,16 @@ def _apply_attack_hp_change(state, player, damage, attack, source, ability, acti
     full = old_hp == max_hp
     # Damage modifiers, including Multiscale, are resolved before HP commits.
     new_hp = jax.lax.clamp(0, old_hp - damage, max_hp.reshape(()))
-    protected_ko = full & attack & (damage > 0) & (new_hp == 0)
+    lethal = attack & (old_hp > 0) & (damage > 0) & (new_hp == 0)
+    v = state.volatile_status
+    endured = lethal & (v.protection.protection_kind[player, 0] == ProtectionKind.ENDURE)
+    protected_ko = full & lethal & ~endured
     sturdy = protected_ko & (ability == AbilityEnum.STURDY)
-    sash = protected_ko & (item == ItemEnum.FOCUS_SASH) & ~sturdy
-    new_hp = jnp.maximum(new_hp, (sturdy | sash).astype(new_hp.dtype))
-    state = emit(state, EventKind.ITEM, player, detail=ItemEnum.FOCUS_SASH, enabled=sash)
-    state = remember_item(state, player, ItemEnum.NONE, sash)
-    state = update_active_fields(state, player, item=jnp.where(sash, ItemEnum.NONE, item))
+    sash_active = (item == ItemEnum.FOCUS_SASH) & ~item_is_suppressed(
+        state.ability[player, 0], state.magic_room_duration, v.embargo_turns[player, 0])
+    sash = protected_ko & sash_active & ~sturdy
+    new_hp = jnp.maximum(new_hp, (endured | sturdy | sash).astype(new_hp.dtype))
+    state = consume(state, player, sash)
     state = commit_hp_change(state, player, old_hp, new_hp, max_hp, source,
                              jnp.where(attack, Cause.MOVE, _indirect_cause(state)), attack)
     return jax.lax.cond(activate_items, after_hp_change, _keep_hp_state, state, player)
@@ -111,14 +114,14 @@ def take_damage_percent(state: BattleState, defender_idx, percent: chex.Array, c
     HP-update graph instead of expanding it twice during compilation.
     """
     if cause is not None:
-        original_cause = state.event_cause
-        state = take_damage_percent(state.replace(event_cause=jnp.int32(cause)), defender_idx, percent)
-        return state.replace(event_cause=original_cause)
+        original_cause = state.event_context.cause
+        state = take_damage_percent(state.replace(event_context=state.event_context.replace(cause=jnp.int32(cause))), defender_idx, percent)
+        return state.replace(event_context=state.event_context.replace(cause=original_cause))
     if jnp.ndim(defender_idx) > 0:
         fractions = jnp.broadcast_to(percent, (2, 1))
         return jax.lax.fori_loop(0, 2,
             partial(_damage_fraction_for_player, fractions=fractions), state)
     healing = jnp.asarray(percent).reshape(()) < 0
-    heal_blocked = healing & (state.volatile_status.heal_block_turns[defender_idx, 0] > 0)
+    heal_blocked = healing & (state.volatile_status.restrictions.heal_block_turns[defender_idx, 0] > 0)
     return jax.lax.cond(heal_blocked, _keep_hp_state, _apply_percent_hp_change,
                         state, defender_idx, percent)

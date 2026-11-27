@@ -12,6 +12,7 @@ from ninjax.battle.types import ActionType, Phase
 from ninjax.enums.moves import MoveType
 from ninjax.moves.properties import effective_priority
 from ninjax.records.events import Cause, capture_conditions_from_values, condition_values
+from ninjax.enums.pokemon import Status
 from ninjax.side.item_effects import refresh_paradox
 
 
@@ -24,8 +25,8 @@ def _queue_actions(current, actions):
     """Order the players' queued choices and preserve their actor slots."""
     key, order_key = random.split(current.key)
     v = current.battle.volatile_status
-    continuing = (actions.move_type == ActionType.CONTINUED) & (v.charging_move_id[:, 0] != 0)
-    charge_indices = jnp.argmax(current.battle.active_move_field('identifier')[..., 0] == v.charging_move_id, axis=1)
+    continuing = (actions.move_type == ActionType.CONTINUED) & (v.continuation.charging_move_id[:, 0] != 0)
+    charge_indices = jnp.argmax(current.battle.active_move_field('identifier')[..., 0] == v.continuation.charging_move_id, axis=1)
     indices = jnp.where(continuing, charge_indices, jnp.clip(actions.index, 0, 3))
 
     priorities = jax.vmap(partial(_effective_priority, battle=current.battle))(jnp.arange(2), indices)
@@ -34,7 +35,9 @@ def _queue_actions(current, actions):
     first, second = action_order(order_key, current.battle, priorities)
     v = current.battle.volatile_status
     battle = current.battle.replace(volatile_status=v.replace(
-        queued_priority=priorities[:, None], queued_priority_valid=(((actions.move_type == ActionType.ATTACK) & (actions.index < 4)) | continuing)[:, None]))
+        queued_move=v.queued_move.replace(
+            queued_priority=priorities[:, None],
+            queued_priority_valid=(((actions.move_type == ActionType.ATTACK) & (actions.index < 4)) | continuing)[:, None])))
     return current.replace(key=key, battle=battle, pending_actions=actions, queued_actor_slot=current.battle.active_index[:, 0],
                            order=jnp.stack((first, second)), cursor=jnp.int32(0), field_pending=jnp.bool_(True),
                            acting_player_mask=jnp.zeros(2, bool))
@@ -42,7 +45,8 @@ def _queue_actions(current, actions):
 
 def _dispatch_queued_action(k, b, *, chosen, player):
     """Execute the bound action for its original surviving actor."""
-    return step_action(k, b, chosen, player)
+    # The environment validated the switch when both players committed.
+    return step_action(k, b, chosen, player, switch_committed=True)
 
 
 def _keep_key_state(k, b):
@@ -56,18 +60,24 @@ def _execute_queued_action(current):
     chosen = current.pending_actions[player]
     other = 1-player
     other_action = current.pending_actions.move_type[other]
-    pending = (current.cursor == 0) & ((other_action == ActionType.ATTACK) | ((other_action == ActionType.CONTINUED) &
-        (current.battle.volatile_status.charging_move_id[other, 0] != 0))) & (current.battle.active_field('current_hp', other)[0] > 0) & (current.queued_actor_slot[other] == current.battle.active_index[other, 0])
     volatile = current.battle.volatile_status
+    later = ((current.cursor == 0) & (current.battle.active_field('current_hp', other)[0] > 0) &
+             (current.queued_actor_slot[other] == current.battle.active_index[other, 0]))
+    will_act = later & ((other_action == ActionType.ATTACK) | (other_action == ActionType.SWITCH) |
+                        (other_action == ActionType.CONTINUED))
+    pending = later & ((other_action == ActionType.ATTACK) | ((other_action == ActionType.CONTINUED) &
+        (volatile.continuation.charging_move_id[other, 0] != 0)))
     other_index = current.pending_actions.index[other]
-    charged_index = jnp.argmax(current.battle.active_move_field('identifier', other)[:, 0] == volatile.charging_move_id[other, 0])
+    charged_index = jnp.argmax(current.battle.active_move_field('identifier', other)[:, 0] == volatile.continuation.charging_move_id[other, 0])
     other_index = jnp.where(other_action == ActionType.CONTINUED, charged_index, jnp.clip(other_index, 0, 3))
     category = current.battle.active_move_field('move_type', other)[other_index, 0]
     category = jnp.where((other_action == ActionType.ATTACK) & (current.pending_actions.index[other] == 4), MoveType.PHYSICAL, category)
     battle_with_context = current.battle.replace(volatile_status=volatile.replace(
-        pending_move=volatile.pending_move.at[:, 0].set(False).at[other, 0].set(pending),
-        pending_move_type=volatile.pending_move_type.at[other, 0].set(category),
-        pending_actor_slot=volatile.pending_actor_slot.at[other, 0].set(current.queued_actor_slot[other])))
+        queued_move=volatile.queued_move.replace(
+            last_action=volatile.queued_move.last_action.at[player, 0].set(~will_act),
+            pending_move=volatile.queued_move.pending_move.at[:, 0].set(False).at[other, 0].set(pending),
+            pending_move_type=volatile.queued_move.pending_move_type.at[other, 0].set(category),
+            pending_actor_slot=volatile.queued_move.pending_actor_slot.at[other, 0].set(current.queued_actor_slot[other]))))
     can_act = (current.battle.active_field('current_hp', player)[0] > 0) & (current.queued_actor_slot[player] == current.battle.active_index[player, 0])
     key, battle = lax.cond(can_act,
         partial(_dispatch_queued_action, chosen=chosen, player=player),
@@ -77,18 +87,19 @@ def _execute_queued_action(current):
     battle = capture_conditions_from_values(condition_values(current.battle), battle)
     slot = current.battle.active_index[player, 0]
     spent = battle.team.moves.current_pp[player, slot, :, 0] < current.battle.team.moves.current_pp[player, slot, :, 0]
-    called_id = battle.volatile_status.called_move_id[player, 0]
+    called_id = battle.volatile_status.called_move.called_move_id[player, 0]
     called = (called_id != 0) & (battle.team.moves.identifier[player, slot, :, 0] == called_id)
     known = current.revealed_moves.at[player, slot].set(current.revealed_moves[player, slot] | spent | called)
-    has_bench = jnp.any(current.selected[player] & (battle.team.current_hp[player, :, 0] > 0) &
-                       (jnp.arange(6) != battle.active_index[player, 0]))
-    pivot = (battle.winner < 0) & battle.switch_requested[player] & (battle.active_field('current_hp', player)[0] > 0) & has_bench
-    battle = battle.replace(switch_requested=jnp.zeros(2, bool),
-                            switch_transfer=battle.switch_transfer.at[player].set(
-                                jnp.where(pivot, battle.switch_transfer[player], 0)))
-    requested = jnp.zeros(2, bool).at[player].set(pivot)
+    has_bench = jnp.any(current.selected & (battle.team.current_hp[..., 0] > 0) &
+                       (jnp.arange(6) != battle.active_index), axis=1)
+    pivot = (battle.winner < 0) & battle.switch_requested & (battle.active_field('current_hp')[:, 0] > 0) & has_bench
+    revival = (battle.winner < 0) & battle.revival_requested
+    battle = battle.replace(switch_requested=jnp.zeros(2, bool), revival_requested=jnp.zeros(2, bool),
+                            switch_transfer=jnp.where(pivot, battle.switch_transfer, 0))
+    requested = pivot | revival
     return current.replace(key=key, battle=battle, revealed_moves=known, cursor=current.cursor + 1,
-        phase=jnp.where(pivot, Phase.REPLACEMENT, Phase.TURN), acting_player_mask=requested)
+        phase=jnp.where(jnp.any(revival), Phase.REVIVAL, jnp.where(jnp.any(pivot), Phase.REPLACEMENT, Phase.TURN)),
+        acting_player_mask=requested)
 
 
 def _keep_episode(c):
@@ -105,7 +116,11 @@ def _resolve_queued_action(_, current):
 
 def _finish_turn(current):
     """Apply field effects once after the queued actions finish."""
-    before = current.battle.replace(event_source=jnp.int32(-1), event_move=jnp.int32(0), event_cause=jnp.int32(Cause.FIELD))
+    before = current.battle.replace(
+        event_context=current.battle.event_context.replace(
+            source=jnp.int32(-1),
+            move_id=jnp.int32(0),
+            cause=jnp.int32(Cause.FIELD)))
     key, battle = step_field(current.key, before)
     battle = capture_conditions_from_values(condition_values(before), battle)
     return current.replace(key=key, battle=battle, turn=current.turn + 1, field_pending=jnp.bool_(False))
@@ -121,12 +136,25 @@ def _skip_replacement(key, battle, player, index):
     return key, battle
 
 
+def _revive_party_member(key, battle, player, index):
+    """Restore a selected fainted member without changing the active position."""
+    team = battle.team
+    hp = jnp.maximum(1, team.max_hp[player, index] // 2)
+    team = team.replace(
+        current_hp=team.current_hp.at[player, index, 0].set(hp),
+        is_alive=team.is_alive.at[player, index, 0].set(True),
+        status=team.status.at[player, index, 0].set(Status.NONE),
+        sleep_counter=team.sleep_counter.at[player, index, 0].set(0))
+    return key, battle.replace(team=team)
+
+
 def replace_player(player, carry):
     """Preserve player order, switch keys and condition snapshots."""
     current, actions = carry
-    key, battle = lax.cond(current.acting_player_mask[player] & (current.battle.winner < 0),
-                           _execute_replacement, _skip_replacement,
-                           current.key, current.battle, player, actions.index[player])
+    active = current.acting_player_mask[player] & (current.battle.winner < 0)
+    branch = jnp.where(active, jnp.where(current.phase == Phase.REVIVAL, 2, 1), 0)
+    key, battle = lax.switch(branch, (_skip_replacement, _execute_replacement, _revive_party_member),
+                             current.key, current.battle, player, actions.index[player])
 
     battle = refresh_paradox(battle)
     battle = capture_conditions_from_values(condition_values(current.battle), battle)
@@ -161,7 +189,8 @@ def advance_turn(state, actions):
     needs = (state.battle.active_field('current_hp')[:, 0] <= 0) & jnp.any((state.battle.team.current_hp[..., 0] > 0) & state.selected, axis=1)
     waiting = jnp.any(state.acting_player_mask)
     needs = (state.battle.winner < 0) & jnp.where(waiting, state.acting_player_mask, needs)
-    state = state.replace(phase=jnp.where(jnp.any(needs), Phase.REPLACEMENT, Phase.TURN),
+    phase = jnp.where(waiting & (state.phase == Phase.REVIVAL), Phase.REVIVAL, Phase.REPLACEMENT)
+    state = state.replace(phase=jnp.where(jnp.any(needs), phase, Phase.TURN),
                           acting_player_mask=jnp.where(jnp.any(needs), needs, jnp.ones(2, bool)))
     revealed = state.revealed.at[jnp.arange(2), state.battle.active_index[:, 0]].set(True)
     return state.replace(revealed=revealed)

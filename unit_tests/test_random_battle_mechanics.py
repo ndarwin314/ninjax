@@ -104,7 +104,8 @@ def test_setup_boosts_match_showdown(neutral_type, probe):
 def test_triggered_secondary_matches_showdown(neutral_type, probe):
     """Compare forced secondary outcomes from real Showdown moves, without RNG parity."""
     key, state = neutral_type
-    move = make_move(probe['name']).replace(secondary_chance=jnp.array([1.]))
+    move = make_move(probe['name'])
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(1.)))
     _, out = secondary_effects(key, state, 0, move)
     statuses = {'': Status.NONE, 'par': Status.PARALYZE, 'brn': Status.BURN,
                 'psn': Status.POISON, 'tox': Status.TOXIC, 'slp': Status.SLEEP,

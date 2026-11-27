@@ -8,19 +8,20 @@ import jax.numpy as jnp
 import jax.random as random
 
 from ninjax.ability_effects import worry_seed
-from ninjax.battle.switching import force_switch_target, forced_switch_move
+from ninjax.battle.switching import force_switch_target, forced_switch_move, queue_entry_recovery, reflected_switching_source
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
-from ninjax.enums.moves import ProtectionKind
-from ninjax.enums.pokemon import Status
+from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.model import Move
+from ninjax.moves.protection import apply_protection, blocked_by_protection
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
-from ninjax.restrictions import apply_restriction
+from ninjax.restrictions import apply_persistent_restriction, apply_restriction
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
 from ninjax.side.field_conditions import field_status, set_terrain, set_weather
 from ninjax.side.hp_effects import take_damage_percent, take_damage_value
-from ninjax.side.item_effects import after_hp_change, status_berry, swap_items
+from ninjax.side.item_effects import after_hp_change, force_eat_berry, is_berry, recycle_item, status_berry, swap_items
+from ninjax.side.queries import ability_against_move
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import apply_confusion, set_status
@@ -134,7 +135,8 @@ def do_status_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Mo
         partial(_status_move_effects, attacker_idx=attacker_idx, move=move,
                 stat_index=stat_index, boost_value=boost_value),
         key, state)
-    return force_switch_target(key, state, attacker_idx, wind=move.identifier[0] == 18,
+    source = reflected_switching_source(state, attacker_idx, move)
+    return force_switch_target(key, state, source, wind=move.identifier[0] == 18,
                                enabled=forced)
 
 
@@ -193,6 +195,99 @@ def _status_direct(k, s, *, attacker_idx, move):
     return direct_status_move(k, s, attacker_idx, move)
 
 
+def _status_persistent_restriction(key, state, *, attacker_idx, move):
+    """Apply Torment or Imprison and mark a repeat or immune attempt as failed."""
+    state, success = apply_persistent_restriction(state, attacker_idx, move)
+    target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
+    state = jax.lax.cond(success, _identity, partial(_record_status_failure, target=target), state)
+    return key, state
+
+
+def _status_recovery_request(key, state, *, attacker_idx, move):
+    """Request revival or sacrifice the user for a later entrant's recovery."""
+    player = attacker_idx
+    ident = move.identifier[0]
+    slots = jnp.arange(6) != state.active_index[player, 0]
+    hp = state.team.current_hp[player, :, 0]
+    candidates = slots & state.roster[player]
+    revive = ident == 863
+    eligible = jnp.any(candidates & jnp.where(revive, hp == 0, hp > 0))
+    state = state.replace(
+        revival_requested=state.revival_requested.at[player].set(revive & eligible))
+    state = queue_entry_recovery(state, player, lunar_dance=ident == 461, enabled=~revive & eligible)
+    state = jax.lax.cond(~revive & eligible, partial(direct_faint, player=player, source=player, cause=Cause.SELF_KO),
+                         _identity, state)
+    return key, jax.lax.cond(revive & ~eligible, partial(_record_status_failure, target=player), _identity, state)
+
+
+def _stuff_cheeks(state, *, player):
+    """Gain Defense before force-feeding the user's berry."""
+    berry = is_berry(state.active_field('item', player)[0])
+    defense = StatEnum.DEFENSE
+    before = state.boosts.normal_boosts[player, defense]
+    state = stat_changes(state, player, jnp.array([defense]), jnp.array([jnp.where(berry, 2, 0)]))
+    boosted = state.boosts.normal_boosts[player, defense] != before
+    state = force_eat_berry(state, player, boosted)
+    return jax.lax.cond(~boosted, partial(_record_status_failure, target=player), _identity, state)
+
+
+def _teatime_eater(player, state, *, eligible):
+    """Feed one of the eligible active Pokémon."""
+    return force_eat_berry(state, player, eligible[player])
+
+
+def _teatime(state, *, player):
+    """Gather eligible holders, then visit them in side order for Teatime."""
+    hidden = state.volatile_status.continuation.semi_invulnerability[:, 0] != 0
+    ability = state.ability[:, 0]
+    own = jnp.arange(2) == player
+    reached = ~hidden | own | (ability == AbilityEnum.NO_GUARD) | (ability[player] == AbilityEnum.NO_GUARD)
+    eligible = (reached & (own | (ability != AbilityEnum.GOOD_AS_GOLD)) &
+                (state.active_field('current_hp')[:, 0] > 0) & is_berry(state.active_field('item')[:, 0]))
+    state = jax.lax.fori_loop(0, 2, partial(_teatime_eater, eligible=eligible), state)
+    return jax.lax.cond(jnp.any(eligible), _identity, partial(_record_status_failure, target=player), state)
+
+
+def _recycle(state, *, player):
+    """Restore recoverable item memory or record a failed attempt."""
+    state, success = recycle_item(state, player)
+    return jax.lax.cond(success, _identity, partial(_record_status_failure, target=player), state)
+
+
+def _status_item_use(key, state, *, attacker_idx, move):
+    """Dispatch forced berry use or held-item recovery."""
+    ident = move.identifier[0]
+    branch = jnp.select((ident == 747, ident == 752), (0, 1), default=2)
+    return key, jax.lax.switch(branch,
+        (partial(_stuff_cheeks, player=attacker_idx), partial(_teatime, player=attacker_idx),
+         partial(_recycle, player=attacker_idx)), state)
+
+
+def _parting_shot(key, state, *, attacker_idx, move):
+    """Apply the drops and request a pivot for the resolved user."""
+    source = reflected_switching_source(state, attacker_idx, move)
+    reflected = source != attacker_idx
+    target = 1 - source
+    ability = ability_against_move(state, target, move)[0]
+    immune = (ability == AbilityEnum.SOUNDPROOF) | (ability == AbilityEnum.GOOD_AS_GOLD)
+    blocked = blocked_by_protection(state, move, attacker_idx) | (
+        reflected & blocked_by_protection(state, move, source))
+    permitted = ~immune & ~blocked
+    mirror = ability == AbilityEnum.MIRROR_ARMOR
+    recipient = jnp.where(mirror, source, target)
+    before = state.boosts.normal_boosts[recipient]
+    context = state.event_context
+    state = state.replace(event_context=context.replace(source=jnp.where(mirror, target, source)))
+    state = stat_changes(state, recipient, move.boost_stat, jnp.where(permitted, move.boost_stages, 0), True)
+    changed = jnp.any(state.boosts.normal_boosts[recipient] != before)
+    # Mirror Armor also allows the pivot when the reflected drops cannot land.
+    success = permitted & (changed | mirror)
+    hit = jnp.where(success, HitOutcome.HIT, jnp.where(blocked, HitOutcome.PROTECTED,
+                    jnp.where(immune, HitOutcome.IMMUNE, HitOutcome.FAILED)))
+    state = record_hit(state, 0, target, hit, jnp.where(success, HitRecipient.POKEMON, HitRecipient.NONE))
+    return key, state.replace(event_context=context, switch_requested=state.switch_requested.at[source].set(success))
+
+
 def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value):
     """Select a status handler, leaving forced switching to its dispatch path."""
     ident = move.identifier[0]
@@ -204,9 +299,13 @@ def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value
          (ident == 271) | (ident == 415),   # Trick / Switcheroo
          ident == 194,                     # Destiny Bond
          ident == 164,                     # Substitute
-         ident == 388),                    # Worry Seed
-        (0, 1, 2, 3, 4, 5),
-        default=6,
+         ident == 388,                    # Worry Seed
+         (ident == 259) | (ident == 286),  # Torment / Imprison
+         (ident == 361) | (ident == 461) | (ident == 863),
+         (ident == 747) | (ident == 752) | (ident == 278),
+         ident == 575),
+        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        default=10,
     )
     return jax.lax.switch(
         branch,
@@ -217,6 +316,10 @@ def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value
             partial(_status_destiny_bond, attacker_idx=attacker_idx),
             partial(_status_substitute, attacker_idx=attacker_idx),
             partial(_status_worry_seed, attacker_idx=attacker_idx),
+            partial(_status_persistent_restriction, attacker_idx=attacker_idx, move=move),
+            partial(_status_recovery_request, attacker_idx=attacker_idx, move=move),
+            partial(_status_item_use, attacker_idx=attacker_idx, move=move),
+            partial(_parting_shot, attacker_idx=attacker_idx, move=move),
             partial(_generic_status_move, attacker_idx=attacker_idx, move=move,
                     stat_index=stat_index, boost_value=boost_value),
         ),
@@ -276,17 +379,8 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     weather, terrain, and Perish Song update field-wide state. Effect coverage
     is partial, and field durations are currently fixed at five turns.
     """
-    # Consecutive Protect attempts succeed with probability 1 / 3**chain.
     key, protect_key = random.split(key)
-    v = state.volatile_status
-    protect = (move.identifier[0] == 182) | (move.identifier[0] == 197) | (move.identifier[0] == 596)
-    success = protect & (random.uniform(protect_key) < jnp.power(1 / 3., v.protect_chain[attacker_idx, 0]))
-    v = v.replace(protected=v.protected.at[attacker_idx, 0].set(success),
-                  protection_kind=v.protection_kind.at[attacker_idx, 0].set(jnp.where(success,
-                      jnp.where(move.identifier[0] == 596, ProtectionKind.SPIKY_SHIELD, ProtectionKind.PROTECT), ProtectionKind.NONE)),
-                  protect_chain=v.protect_chain.at[attacker_idx, 0].set(
-                      jnp.where(protect & success, jnp.minimum(v.protect_chain[attacker_idx, 0] + 1, 20), 0)))
-    state = state.replace(volatile_status=v)
+    state, guard_failed = apply_protection(state, attacker_idx, move, random.uniform(protect_key))
     target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
     # Record these explicit failure conditions independently of HP deltas, so
     # previous-turn move results distinguish failed healing/status attempts.
@@ -324,7 +418,7 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     # Reapplying an active field condition fails without refreshing its timer.
     field_failed = ((move.weather_effect[0] != 0) & (state.weather.weather == move.weather_effect[0])) | (
         (move.terrain_effect[0] != 0) & (state.terrain.terrain == move.terrain_effect[0])) | (
-        (move.identifier[0] == 115) & (state.reflect[attacker_idx, 0] > 0))
+        (move.identifier[0] == 115) & (state.side_conditions.reflect[attacker_idx, 0] > 0))
     # Chilly Reception can pivot even when snow was already active.
     field_failed &= move.identifier[0] != 881
     state = field_status(state, attacker_idx, move)
@@ -338,11 +432,12 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     # Spikes. Layered hazards are capped at their represented maximum.
     hazard = move.hazard_effect[0]
     state = state.replace(
-        stealth_rocks=state.stealth_rocks.at[target].set(state.stealth_rocks[target] | (hazard == 1)),
-        sticky_webs=state.sticky_webs.at[target].set(state.sticky_webs[target] | (hazard == 2)),
-        spikes=state.spikes.at[target].set(jnp.minimum(3, state.spikes[target] + (hazard == 3))),
-        toxic_spikes=state.toxic_spikes.at[target].set(jnp.minimum(2, state.toxic_spikes[target] + (hazard == 4))))
-    failed = (protect & ~success) | heal_failed | status_failed | stat_failed | confusion_failed | field_failed
+        hazards=state.hazards.replace(
+            stealth_rocks=state.hazards.stealth_rocks.at[target].set(state.hazards.stealth_rocks[target] | (hazard == 1)),
+            sticky_webs=state.hazards.sticky_webs.at[target].set(state.hazards.sticky_webs[target] | (hazard == 2)),
+            spikes=state.hazards.spikes.at[target].set(jnp.minimum(3, state.hazards.spikes[target] + (hazard == 3))),
+            toxic_spikes=state.hazards.toxic_spikes.at[target].set(jnp.minimum(2, state.hazards.toxic_spikes[target] + (hazard == 4)))))
+    failed = guard_failed | heal_failed | status_failed | stat_failed | confusion_failed | field_failed
     state = jax.lax.cond(failed, partial(_record_status_failure, target=target), _identity, state)
     return key, state
 

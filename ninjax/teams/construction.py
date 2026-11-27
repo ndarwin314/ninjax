@@ -12,9 +12,9 @@ import jax.numpy as jnp
 from ninjax.calculations.stats import Nature, StatTable
 from ninjax.data.load_json import dex
 from ninjax.enums.field import TerrainEnum, WeatherEnum
-from ninjax.enums.moves import EffectivenessRule, HitRule, MoveFlags, MoveType, PowerRule
+from ninjax.enums.moves import EffectivenessRule, HitRule, MoveFlags, MoveType, PowerRule, SecondaryEffectType
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
-from ninjax.moves.model import Move
+from ninjax.moves.model import Move, MoveSecondaries, SECONDARY_SLOTS, STAT_CHANGE_SLOTS
 from ninjax.moves.support import is_move_supported
 from ninjax.pokemon import Pokemon
 from ninjax.tree import stack
@@ -60,6 +60,41 @@ FORM_IDS.update({
 })
 
 
+def _pack_secondary_boosts(boosts, stat_ids):
+    """Pad each slot's stat indices and deltas to the same fixed width."""
+    stats = [[stat_ids[stat] for stat in row] + [1] * (STAT_CHANGE_SLOTS - len(row)) for row in boosts]
+    stages = [list(row.values()) + [0] * (STAT_CHANGE_SLOTS - len(row)) for row in boosts]
+    return jnp.array(stats, jnp.int32), jnp.array(stages, jnp.int32)
+
+
+def _project_secondaries(name, entries, status_ids, stat_ids):
+    """Pack independent effects or mutually exclusive outcomes into fixed slots."""
+    outcomes = {
+        'Dire Claw': ('psn', 'par', 'slp'),
+        'Tri Attack': ('brn', 'par', 'frz'),
+    }.get(name)
+    mode = SecondaryEffectType.DEFAULT
+    if outcomes:
+        mode = SecondaryEffectType.EXCLUSIVE
+        chance = entries[0]['chance'] / len(outcomes)
+        entries = [{'status': status, 'chance': chance} for status in outcomes]
+    if len(entries) > SECONDARY_SLOTS:
+        raise ValueError(f'{name} has more than {SECONDARY_SLOTS} secondary effects')
+    slots = entries + [{}] * (SECONDARY_SLOTS - len(entries))
+    stats, stages = _pack_secondary_boosts([slot.get('boosts', {}) for slot in slots], stat_ids)
+    user_stats, user_stages = _pack_secondary_boosts(
+        [(slot.get('self') or {}).get('boosts', {}) for slot in slots], stat_ids)
+    return MoveSecondaries(
+        mode=jnp.array([mode], jnp.int32),
+        probabilities=jnp.array([slot.get('chance', 0) / 100 for slot in slots], jnp.float32),
+        status=jnp.array([status_ids.get(slot.get('status'), Status.NONE) for slot in slots], jnp.int32),
+        stats=stats, stages=stages, user_stats=user_stats, user_stages=user_stages,
+        flinch=jnp.array([slot.get('volatileStatus') == 'flinch' for slot in slots]),
+        confusion=jnp.array([slot.get('volatileStatus') == 'confusion' for slot in slots]),
+        restriction=jnp.array([i == 0 and name in ('Throat Chop', 'Psychic Noise')
+                               for i in range(SECONDARY_SLOTS)]))
+
+
 def make_move(name):
     """Project metadata, enabling PP only for reviewed singles implementations.
 
@@ -97,7 +132,8 @@ def make_move(name):
     # Move metadata is projected on the host; traced transitions only consume
     # arrays. Stat-index and stage vectors are padded by Move on construction.
     secondary = data.get('secondary') or {}
-    self_effect = data.get('self') or secondary.get('self') or {}
+    secondaries = data.get('secondaries') or ([secondary] if secondary else [])
+    self_effect = data.get('self') or {}
     for prefix, boosts in [('boost', data.get('boosts', {})),
                            ('self', self_effect.get('boosts', {}))]:
         if boosts:
@@ -106,21 +142,13 @@ def make_move(name):
     if data.get('boosts'):
         # Top-level boosts apply to the move's target, which may be the user.
         effects['target_self'] = jnp.array([data.get('target') == 'self'])
-    # Secondary self boosts use the secondary effect's chance.
-    self_chance = self_effect.get('chance', 100 if data.get('self') else secondary.get('chance', 100))
-    effects['self_chance'] = jnp.array([self_chance / 100])
+    effects['self_chance'] = jnp.array([self_effect.get('chance', 100) / 100])
     if data.get('status'):
         effects['status_effect'] = jnp.array([status_ids[data['status']]])
     if data.get('heal'):
         effects.update(target_self=jnp.array([True]),
                        healing_fraction=jnp.array([data['heal'][0] / data['heal'][1]]))
-    effects['secondary_chance'] = jnp.array([secondary.get('chance', 0) / 100])
-    effects['secondary_status'] = jnp.array([status_ids.get(secondary.get('status'), 0)])
-    effects['secondary_flinch'] = jnp.array([secondary.get('volatileStatus') == 'flinch'])
-    effects['secondary_confusion'] = jnp.array([secondary.get('volatileStatus') == 'confusion'])
-    if secondary.get('boosts'):
-        effects['secondary_stat'] = jnp.array([stat_ids[stat] for stat in secondary['boosts']])
-        effects['secondary_stages'] = jnp.array(list(secondary['boosts'].values()))
+    effects['secondaries'] = _project_secondaries(name, secondaries, status_ids, stat_ids)
     if data.get('drain'):
         effects['drain_fraction'] = jnp.array([data['drain'][0] / data['drain'][1]])
     if data.get('recoil'):
@@ -148,7 +176,7 @@ def make_move(name):
         effects['escalating_power'] = jnp.array([True])
     if name == 'Surging Strikes':
         effects['always_crit'] = jnp.array([True])
-    if name in ('U-turn', 'Volt Switch', 'Flip Turn', 'Teleport', 'Chilly Reception', 'Baton Pass', 'Shed Tail'):
+    if data.get('selfSwitch') and name != 'Revival Blessing':
         effects['switch_out'] = jnp.array([True])
     if name in ('Swords Dance', 'Nasty Plot'):
         effects.update(target_self=jnp.array([True]), boost_stat=jnp.array([StatEnum.ATTACK if name == 'Swords Dance' else StatEnum.SPECIAL_ATTACK]), boost_stages=jnp.array([2]))
@@ -188,6 +216,14 @@ def make_move(name):
         flags |= int(MoveFlags.THAWS_TARGET)
     if data.get('ignoreAbility'):
         flags |= int(MoveFlags.IGNORE_ABILITY)
+    if data.get('volatileStatus') == 'partiallytrapped':
+        flags |= int(MoveFlags.BINDING)
+    if self_effect.get('volatileStatus') == 'mustrecharge' or data.get('flags', {}).get('recharge'):
+        flags |= int(MoveFlags.RECHARGE)
+    if data.get('flags', {}).get('cantusetwice'):
+        flags |= int(MoveFlags.CANNOT_REPEAT)
+    if data.get('target') in ('allAdjacent', 'allAdjacentFoes'):
+        flags |= int(MoveFlags.SPREAD)
     effects['encore_eligible'] = jnp.array([not bool(data.get('flags', {}).get('failencore'))])
     effects['sleep_talk_eligible'] = jnp.array([not bool(data.get('flags', {}).get('nosleeptalk') or data.get('flags', {}).get('charge'))])
     offensive = effects.pop('offensive_stat', jnp.array([1 if physical else 3]))

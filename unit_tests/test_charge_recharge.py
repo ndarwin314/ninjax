@@ -44,7 +44,7 @@ def test_charge_preparation(neutral_type, name, weather, herb, ready, boost):
     assert bool(actual_ready) == ready
     assert out.boosts.normal_boosts[0, 3] == boost
     assert (out.active.item[0, 0] == I.POWER_HERB) == (herb and name == 'Solar Beam' and weather == W.SUN)
-    assert (out.volatile_status.charging_move_id[0, 0] != 0) == (not ready)
+    assert (out.volatile_status.continuation.charging_move_id[0, 0] != 0) == (not ready)
 
 
 @pytest.mark.parametrize('name', ['Solar Beam', 'Solar Blade', 'Meteor Beam', 'Sky Attack', 'Freeze Shock', 'Ice Burn'])
@@ -53,15 +53,15 @@ def test_shared_charge_release(neutral_type, name):
     key, state = neutral_type
     state = equip_move(state, name)
     key, charged = step_move(key, state, 0, 0, False)
-    assert charged.volatile_status.charging_move_id[0, 0] == make_move(name).identifier[0]
+    assert charged.volatile_status.continuation.charging_move_id[0, 0] == make_move(name).identifier[0]
     assert charged.active.moves.current_pp[0, 0, 0] == state.active.moves.current_pp[0, 0, 0] - 1
     assert charged.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     v = charged.volatile_status
-    charged = charged.replace(volatile_status=v.replace(semi_invulnerability=
-        v.semi_invulnerability.at[0, 0].set(SemiInvulnerability.AIRBORNE)))
+    charged = charged.replace(volatile_status=v.replace(continuation=v.continuation.replace(semi_invulnerability=
+        v.continuation.semi_invulnerability.at[0, 0].set(SemiInvulnerability.AIRBORNE))))
     _, released = step_action(key, charged, continued(), 0)
-    assert released.volatile_status.charging_move_id[0, 0] == 0
-    assert released.volatile_status.semi_invulnerability[0, 0] == SemiInvulnerability.NONE
+    assert released.volatile_status.continuation.charging_move_id[0, 0] == 0
+    assert released.volatile_status.continuation.semi_invulnerability[0, 0] == SemiInvulnerability.NONE
     assert released.active.moves.current_pp[0, 0, 0] == charged.active.moves.current_pp[0, 0, 0]
     if name == 'Meteor Beam':
         assert released.boosts.normal_boosts[0, 3] == 1
@@ -75,7 +75,7 @@ def test_power_herb_skips_charge(neutral_type, name):
     state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.POWER_HERB])))
     _, out = step_move(key, state, 0, 0, False)
     assert out.active.item[0, 0] == I.NONE
-    assert out.volatile_status.charging_move_id[0, 0] == 0
+    assert out.volatile_status.continuation.charging_move_id[0, 0] == 0
     if name in ('Meteor Beam', 'Electro Shot'):
         assert out.boosts.normal_boosts[0, 3] == 1
 
@@ -95,7 +95,7 @@ def test_sun_preserves_power_herb(neutral_type):
     state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.POWER_HERB])))
     _, out = step_move(key, state, 0, 0, False)
     assert out.active.item[0, 0] == I.POWER_HERB
-    assert out.volatile_status.charging_move_id[0, 0] == 0
+    assert out.volatile_status.continuation.charging_move_id[0, 0] == 0
 
 
 def test_electro_shot_charge_and_last_pp(neutral_type):
@@ -105,7 +105,7 @@ def test_electro_shot_charge_and_last_pp(neutral_type):
     mon = state.active[0]
     state = update_active(state, 0, mon.replace(moves=mon.moves.replace(current_pp=mon.moves.current_pp.at[0, 0].set(1))))
     key, charged = step_move(key, state, 0, 0, False)
-    assert charged.volatile_status.charging_move_id[0, 0] == 905
+    assert charged.volatile_status.continuation.charging_move_id[0, 0] == 905
     assert charged.boosts.normal_boosts[0, 3] == 1
     assert charged.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     assert charged.active.moves.current_pp[0, 0, 0] == 0
@@ -119,7 +119,7 @@ def test_electro_shot_charge_and_last_pp(neutral_type):
     assert released.active.current_hp[1, 0] < charged.active.current_hp[1, 0]
     assert released.active.moves.current_pp[0, 0, 0] == 0
     assert released.boosts.normal_boosts[0, 3] == 1
-    assert released.volatile_status.charging_move_id[0, 0] == 0
+    assert released.volatile_status.continuation.charging_move_id[0, 0] == 0
 
 
 @pytest.mark.parametrize('suppressed', [False, True])
@@ -131,7 +131,7 @@ def test_rain_skip_uses_effective_weather(neutral_type, suppressed):
         state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.CLOUD_NINE])))
     _, out = step_move(key, state, 0, 0, False)
     assert out.boosts.normal_boosts[0, 3] == 1
-    assert bool(out.volatile_status.charging_move_id[0, 0] != 0) == suppressed
+    assert bool(out.volatile_status.continuation.charging_move_id[0, 0] != 0) == suppressed
     assert bool(out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) != suppressed
 
 
@@ -151,7 +151,7 @@ def test_charge_preparation_gates_accuracy(neutral_type, rain):
     assert out.boosts.normal_boosts[0, 3] == 1
     assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
     assert jnp.array_equal(out.active.moves.current_pp, state.active.moves.current_pp)
-    assert (out.volatile_status.charging_move_id[0, 0] == 905) != rain
+    assert (out.volatile_status.continuation.charging_move_id[0, 0] == 905) != rain
     assert out.hit_results[0].outcome == (HitOutcome.MISS if rain else HitOutcome.UNUSED)
 
 
@@ -163,12 +163,12 @@ def test_charge_interruption_and_switch_cleanup(neutral_type):
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(flinched=v.flinched.at[0, 0].set(True)))
     _, out = step_action(key, state, continued(), 0)
-    assert out.volatile_status.charging_move_id[0, 0] == 0
+    assert out.volatile_status.continuation.charging_move_id[0, 0] == 0
     assert out.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     assert out.active.moves.current_pp[0, 0, 0] == state.active.moves.current_pp[0, 0, 0]
-    cleared = clear_volatile_status(state.replace(volatile_status=v.replace(recharging=v.recharging.at[0, 0].set(True))), 0)
-    assert not cleared.volatile_status.recharging[0, 0]
-    assert cleared.volatile_status.charging_move_id[0, 0] == 0
+    cleared = clear_volatile_status(state.replace(volatile_status=v.replace(continuation=v.continuation.replace(recharging=v.continuation.recharging.at[0, 0].set(True)))), 0)
+    assert not cleared.volatile_status.continuation.recharging[0, 0]
+    assert cleared.volatile_status.continuation.charging_move_id[0, 0] == 0
 
 
 @pytest.mark.parametrize('disabled', [False, True])
@@ -181,18 +181,19 @@ def test_shared_release_ignores_encore_and_selection_bookkeeping(neutral_type, d
     state = update_active(state, 0, mon.replace(moves=moves))
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(
-        charging_move_id=v.charging_move_id.at[0, 0].set(905),
-        encore_turns=v.encore_turns.at[0, 0].set(2),
-        encore_move_id=v.encore_move_id.at[0, 0].set(347),
-        disable_turns=v.disable_turns.at[0, 0].set(2 if disabled else 0),
-        disabled_move_id=v.disabled_move_id.at[0, 0].set(905),
-        last_move_id=v.last_move_id.at[0, 0].set(905),
-        choice_lock=v.choice_lock.at[0, 0].set(2)))
+        continuation=v.continuation.replace(charging_move_id=v.continuation.charging_move_id.at[0, 0].set(905)),
+        restrictions=v.restrictions.replace(
+            encore_turns=v.restrictions.encore_turns.at[0, 0].set(2),
+            encore_move_id=v.restrictions.encore_move_id.at[0, 0].set(347),
+            disable_turns=v.restrictions.disable_turns.at[0, 0].set(2 if disabled else 0),
+            disabled_move_id=v.restrictions.disabled_move_id.at[0, 0].set(905),
+            choice_lock=v.restrictions.choice_lock.at[0, 0].set(2)),
+        move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[0, 0].set(905))))
     _, out = step_action(key, state, continued(), 0)
     assert jnp.array_equal(out.team.moves.current_pp, state.team.moves.current_pp)
-    assert out.volatile_status.last_move_id[0, 0] == 905
-    assert out.volatile_status.choice_lock[0, 0] == 2
-    assert out.volatile_status.charging_move_id[0, 0] == 0
+    assert out.volatile_status.move_history.last_move_id[0, 0] == 905
+    assert out.volatile_status.restrictions.choice_lock[0, 0] == 2
+    assert out.volatile_status.continuation.charging_move_id[0, 0] == 0
     assert out.boosts.normal_boosts[0, 3] == 0
     assert (out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) != disabled
 
@@ -201,16 +202,24 @@ def test_hyper_beam_recharge_precedes_status_checks(neutral_type):
     """A successful beam forces recharge without ticking sleep or confusion."""
     key, state = neutral_type
     _, hit = resolve_multi_hit(key, state, 0, make_move('Hyper Beam'))
-    assert hit.volatile_status.recharging[0, 0]
+    assert hit.volatile_status.continuation.recharging[0, 0]
     hit = update_active(hit, 0, hit.active[0].replace(status=jnp.array([Status.SLEEP]), sleep_counter=jnp.array([2])))
     v = hit.volatile_status
     hit = hit.replace(volatile_status=v.replace(confusion_turns=v.confusion_turns.at[0, 0].set(3)))
     _, out = step_action(key, hit, continued(), 0)
-    assert not out.volatile_status.recharging[0, 0]
-    assert out.volatile_status.move_result[0, 0] == MoveResult.SKIPPED
+    assert not out.volatile_status.continuation.recharging[0, 0]
+    assert out.volatile_status.move_history.move_result[0, 0] == MoveResult.SKIPPED
     assert out.active.sleep_counter[0, 0] == 2
     assert out.volatile_status.confusion_turns[0, 0] == 3
     assert jnp.array_equal(out.active.current_hp, hit.active.current_hp)
+
+
+@pytest.mark.parametrize('name', ['Giga Impact', 'Prismatic Laser'])
+def test_catalogue_recharge_after_hit(neutral_type, name):
+    """The shared finishing path forces recharge for physical and special moves."""
+    key, state = neutral_type
+    _, hit = resolve_multi_hit(key, state, 0, make_move(name))
+    assert hit.volatile_status.continuation.recharging[0, 0]
 
 
 def test_blocked_hyper_beam_needs_no_recharge(neutral_type):
@@ -218,9 +227,9 @@ def test_blocked_hyper_beam_needs_no_recharge(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'Hyper Beam')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     _, out = move_hits(key, state, 0, 0)
-    assert not out.volatile_status.recharging[0, 0]
+    assert not out.volatile_status.continuation.recharging[0, 0]
 
 
 def test_missed_beam_and_substitute_recharge(neutral_type):
@@ -230,11 +239,11 @@ def test_missed_beam_and_substitute_recharge(neutral_type):
     mon = state.active[0]
     state = update_active(state, 0, mon.replace(moves=mon.moves.replace(accuracy=mon.moves.accuracy.at[0, 0].set(0.))))
     _, missed = step_move(key, state, 0, 0, False)
-    assert not missed.volatile_status.recharging[0, 0]
+    assert not missed.volatile_status.continuation.recharging[0, 0]
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(1)))
     _, hit = resolve_multi_hit(key, state, 0, make_move('Hyper Beam'))
-    assert hit.volatile_status.recharging[0, 0]
+    assert hit.volatile_status.continuation.recharging[0, 0]
     assert hit.active.current_hp[1, 0] == state.active.current_hp[1, 0]
 
 
@@ -249,14 +258,17 @@ def test_environment_continues_charge_and_recharge(neutral_type):
     state = update_active(state, 0, mon.replace(moves=mon.moves.replace(current_pp=mon.moves.current_pp.at[0, 0].set(0))))
     state = update_active(state, 1, state.active[1].replace(status=jnp.array([Status.SLEEP]), sleep_counter=jnp.array([2])))
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(charging_move_id=v.charging_move_id.at[0, 0].set(905), recharging=v.recharging.at[1, 0].set(True)))
+    state = state.replace(volatile_status=v.replace(
+        continuation=v.continuation.replace(
+            charging_move_id=v.continuation.charging_move_id.at[0, 0].set(905),
+            recharging=v.continuation.recharging.at[1, 0].set(True))))
     episode = episode.replace(battle=state)
     action = BattleAction(jnp.zeros(2, jnp.int32), jnp.full(2, ActionType.CONTINUED))
     out, ts = env.step(episode, action)
     assert not ts.extras['invalid_action']
     assert out.turn == 1
-    assert not jnp.any(out.battle.volatile_status.recharging)
-    assert not jnp.any(out.battle.volatile_status.charging_move_id)
+    assert not jnp.any(out.battle.volatile_status.continuation.recharging)
+    assert not jnp.any(out.battle.volatile_status.continuation.charging_move_id)
     assert out.battle.active.moves.current_pp[0, 0, 0] == 0
     assert out.battle.active.sleep_counter[1, 0] == 2
     env.observation_spec.validate(ts.observation)

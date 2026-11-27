@@ -61,8 +61,10 @@ def test_shell_side_arm_protection_uses_resolved_contact(neutral_type, route_cat
     volatile = state.volatile_status
     state = state.replace(boosts=state.boosts.replace(
         normal_boosts=state.boosts.normal_boosts.at[1, StatEnum.DEFENSE].set(defense_stage)),
-        volatile_status=volatile.replace(protected=volatile.protected.at[1, 0].set(True),
-            protection_kind=volatile.protection_kind.at[1, 0].set(ProtectionKind.SPIKY_SHIELD)))
+        volatile_status=volatile.replace(
+            protection=volatile.protection.replace(
+                protected=volatile.protection.protected.at[1, 0].set(True),
+                protection_kind=volatile.protection.protection_kind.at[1, 0].set(ProtectionKind.SPIKY_SHIELD))))
     next_key, resolved = prepare_hit_move(key, state, 0, state.active_moves(0, 0))
     assert jnp.array_equal(jax.random.key_data(key), jax.random.key_data(next_key))
     assert resolved.contact[0] == contact
@@ -82,8 +84,8 @@ def test_shell_side_arm_uses_category_for_damage(neutral_type, route_category_mo
     state = state.replace(boosts=state.boosts.replace(
         normal_boosts=state.boosts.normal_boosts.at[1, StatEnum.DEFENSE].set(defense_stage)))
     _, normal = route_category_move(key, state, 0, 0, 0)
-    _, reflected = route_category_move(key, state.replace(reflect=state.reflect.at[1, 0].set(5)), 0, 0, 0)
-    _, screened = route_category_move(key, state.replace(light_screen=state.light_screen.at[1, 0].set(5)), 0, 0, 0)
+    _, reflected = route_category_move(key, state.replace(side_conditions=state.side_conditions.replace(reflect=state.side_conditions.reflect.at[1, 0].set(5))), 0, 0, 0)
+    _, screened = route_category_move(key, state.replace(side_conditions=state.side_conditions.replace(light_screen=state.side_conditions.light_screen.at[1, 0].set(5))), 0, 0, 0)
     damage = normal.hit_results[0].damage
     assert normal.hit_results[0].outcome == HitOutcome.HIT and damage > 0
     assert reflected.hit_results[0].damage == (damage // 2 if physical else damage)

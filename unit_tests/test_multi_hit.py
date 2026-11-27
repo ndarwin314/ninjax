@@ -39,7 +39,7 @@ def test_recoil_uses_total_actual_hp_loss_once(neutral_type):
     assert out.active.current_hp[0, 0] == state.active.current_hp[0, 0] - 3
     recoil = out.events.valid & (out.events.kind == EventKind.HP) & (out.events.cause == Cause.RECOIL)
     assert jnp.sum(recoil) == 1
-    assert jnp.array_equal(out.faint_order, jnp.array([2, 1]))
+    assert jnp.array_equal(out.pending_faints.order, jnp.array([2, 1]))
     assert resolve_faints(out).winner == 0
 
     # A zero-damage fixed hit must not incur minimum recoil.

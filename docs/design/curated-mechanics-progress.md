@@ -281,9 +281,6 @@ Remaining integration and mechanics include:
 - Auditing move-specific exceptions and interactions across the enabled catalogue;
   zero unavailable moves does not imply complete mechanics coverage.
 - Other Mental Herb effects.
-- Protect and Spiky Shield share the protection chain and support Unseen Fist
-  bypass; failure when no actions remain and additional protection variants
-  are not yet represented.
 - General ability-change lifecycle hooks beyond the represented Worry Seed
   transition, and further audits of public ability/item knowledge.
 - Additional charge/semi-invulnerability variants, protection-independent

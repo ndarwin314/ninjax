@@ -29,13 +29,13 @@ def test_hit_callback_scope(neutral_type, compiled_after_damage, player, name):
     _, state = neutral_type
     state = state.replace(
         terrain=Terrain(TerrainEnum.GRASSY, 5),
-        spikes=jnp.full((2, 1), 2, jnp.int32),
+        hazards=state.hazards.replace(spikes=jnp.full((2, 1), 2, jnp.int32)),
         boosts=state.boosts.replace(normal_boosts=jnp.ones_like(state.boosts.normal_boosts),
                                     acc_boosts=jnp.ones_like(state.boosts.acc_boosts)))
     out = compiled_after_damage(state, jnp.int32(player), make_move(name))
     expected_normal = state.boosts.normal_boosts
     expected_accuracy = state.boosts.acc_boosts
-    expected_spikes = state.spikes
+    expected_spikes = state.hazards.spikes
     if name == 'Clear Smog':
         expected_normal = expected_normal.at[1-player].set(0)
         expected_accuracy = expected_accuracy.at[1-player].set(0)
@@ -44,7 +44,7 @@ def test_hit_callback_scope(neutral_type, compiled_after_damage, player, name):
         expected_normal = expected_normal.at[player, 5].add(1)
     assert jnp.array_equal(out.boosts.normal_boosts, expected_normal)
     assert jnp.array_equal(out.boosts.acc_boosts, expected_accuracy)
-    assert jnp.array_equal(out.spikes, expected_spikes)
+    assert jnp.array_equal(out.hazards.spikes, expected_spikes)
     assert out.terrain.terrain == (TerrainEnum.NONE if name == 'Ice Spinner' else TerrainEnum.GRASSY)
     assert jnp.array_equal(out.active.current_hp, state.active.current_hp)
 
@@ -55,20 +55,20 @@ def test_haze_preserves_field_conditions(neutral_type, compiled_field_status, pl
     _, state = neutral_type
     state = state.replace(
         terrain=Terrain(TerrainEnum.PSYCHIC, 5),
-        spikes=jnp.full((2, 1), 2, jnp.int32),
+        hazards=state.hazards.replace(spikes=jnp.full((2, 1), 2, jnp.int32)),
         boosts=state.boosts.replace(normal_boosts=jnp.ones_like(state.boosts.normal_boosts),
                                     acc_boosts=jnp.ones_like(state.boosts.acc_boosts)))
     out = compiled_field_status(state, jnp.int32(player), make_move('Haze'))
     assert jnp.all(out.boosts.normal_boosts == 0)
     assert jnp.all(out.boosts.acc_boosts == 0)
-    assert jnp.array_equal(out.spikes, state.spikes)
+    assert jnp.array_equal(out.hazards.spikes, state.hazards.spikes)
     assert out.terrain.terrain == TerrainEnum.PSYCHIC
 
 
 def test_unknown_field_callback_preserves_state(neutral_type, compiled_field_status):
     """An unmatched identifier must select the fallback instead of Court Change."""
     _, state = neutral_type
-    state = state.replace(spikes=state.spikes.at[0, 0].set(2))
+    state = state.replace(hazards=state.hazards.replace(spikes=state.hazards.spikes.at[0, 0].set(2)))
     move = make_move('Tackle').replace(identifier=jnp.array([999999], jnp.int32))
     out = compiled_field_status(state, jnp.int32(0), move)
     assert all(jnp.array_equal(before, after)

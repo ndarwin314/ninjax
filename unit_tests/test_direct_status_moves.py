@@ -22,7 +22,7 @@ def test_pain_split_sets_hp_and_bypasses_damage_abilities(neutral_type):
     state = update_active(state, 1, state.active[1].replace(current_hp=jnp.array([100]), ability=jnp.array([A.MULTISCALE])))
     _, out = do_status_move(key, state, 0, make_move('Pain Split'), 0, 0)
     assert jnp.all(out.active.current_hp == 60)
-    assert jnp.all(out.volatile_status.last_damage == 0)
+    assert jnp.all(out.volatile_status.move_history.last_damage == 0)
     # The mean is computed before either participant's Sitrus Berry activates.
     state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.SITRUS_BERRY])))
     _, out = do_status_move(key, state, 0, make_move('Pain Split'), 0, 0)
@@ -81,7 +81,7 @@ def test_poltergeist_requires_and_reveals_item(neutral_type):
     assert out.active.current_hp[1, 0] < state.active.current_hp[1, 0]
     assert out.active.item[1, 0] == I.LEFTOVERS
     assert out.known_items[1, 0] == I.LEFTOVERS
-    guarded = state.replace(volatile_status=state.volatile_status.replace(protected=state.volatile_status.protected.at[1, 0].set(True)))
+    guarded = state.replace(volatile_status=state.volatile_status.replace(protection=state.volatile_status.protection.replace(protected=state.volatile_status.protection.protected.at[1, 0].set(True))))
     _, out = move_hits(key, guarded, 0, 0)
     assert out.known_items[1, 0] == -1
     assert jnp.array_equal(out.active.current_hp, guarded.active.current_hp)

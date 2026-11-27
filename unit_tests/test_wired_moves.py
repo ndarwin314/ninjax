@@ -42,7 +42,8 @@ def test_field_moves_ignore_opponent_hit_gates(neutral_type, hit_dispatch, name,
     state = equip_move(state, name)
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.GOOD_AS_GOLD])))
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True),
+    state = state.replace(volatile_status=v.replace(
+        protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True)),
         substitute_hp=v.substitute_hp.at[1, 0].set(50)))
     _, out = hit_dispatch(key, state, jnp.int32(0), jnp.int32(0))
     assert out.weather.weather == weather and out.terrain.terrain == terrain
@@ -57,14 +58,14 @@ def test_reflect_duration_expiry_and_damage(neutral_type, hit_dispatch):
     state = equip_move(state, 'Reflect')
     state = update_active(state, 0, state.active[0].replace(item=jnp.array([I.LIGHT_CLAY])))
     _, screen = hit_dispatch(key, state, jnp.int32(0), jnp.int32(0))
-    assert screen.reflect[0, 0] == 8
-    _, expired = step_side_conditions(key, screen.replace(reflect=screen.reflect.at[0, 0].set(1)))
-    assert expired.reflect[0, 0] == 0
+    assert screen.side_conditions.reflect[0, 0] == 8
+    _, expired = step_side_conditions(key, screen.replace(side_conditions=screen.side_conditions.replace(reflect=screen.side_conditions.reflect.at[0, 0].set(1))))
+    assert expired.side_conditions.reflect[0, 0] == 0
     # Battle Armor removes critical-hit variation; use identical random rolls.
     screen = update_active(screen, 0, screen.active[0].replace(ability=jnp.array([A.BATTLE_ARMOR])))
     screen = equip_move(screen, 'Tackle', 1)
     _, reduced = hit_dispatch(key, screen, jnp.int32(1), jnp.int32(0))
-    _, full = hit_dispatch(key, screen.replace(reflect=jnp.zeros_like(screen.reflect)), jnp.int32(1), jnp.int32(0))
+    _, full = hit_dispatch(key, screen.replace(side_conditions=screen.side_conditions.replace(reflect=jnp.zeros_like(screen.side_conditions.reflect))), jnp.int32(1), jnp.int32(0))
     assert 0 < reduced.hit_results[0].damage < full.hit_results[0].damage
 
 
@@ -122,7 +123,7 @@ def test_confusion_prevention_and_cure(neutral_type, hit_dispatch, case):
     if case == 'substitute':
         state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(50)))
     if case == 'protected':
-        state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+        state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     _, out = hit_dispatch(key, state, jnp.int32(0), jnp.int32(0))
     assert out.volatile_status.confusion_turns[1, 0] == 0
     if case == 'lum':
@@ -135,14 +136,13 @@ def test_detect_blocks_and_shares_chain(neutral_type, hit_dispatch):
     key, state = neutral_type
     state = equip_move(equip_move(state, 'Detect'), 'Tackle', 1)
     _, out = hit_dispatch(key, state, jnp.int32(0), jnp.int32(0))
-    assert out.volatile_status.protected[0, 0]
-    assert out.volatile_status.protection_kind[0, 0] == ProtectionKind.PROTECT
-    assert out.volatile_status.protect_chain[0, 0] == 1
+    assert out.volatile_status.protection.protected[0, 0]
+    assert out.volatile_status.protection.protection_kind[0, 0] == ProtectionKind.PROTECT
+    assert out.volatile_status.protection.protect_chain[0, 0] == 1
     # Starting Detect must retain a chain built by Protect or Spiky Shield.
-    chained = state.replace(volatile_status=state.volatile_status.replace(
-        protect_chain=state.volatile_status.protect_chain.at[0, 0].set(4)))
+    chained = state.replace(volatile_status=state.volatile_status.replace(protection=state.volatile_status.protection.replace(protect_chain=state.volatile_status.protection.protect_chain.at[0, 0].set(4))))
     _, prepared = _prepare_move_use(key, chained, 0, 0)
-    assert prepared.volatile_status.protect_chain[0, 0] == 4
+    assert prepared.volatile_status.protection.protect_chain[0, 0] == 4
     _, blocked = hit_dispatch(key, out, jnp.int32(1), jnp.int32(0))
     assert blocked.hit_results[0].outcome == HitOutcome.PROTECTED
     assert blocked.active.current_hp[0, 0] == state.active.current_hp[0, 0]
@@ -163,7 +163,7 @@ def test_flip_turn_protection_blocks_pivot(neutral_type, hit_dispatch):
     key, state = neutral_type
     state = equip_move(state, 'Flip Turn')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     _, out = hit_dispatch(key, state, jnp.int32(0), jnp.int32(0))
     assert not out.switch_requested[0]
     assert out.hit_results[0].outcome == HitOutcome.PROTECTED

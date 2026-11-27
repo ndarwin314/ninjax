@@ -13,8 +13,8 @@ def test_protect_blocks_and_unseen_fist_bypasses(neutral_type):
     key, state = neutral_type
     protect = make_move('Protect')
     key, state = do_status_move(key, state, 1, protect, 0, 0)
-    assert state.volatile_status.protected[1, 0]
-    assert state.volatile_status.protect_chain[1, 0] == 1
+    assert state.volatile_status.protection.protected[1, 0]
+    assert state.volatile_status.protection.protect_chain[1, 0] == 1
     flags = state.team.moves.move_flags.at[0, 0, 0, 0].set(int(MoveFlags.CONTACT))
     state = state.replace(team=state.team.replace(moves=state.team.moves.replace(move_flags=flags)))
     hp = state.active.current_hp[1, 0]
@@ -24,5 +24,5 @@ def test_protect_blocks_and_unseen_fist_bypasses(neutral_type):
     _, hit = move_hits(key, state, 0, 0)
     assert hit.active.current_hp[1, 0] < hp
     _, cleared = step_side_conditions(key, hit)
-    assert not cleared.volatile_status.protected[1, 0]
-    assert cleared.volatile_status.protect_chain[1, 0] == 1
+    assert not cleared.volatile_status.protection.protected[1, 0]
+    assert cleared.volatile_status.protection.protect_chain[1, 0] == 1

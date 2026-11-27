@@ -106,7 +106,9 @@ def test_entry_hazards_before_switch_abilities(neutral_type):
     key, original = neutral_type
     team = original.team.replace(current_hp=original.team.current_hp.at[0, 1, 0].set(1),
                                   ability=original.team.ability.at[0, 1, 0].set(AbilityEnum.DROUGHT))
-    state = original.replace(team=team, stealth_rocks=original.stealth_rocks.at[0, 0].set(True))
+    state = original.replace(
+        team=team,
+        hazards=original.hazards.replace(stealth_rocks=original.hazards.stealth_rocks.at[0, 0].set(True)))
     switch = jax.jit(lambda s: step_switch(key, s, 0, 1, False)[1])
     fainted = switch(state)
     assert fainted.active.current_hp[0, 0] == 0
@@ -204,7 +206,7 @@ def test_generic_move_effects(neutral_type, compiled_move_used):
     assert result.boosts.normal_boosts[1, StatEnum.ATTACK] == -1
     assert result.weather.weather == WeatherEnum.RAIN
     assert result.terrain.terrain == TerrainEnum.GRASSY
-    assert result.spikes[1, 0] == 1
+    assert result.hazards.spikes[1, 0] == 1
     assert result.active.moves.current_pp[0, 0, 0] == 7
     self_moves = configured.replace(target_self=jnp.ones_like(configured.target_self),
         status_effect=jnp.zeros_like(configured.status_effect),
@@ -215,7 +217,7 @@ def test_generic_move_effects(neutral_type, compiled_move_used):
     _, noop = run(key, original.replace(team=original.team.replace(moves=unsupported)))
     assert jnp.array_equal(noop.team.current_hp, original.team.current_hp)
     assert jnp.array_equal(noop.team.status, original.team.status)
-    assert jnp.all(noop.spikes == 0)
+    assert jnp.all(noop.hazards.spikes == 0)
 
 def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
     """Innards Out returns remaining HP as damage only when its holder faints."""
@@ -239,13 +241,15 @@ def test_innards_out_reacts_once_to_lethal_damage(neutral_type):
     team = team.replace(
         ability=team.ability.at[0, 0, 0].set(AbilityEnum.INNARDS_OUT),
         current_hp=team.current_hp.at[0, 0, 0].set(5))
-    state = state.replace(team=team, event_cause=jnp.int32(Cause.MOVE))
+    state = state.replace(
+        team=team,
+        event_context=state.event_context.replace(cause=jnp.int32(Cause.MOVE)))
     _, result, _, _ = hit(key, state, 0, lethal)
     events = result.events.unpack()
     faints = events.valid & (events.kind == EventKind.FAINT)
     assert jnp.array_equal(events.target[faints], jnp.array([1, 0]))
-    assert jnp.array_equal(result.faint_source, jnp.array([1, 0]))
-    assert jnp.array_equal(result.faint_cause, jnp.array([Cause.INDIRECT, Cause.MOVE]))
+    assert jnp.array_equal(result.pending_faints.source, jnp.array([1, 0]))
+    assert jnp.array_equal(result.pending_faints.cause, jnp.array([Cause.INDIRECT, Cause.MOVE]))
 
 
 def test_boost_events_keep_stat_order(neutral_type):
@@ -289,7 +293,7 @@ def test_scheduler_condition_events_keep_order_and_slot(neutral_type):
     after = state.replace(
         weather=Weather(WeatherEnum.RAIN, 5),
         active_index=state.active_index.at[1, 0].set(2),
-        spikes=state.spikes.at[1, 0].set(1),
+        hazards=state.hazards.replace(spikes=state.hazards.spikes.at[1, 0].set(1)),
         gravity_duration=jnp.int32(5))
     events = jax.jit(capture_conditions)(state, after).events.unpack()
     assert events.count == 3
@@ -604,28 +608,29 @@ def test_flash_fire_activation_and_switch_reset(neutral_type, compiled_move_used
     hit = lambda s: compiled_move_used(key, s)[1]
     activated = hit(state)
     assert activated.active.current_hp[1, 0] == state.active.current_hp[1, 0]
-    assert activated.volatile_status.flash_fire[1, 0]
-    assert not activated.volatile_status.flash_fire[0, 0]
+    assert activated.volatile_status.ability_state.flash_fire[1, 0]
+    assert not activated.volatile_status.ability_state.flash_fire[0, 0]
     repeated = hit(activated)
-    assert repeated.volatile_status.flash_fire[1, 0]
+    assert repeated.volatile_status.ability_state.flash_fire[1, 0]
     assert repeated.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     retaliate = jax.jit(lambda s: do_damaging_move(key, s, 1, s.active[1].moves[0], 0, 0)[1])
-    unboosted = activated.replace(volatile_status=activated.volatile_status.replace(
-        flash_fire=activated.volatile_status.flash_fire.at[1, 0].set(False)))
+    unboosted = activated.replace(volatile_status=activated.volatile_status.replace(ability_state=activated.volatile_status.ability_state.replace(flash_fire=activated.volatile_status.ability_state.flash_fire.at[1, 0].set(False))))
     assert retaliate(activated).active.current_hp[0, 0] < retaliate(unboosted).active.current_hp[0, 0]
     # Other fields reset for the leaving side and remain intact for its opponent.
-    marked = repeated.volatile_status.replace(confusion_turns=jnp.array([[3], [2]]),
-        transformed=jnp.array([[True], [True]]), flash_fire=jnp.ones((2, 1), bool))
+    marked = repeated.volatile_status.replace(
+        confusion_turns=jnp.array([[3], [2]]),
+        transformed=jnp.array([[True], [True]]),
+        ability_state=repeated.volatile_status.ability_state.replace(flash_fire=jnp.ones((2, 1), bool)))
     cleared = jax.jit(clear_volatile_status)(repeated.replace(volatile_status=marked), 1)
     assert cleared.volatile_status.confusion_turns[1, 0] == 0
     assert not cleared.volatile_status.transformed[1, 0]
-    assert not cleared.volatile_status.flash_fire[1, 0]
+    assert not cleared.volatile_status.ability_state.flash_fire[1, 0]
     assert cleared.volatile_status.confusion_turns[0, 0] == 3
-    assert cleared.volatile_status.flash_fire[0, 0]
+    assert cleared.volatile_status.ability_state.flash_fire[0, 0]
     switched = jax.jit(lambda s: step_switch(key, s, 1, 1, False)[1])(repeated.replace(volatile_status=marked))
     assert switched.active_index[1, 0] == 1
-    assert not switched.volatile_status.flash_fire[1, 0]
-    assert switched.volatile_status.flash_fire[0, 0]
+    assert not switched.volatile_status.ability_state.flash_fire[1, 0]
+    assert switched.volatile_status.ability_state.flash_fire[0, 0]
 
 
 def test_flash_fire_modifies_only_fire_damage_when_active(neutral_type):
@@ -685,7 +690,11 @@ def test_observation_events_and_private_hp(neutral_type):
     assert jnp.all(first.observation.team['current_hp'][:, 1] == 0)
     assert jnp.array_equal(first.observation.team['stats'][0, 0], battle.team.stat_table.stats[0])
     def effects(b):
-        b = b.replace(events=EventBuffer.empty(), event_source=jnp.int32(0), event_cause=jnp.int32(Cause.MOVE))
+        b = b.replace(
+            events=EventBuffer.empty(),
+            event_context=b.event_context.replace(
+                source=jnp.int32(0),
+                cause=jnp.int32(Cause.MOVE)))
         b = take_damage_value(b, 1, 13, True)
         b = take_damage_value(b, 1, -5, False)
         _, b = set_status(key, b, 1, jnp.array([Status.BURN]))

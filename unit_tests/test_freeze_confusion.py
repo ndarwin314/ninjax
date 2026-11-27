@@ -69,8 +69,10 @@ def test_weather_accuracy_jit(neutral_type):
 def test_secondary_status_and_immunity(neutral_type):
     """Both moves apply their secondary effect and sunshine prevents freezing."""
     key, state = neutral_type
-    blizzard = make_move('Blizzard').replace(secondary_chance=jnp.array([1.]))
-    hurricane = make_move('Hurricane').replace(secondary_chance=jnp.array([1.]))
+    blizzard = make_move('Blizzard')
+    blizzard = blizzard.replace(secondaries=blizzard.secondaries.replace(probabilities=blizzard.secondaries.probabilities.at[0].set(1.)))
+    hurricane = make_move('Hurricane')
+    hurricane = hurricane.replace(secondaries=hurricane.secondaries.replace(probabilities=hurricane.secondaries.probabilities.at[0].set(1.)))
     _, out = secondary_effects(key, state, 0, blizzard)
     assert out.active.status[1, 0] == Status.FREEZE
     _, out = secondary_effects(key, state.replace(weather=Weather(W.SUN, 5)), 0, blizzard)
@@ -94,7 +96,8 @@ def test_freeze_thaw_and_fire_hit(neutral_type):
     _, out, interrupted = before_move(key, state, 0, defrost_move=True)
     assert not interrupted and out.active.status[0, 0] == Status.FREEZE
     state = update_active(state, 1, state.active[1].replace(status=jnp.array([Status.FREEZE])))
-    fire = make_move('Flamethrower').replace(secondary_chance=jnp.array([0.]))
+    fire = make_move('Flamethrower')
+    fire = fire.replace(secondaries=fire.secondaries.replace(probabilities=fire.secondaries.probabilities.at[0].set(0.)))
     _, out, _, _ = resolve_damaging_hit(key, state, 0, fire)
     assert out.active.status[1, 0] == Status.NONE
 
@@ -115,7 +118,7 @@ def test_explicit_target_thaw_follows_secondaries(neutral_type, resolve_thawing_
     move = make_move(name)
     assert move.current_pp[0] > 0 and move.thaws_target[0]
     # Force the burn roll to expose a thaw that happens too early.
-    move = move.replace(secondary_chance=jnp.ones_like(move.secondary_chance))
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(1.)))
     _, out, _, _ = resolve_thawing_hit(key, state, 0, move)
     assert out.hit_results[0].recipient == HitRecipient.POKEMON
     assert out.active.status[1, 0] == Status.NONE

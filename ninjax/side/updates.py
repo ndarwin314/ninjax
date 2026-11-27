@@ -8,12 +8,12 @@ from ninjax.calculations.stats import StatBoosts
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventKind, emit
-from ninjax.side.state import BattleState
+from ninjax.side.state import BattleState, VolatileStatus
 
 
-def _clear_volatile_row(value, *, side_idx):
-    """Clear volatile row."""
-    return value.at[side_idx].set(jnp.zeros_like(value[side_idx]))
+def _reset_volatile_row(value, default, *, side_idx):
+    """Reset one side to the field's default, including sentinel values."""
+    return value.at[side_idx].set(default[side_idx])
 
 
 def _record_boost(stat, carry):
@@ -107,9 +107,6 @@ def update_active_fields(state: BattleState, side_idx, **updates) -> BattleState
 
 def clear_volatile_status(state: BattleState, side_idx) -> BattleState:
     """Reset all represented switch-cleared effects for one active side."""
-    volatile = jax.tree.map(partial(_clear_volatile_row, side_idx=side_idx), state.volatile_status)
-    volatile = volatile.replace(paradox_stat=volatile.paradox_stat.at[side_idx].set(-1),
-                                choice_lock=volatile.choice_lock.at[side_idx].set(-1),
-                                pending_actor_slot=volatile.pending_actor_slot.at[side_idx].set(-1),
-                                ability_override=volatile.ability_override.at[side_idx].set(-1))
+    volatile = jax.tree.map(partial(_reset_volatile_row, side_idx=side_idx),
+                            state.volatile_status, VolatileStatus())
     return state.replace(volatile_status=volatile)

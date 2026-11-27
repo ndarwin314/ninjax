@@ -20,7 +20,7 @@ def test_explosion_self_faints_even_when_target_unaffected(neutral_type, mode):
     state = update_active(state, 0, state.active[0].replace(ability=jnp.array([A.STURDY]), item=jnp.array([I.FOCUS_SASH])))
     if mode == 'protect':
         v = state.volatile_status
-        state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+        state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     if mode == 'ghost':
         state = update_active(state, 1, state.active[1].replace(type_list=jnp.array([Type.GHOST, Type.NONE])))
     if mode == 'miss':
@@ -58,7 +58,7 @@ def test_memento_requires_reaching_target(neutral_type, mode):
     if mode in ('protect', 'substitute'):
         v = state.volatile_status
         if mode == 'protect':
-            v = v.replace(protected=v.protected.at[1, 0].set(True))
+            v = v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True)))
         else:
             v = v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(20))
         state = state.replace(volatile_status=v)

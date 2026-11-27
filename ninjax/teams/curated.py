@@ -266,6 +266,7 @@ CURATED_ITEMS = {
     'Splash Plate': 'SPLASH_PLATE', 'Meadow Plate': 'MEADOW_PLATE', 'Zap Plate': 'ZAP_PLATE',
     'Mind Plate': 'MIND_PLATE', 'Icicle Plate': 'ICICLE_PLATE', 'Draco Plate': 'DRACO_PLATE',
     'Dread Plate': 'DREAD_PLATE', 'Pixie Plate': 'PIXIE_PLATE',
+    'Shed Shell': 'SHED_SHELL', 'Grip Claw': 'GRIP_CLAW', 'Binding Band': 'BINDING_BAND',
 }
 
 

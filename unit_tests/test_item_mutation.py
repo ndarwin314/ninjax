@@ -25,11 +25,11 @@ def test_remove_updates_knowledge_and_choice_lock(neutral_type):
     state = items(state, I.NONE, I.CHOICE_BAND)
     v = state.volatile_status
     state = state.replace(known_items=state.known_items.at[1, 0].set(I.CHOICE_BAND),
-        volatile_status=v.replace(choice_lock=v.choice_lock.at[1, 0].set(2)))
+        volatile_status=v.replace(restrictions=v.restrictions.replace(choice_lock=v.restrictions.choice_lock.at[1, 0].set(2))))
     out, success = remove_item(state, 1, 0)
     assert success and out.active.item[1, 0] == I.NONE
     assert out.known_items[1, 0] == I.NONE
-    assert out.volatile_status.choice_lock[1, 0] == -1
+    assert out.volatile_status.restrictions.choice_lock[1, 0] == -1
     assert out.events.count > state.events.count
     failed, success = remove_item(out, 1, 0)
     assert not success and failed.events.count == out.events.count
@@ -94,13 +94,14 @@ def test_effective_sticky_hold_and_received_mental_herb(neutral_type):
     _, state = neutral_type
     state = items(state, I.MENTAL_HERB, I.LEFTOVERS)
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(ability_override=v.ability_override.at[1, 0].set(A.STICKY_HOLD)))
+    state = state.replace(volatile_status=v.replace(ability_state=v.ability_state.replace(ability_override=v.ability_state.ability_override.at[1, 0].set(A.STICKY_HOLD))))
     assert not swap_items(state, 0, 1)[1]
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(ability_suppressed=v.ability_suppressed.at[1, 0].set(True),
-        taunt_turns=v.taunt_turns.at[1, 0].set(3)))
+    state = state.replace(volatile_status=v.replace(
+        ability_state=v.ability_state.replace(ability_suppressed=v.ability_state.ability_suppressed.at[1, 0].set(True)),
+        restrictions=v.restrictions.replace(taunt_turns=v.restrictions.taunt_turns.at[1, 0].set(3))))
     out, success = swap_items(state, 0, 1)
-    assert success and out.volatile_status.taunt_turns[1, 0] == 0
+    assert success and out.volatile_status.restrictions.taunt_turns[1, 0] == 0
     assert out.active.item[1, 0] == I.NONE
 
 
@@ -111,15 +112,15 @@ def test_choice_lock_preservation_and_booster_energy(neutral_type):
     _, state = neutral_type
     state = items(state, I.CHOICE_BAND, I.CHOICE_SPECS)
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(choice_lock=v.choice_lock.at[:, 0].set(jnp.array([1, 2]))))
+    state = state.replace(volatile_status=v.replace(restrictions=v.restrictions.replace(choice_lock=v.restrictions.choice_lock.at[:, 0].set(jnp.array([1, 2])))))
     out, success = swap_items(state, 0, 1)
-    assert success and jnp.array_equal(out.volatile_status.choice_lock, state.volatile_status.choice_lock)
+    assert success and jnp.array_equal(out.volatile_status.restrictions.choice_lock, state.volatile_status.restrictions.choice_lock)
     state = items(state, I.BOOSTER_ENERGY, I.LEFTOVERS)
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.QUARK_DRIVE])))
     out, success = swap_items(state, 0, 1)
     assert success and out.active.item[1, 0] == I.NONE
-    assert out.volatile_status.paradox_booster[1, 0]
-    assert out.volatile_status.paradox_stat[1, 0] > 0
+    assert out.volatile_status.ability_state.paradox_booster[1, 0]
+    assert out.volatile_status.ability_state.paradox_stat[1, 0] > 0
     assert out.known_items[1, 0] == I.NONE
-    assert out.volatile_status.choice_lock[1, 0] == -1
-    assert out.event_source == state.event_source
+    assert out.volatile_status.restrictions.choice_lock[1, 0] == -1
+    assert out.event_context.source == state.event_context.source

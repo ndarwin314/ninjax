@@ -41,9 +41,9 @@ def test_restrictions_transform(neutral_type):
     move = make_move('Taunt')
     batch = jax.tree.map(lambda x: jnp.stack([x, x]), state)
     out = jax.jit(jax.vmap(lambda s: apply_restriction(s, 0, move)))(batch)
-    assert jnp.all(out.volatile_status.taunt_turns[:, 1, 0] == 3)
+    assert jnp.all(out.volatile_status.restrictions.taunt_turns[:, 1, 0] == 3)
     def body(s, _):
         """Carry the restriction through two residual phases."""
         return step_side_conditions(key, s)[1], None
     final, _ = jax.jit(lambda s: jax.lax.scan(body, s, None, length=2))(jax.tree.map(lambda x: x[0], out))
-    assert final.volatile_status.taunt_turns[1, 0] == 1
+    assert final.volatile_status.restrictions.taunt_turns[1, 0] == 1

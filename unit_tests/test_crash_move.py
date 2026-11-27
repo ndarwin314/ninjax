@@ -14,7 +14,7 @@ def test_crash_on_protect_and_immunity(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'High Jump Kick')
     v = state.volatile_status
-    protected = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    protected = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     _, out = step_move(key, protected, 0, 0, False)
     assert out.active.current_hp[0, 0] == protected.active.current_hp[0, 0] - protected.active.max_hp[0] // 2
     ghost = update_active(state, 1, state.active[1].replace(type_list=jnp.array([Type.GHOST, Type.NONE])))
@@ -28,7 +28,7 @@ def test_magic_guard_and_gravity(neutral_type):
     state = equip_move(state, 'High Jump Kick')
     state = update_active(state, 0, state.active[0].replace(ability=jnp.array([A.MAGIC_GUARD])))
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     _, out = step_move(key, state, 0, 0, False)
     assert out.active.current_hp[0, 0] == state.active.current_hp[0, 0]
     state = state.replace(gravity_duration=jnp.int32(3))

@@ -16,16 +16,17 @@ from ninjax.enums.field import (
 )
 from ninjax.enums.items import ItemEnum as I
 from ninjax.side.queries import effective_weather
-from ninjax.side.state import BattleState
+from ninjax.side.state import BattleState, Hazards
 from ninjax.side.updates import add_boosts, clear_boosts, set_boosts
 
 
 def clear_target_screens(state, target, enabled):
     """Clear the selected side's three damage-reducing screens."""
     return state.replace(
-        reflect=state.reflect.at[target].set(jnp.where(enabled, 0, state.reflect[target])),
-        light_screen=state.light_screen.at[target].set(jnp.where(enabled, 0, state.light_screen[target])),
-        aurora_veil=state.aurora_veil.at[target].set(jnp.where(enabled, 0, state.aurora_veil[target])))
+        side_conditions=state.side_conditions.replace(
+            reflect=state.side_conditions.reflect.at[target].set(jnp.where(enabled, 0, state.side_conditions.reflect[target])),
+            light_screen=state.side_conditions.light_screen.at[target].set(jnp.where(enabled, 0, state.side_conditions.light_screen[target])),
+            aurora_veil=state.side_conditions.aurora_veil.at[target].set(jnp.where(enabled, 0, state.side_conditions.aurora_veil[target]))))
 
 
 def _field_status_add_boosts(s, *, player):
@@ -53,16 +54,14 @@ def _field_status_defog(s, *, player):
     boosts = StatBoosts(normal_boosts=s.boosts.normal_boosts[target],
         acc_boosts=s.boosts.acc_boosts[target].at[1].add(amount))
     s = set_boosts(s, target, boosts)
-    s = s.replace(**{name: jnp.zeros_like(getattr(s, name)) for name in ('stealth_rocks', 'spikes', 'toxic_spikes', 'sticky_webs')})
-    s = s.replace(**{name: getattr(s, name).at[target].set(0) for name in ('reflect', 'light_screen', 'aurora_veil')})
+    s = clear_target_screens(s.replace(hazards=Hazards()), target, True)
     return s.replace(terrain=Terrain(T.NONE, 0))
 
 
 def _field_status_update_field(s):
-    """Field status update field."""
-    return s.replace(**{
-            name: getattr(s, name)[::-1] for name in ('stealth_rocks', 'spikes', 'toxic_spikes', 'sticky_webs',
-                                                    'reflect', 'light_screen', 'aurora_veil', 'tailwind')})
+    """Swap both sides' hazards and timed side conditions for Court Change."""
+    hazards, side_conditions = jax.tree.map(jnp.flipud, (s.hazards, s.side_conditions))
+    return s.replace(hazards=hazards, side_conditions=side_conditions)
 
 
 def set_terrain(
@@ -93,16 +92,18 @@ def set_weather(
 def field_status(state, player, move):
     """Set screens and timers, swap side conditions, or clear stages field-wide."""
     ident = move.identifier[0]
-    old_tailwind = state.tailwind[player, 0]
+    conditions = state.side_conditions
+    old_tailwind = conditions.tailwind[player, 0]
     duration = jnp.where(state.active.item[player, 0] == I.LIGHT_CLAY, 8, 5)
     for name, enabled in [('reflect', ident == 115),
                           ('light_screen', ident == 113),
                           ('aurora_veil', (ident == 694) & (effective_weather(state.weather.weather, state.ability, state.active.current_hp) == W.SNOW)),
                           ('tailwind', ident == 366)]:
-        current = getattr(state, name)
+        current = getattr(conditions, name)
         value = jnp.where(enabled & (current[player, 0] == 0), jnp.where(ident == 366, 4, duration), current[player, 0])
-        state = state.replace(**{name: current.at[player, 0].set(value)})
-    state = jax.lax.cond((old_tailwind == 0) & (state.tailwind[player, 0] > 0) & (state.ability[player, 0] == A.WIND_RIDER),
+        conditions = conditions.replace(**{name: current.at[player, 0].set(value)})
+    state = state.replace(side_conditions=conditions)
+    state = jax.lax.cond((old_tailwind == 0) & (state.side_conditions.tailwind[player, 0] > 0) & (state.ability[player, 0] == A.WIND_RIDER),
         partial(_field_status_add_boosts, player=player), _preserve_operand, state)
     state = state.replace(trick_room_duration=jnp.where(ident == 433, jnp.where(state.trick_room_duration > 0, 0, 5), state.trick_room_duration))
     # Haze, Defog and Court Change are mutually exclusive move callbacks.

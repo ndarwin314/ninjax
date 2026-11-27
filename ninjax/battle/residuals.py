@@ -19,7 +19,7 @@ from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.item_effects import cure_status
 from ninjax.side.queries import effective_weather, is_floating, is_sand_immune
-from ninjax.side.state import BattleState
+from ninjax.side.state import BattleState, SideProtection
 from ninjax.side.status_effects import set_status
 from ninjax.side.updates import add_boosts, conditional_add_boosts
 
@@ -43,6 +43,7 @@ class ResidualHPPhase(IntEnum):
     POISON = 2
     BURN = 3
     BAD_DREAMS = 4
+    BINDING = 5
 
 
 def residual_speed_order(state):
@@ -66,11 +67,11 @@ def _weather_fraction(state, mon):
 
 def _residual_fraction(state, player, phase):
     """Resolve one holder's eligibility and HP fraction at this phase."""
-    mon = state.effective_active[player]
+    mon = state.combat_active[player]
     ability, status = mon.ability[0], mon.status[0]
     weather = _weather_fraction(state, mon)
     # Dig and Dive shelter the user from sandstorm, but not other weather effects.
-    hidden = state.volatile_status.semi_invulnerability[player, 0]
+    hidden = state.volatile_status.continuation.semi_invulnerability[player, 0]
     sand = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp')) == WeatherEnum.SANDSTORM
     weather = jnp.where(sand & ((hidden == SemiInvulnerability.UNDERGROUND) | (hidden == SemiInvulnerability.UNDERWATER)), 0., weather)
     grassy = ((state.terrain.terrain == TerrainEnum.GRASSY) &
@@ -83,7 +84,10 @@ def _residual_fraction(state, player, phase):
     dreams = ((state.ability[source, 0] == AbilityEnum.BAD_DREAMS) &
               (state.active_field('current_hp', source)[0] > 0) &
               ((status == Status.SLEEP) | (ability == AbilityEnum.COMATOSE)))
-    fractions = jnp.stack((weather, jnp.where(grassy, -1 / 16, 0.), poison, burn, dreams / 8))
+    traps = state.volatile_status.trapping
+    binding = jnp.where(traps.binding_turns[player, 0] > 0,
+                        1 / jnp.maximum(1, traps.binding_divisor[player, 0]), 0.)
+    fractions = jnp.stack((weather, jnp.where(grassy, -1 / 16, 0.), poison, burn, dreams / 8, binding))
     fraction = fractions[phase]
     return jnp.where((mon.current_hp[0] > 0) &
                      ((ability != AbilityEnum.MAGIC_GUARD) | (fraction < 0)), fraction, 0.)
@@ -91,11 +95,14 @@ def _residual_fraction(state, player, phase):
 
 def _apply_residual_hp(state, player, fraction, phase):
     """Attribute and commit a single residual HP change."""
-    causes = jnp.array([Cause.WEATHER, Cause.TERRAIN, Cause.STATUS, Cause.STATUS, Cause.INDIRECT])
-    source = state.event_source
-    state = state.replace(event_source=jnp.where(phase == ResidualHPPhase.BAD_DREAMS, 1 - player, source))
+    causes = jnp.array([Cause.WEATHER, Cause.TERRAIN, Cause.STATUS, Cause.STATUS, Cause.INDIRECT, Cause.INDIRECT])
+    context = state.event_context
+    binding = phase == ResidualHPPhase.BINDING
+    source = jnp.where(binding | (phase == ResidualHPPhase.BAD_DREAMS), 1 - player, context.source)
+    move_id = jnp.where(binding, state.volatile_status.trapping.binding_move_id[player, 0], context.move_id)
+    state = state.replace(event_context=context.replace(source=source, move_id=move_id))
     state = take_damage_percent(state, player, fraction, cause=causes[phase])
-    return state.replace(event_source=source)
+    return state.replace(event_context=context)
 
 
 def _skip_residual_hp(state, player, fraction, phase):
@@ -129,6 +136,11 @@ def end_turn_damage(state: BattleState) -> BattleState:
     return run_hp_residuals(state, tuple(ResidualHPPhase))
 
 
+def _tick_side_timer(turns):
+    """Decrement one side condition duration without going below zero."""
+    return jnp.maximum(turns - 1, 0)
+
+
 def step_side_conditions(
     key: chex.PRNGKey,
     state: BattleState,
@@ -136,17 +148,20 @@ def step_side_conditions(
     """Decrement side timers and update toxic counters; return the unchanged key."""
     toxic_counter = (state.toxic_counter + 1) * (state.active.status == Status.TOXIC)
     state = state.replace(
-        reflect=jnp.maximum(state.reflect - 1, 0),
-        light_screen=jnp.maximum(state.light_screen - 1, 0),
-        aurora_veil=jnp.maximum(state.aurora_veil - 1, 0),
-        tailwind=jnp.maximum(state.tailwind - 1, 0),
-        toxic_counter=toxic_counter
-    )
-    state = state.replace(volatile_status=state.volatile_status.replace(
-        protected=jnp.zeros_like(state.volatile_status.protected),
-        protection_kind=jnp.zeros_like(state.volatile_status.protection_kind),
-        flinched=jnp.zeros_like(state.volatile_status.flinched),
-        embargo_turns=jnp.maximum(state.volatile_status.embargo_turns - 1, 0)))
+        side_conditions=jax.tree.map(_tick_side_timer, state.side_conditions),
+        side_protection=SideProtection(),
+        toxic_counter=toxic_counter)
+    v = state.volatile_status
+    guard = v.protection
+    state = state.replace(volatile_status=v.replace(
+        protection=guard.replace(
+            protected=jnp.zeros_like(guard.protected),
+            protection_kind=jnp.zeros_like(guard.protection_kind),
+            protect_chain=jnp.where(guard.stall_refreshed, guard.protect_chain, 0),
+            stall_refreshed=jnp.zeros_like(guard.stall_refreshed)),
+        queued_move=v.queued_move.replace(last_action=jnp.zeros_like(v.queued_move.last_action)),
+        flinched=jnp.zeros_like(v.flinched),
+        embargo_turns=jnp.maximum(v.embargo_turns - 1, 0)))
 
     state = tick(state)
     return key, state

@@ -74,15 +74,17 @@ def test_raging_bull_screen_break_follows_hit_gates(neutral_type, route_form_mov
     state = equip_move(state, 'Raging Bull')
     user = state.active[0].replace(form=jnp.array([F.TAUROS_PALDEA_COMBAT]))
     state = update_active(state, 0, user)
-    state = state.replace(reflect=state.reflect.at[1, 0].set(4),
-                          light_screen=state.light_screen.at[1, 0].set(4),
-                          aurora_veil=state.aurora_veil.at[1, 0].set(4))
+    state = state.replace(
+        side_conditions=state.side_conditions.replace(
+            reflect=state.side_conditions.reflect.at[1, 0].set(4),
+            light_screen=state.side_conditions.light_screen.at[1, 0].set(4),
+            aurora_veil=state.side_conditions.aurora_veil.at[1, 0].set(4)))
     if case == 'substitute':
         v = state.volatile_status
         state = state.replace(volatile_status=v.replace(substitute_hp=v.substitute_hp.at[1, 0].set(10)))
     elif case == 'protected':
         v = state.volatile_status
-        state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+        state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     elif case == 'immune':
         defender = state.active[1].replace(type_list=jnp.array([Type.GHOST, Type.NONE]))
         state = update_active(state, 1, defender)
@@ -93,7 +95,7 @@ def test_raging_bull_screen_break_follows_hit_gates(neutral_type, route_form_mov
     _, out = route_form_move(key, state, 0, 0, 0)
     assert out.hit_results[0].outcome == outcome
     expected = 0 if case == 'substitute' else 4
-    assert out.reflect[1, 0] == out.light_screen[1, 0] == out.aurora_veil[1, 0] == expected
+    assert out.side_conditions.reflect[1, 0] == out.side_conditions.light_screen[1, 0] == out.side_conditions.aurora_veil[1, 0] == expected
     if case == 'substitute':
         assert out.hit_results[0].recipient == HitRecipient.SUBSTITUTE
         assert out.active.current_hp[1, 0] == state.active.current_hp[1, 0]

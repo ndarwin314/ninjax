@@ -22,7 +22,7 @@ from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import _apply_move_effects, move_misses
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults, record_hit
-from ninjax.restrictions import move_blocked_by_hit_restrictions
+from ninjax.restrictions import move_blocked_at_execution
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
 from ninjax.side.item_effects import consume
 from ninjax.side.queries import effective_weather, is_choice_item
@@ -60,8 +60,6 @@ def move_interrupted(key: chex.PRNGKey, state: BattleState, attacker_index: int,
 
     state = clear_destiny_bond(state, attacker_index)
     # TODO: eventually we will need to figure out we handle observations and include it here
-    v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protect_chain=v.protect_chain.at[attacker_index, 0].set(0)))
     return key, emit(state, EventKind.INTERRUPTED, attacker_index)
 
 
@@ -69,7 +67,7 @@ def _release_charged_move(k, s, p, i):
     """Announce a released charge without consuming PP or changing type."""
 
     s = clear_destiny_bond(s, p)
-    return k, emit(s, EventKind.MOVE, p, detail=s.event_move)
+    return k, emit(s, EventKind.MOVE, p, detail=s.event_context.move_id)
 
 
 def _prepare_selected_or_released_move(k, s, p, i, *, continued):
@@ -98,10 +96,11 @@ def move_used(key, state: BattleState, attacker_index, move_index, continued=Fal
     # Release keeps concealment during its own execution, then ends it even
     # when called directly instead of through the battle action scheduler.
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(semi_invulnerability=
-        v.semi_invulnerability.at[attacker_index, 0].set(jnp.where(
-            continued, SemiInvulnerability.NONE, v.semi_invulnerability[attacker_index, 0]))))
-    return key, jax.lax.cond(struggle, partial(_struggle_recoil, player=attacker_index), _identity, state)
+    state = state.replace(volatile_status=v.replace(continuation=v.continuation.replace(semi_invulnerability=
+        v.continuation.semi_invulnerability.at[attacker_index, 0].set(jnp.where(
+            continued, SemiInvulnerability.NONE, v.continuation.semi_invulnerability[attacker_index, 0])))))
+    hit = state.hit_results[0].outcome == HitOutcome.HIT
+    return key, jax.lax.cond(struggle & hit, partial(_struggle_recoil, player=attacker_index), _identity, state)
 
 
 def _prepare_struggle_use(key, state, player, unused_index):
@@ -109,8 +108,10 @@ def _prepare_struggle_use(key, state, player, unused_index):
 
     state = clear_destiny_bond(state, player)
     v = state.volatile_status
-    state = state.replace(hit_results=HitResults.empty(), event_move=jnp.int32(-1),
-        volatile_status=v.replace(last_move_id=v.last_move_id.at[player, 0].set(0)))
+    state = state.replace(
+        hit_results=HitResults.empty(),
+        event_context=state.event_context.replace(move_id=jnp.int32(-1)),
+        volatile_status=v.replace(move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[player, 0].set(0))))
     return key, emit(state, EventKind.MOVE, player, detail=-1)
 
 
@@ -148,19 +149,21 @@ def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
 
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(
-        last_move_id=v.last_move_id.at[attacker_index, 0].set(move.identifier[0]),
-        called_move_id=v.called_move_id.at[attacker_index, 0].set(0),
-        protect_chain=v.protect_chain.at[attacker_index, 0].set(
-            jnp.where((move.identifier[0] == 182) | (move.identifier[0] == 197) | (move.identifier[0] == 596), v.protect_chain[attacker_index, 0], 0))))
+        move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[attacker_index, 0].set(move.identifier[0])),
+        called_move=v.called_move.replace(called_move_id=v.called_move.called_move_id.at[attacker_index, 0].set(0))))
 
-    state = state.replace(hit_results=HitResults.empty(), event_source=jnp.asarray(attacker_index, jnp.int32),
-                          event_move=move.identifier[0], event_cause=jnp.int32(Cause.MOVE))
+    state = state.replace(
+        hit_results=HitResults.empty(),
+        event_context=state.event_context.replace(
+            source=jnp.asarray(attacker_index, jnp.int32),
+            move_id=move.identifier[0],
+            cause=jnp.int32(Cause.MOVE)))
     state = emit(state, EventKind.MOVE, attacker_index, detail=move.identifier[0])
 
     choice = is_choice_item(state.active.item[attacker_index, 0])
-    lock = state.volatile_status.choice_lock
-    state = state.replace(volatile_status=state.volatile_status.replace(choice_lock=lock.at[attacker_index, 0].set(
-        jnp.where(choice & (lock[attacker_index, 0] < 0), move_index, lock[attacker_index, 0]))))
+    lock = state.volatile_status.restrictions.choice_lock
+    state = state.replace(volatile_status=state.volatile_status.replace(restrictions=state.volatile_status.restrictions.replace(choice_lock=lock.at[attacker_index, 0].set(
+        jnp.where(choice & (lock[attacker_index, 0] < 0), move_index, lock[attacker_index, 0])))))
     # Moves that call other moves do not themselves activate Protean/Libero.
     state = jax.lax.cond(
         move.identifier[0] == 214,
@@ -234,22 +237,23 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
     The scalar ``continued`` flag bypasses initial charge setup and ordinary
     attempt finalization; release bookkeeping was handled by the scheduler.
     """
-    struggle = state.event_move == -1
+    struggle = state.event_context.move_id == -1
     move = state.active_moves(attacker_index, move_index)
     explosion = (move.identifier[0] == 153) & move.implemented[0]
     charge_move = jnp.isin(move.identifier[0], jnp.array([19, 76, 91, 143, 291, 340, 467, 553, 554, 566, 669, 800, 905])) & move.implemented[0]
 
     v = state.volatile_status
     target = 1-attacker_index
-    fake_fails = (move.identifier[0] == 252) & (v.active_move_actions[attacker_index, 0] > 1)
-    sucker_fails = (move.identifier[0] == 389) & (~v.pending_move[target, 0] |
-        (v.pending_move_type[target, 0] == MoveType.STATUS) |
-        (v.pending_actor_slot[target, 0] != state.active_index[target, 0]))
+    fake_fails = (move.identifier[0] == 252) & (v.move_history.active_move_actions[attacker_index, 0] > 1)
+    sucker_fails = (move.identifier[0] == 389) & (~v.queued_move.pending_move[target, 0] |
+        (v.queued_move.pending_move_type[target, 0] == MoveType.STATUS) |
+        (v.queued_move.pending_actor_slot[target, 0] != state.active_index[target, 0]))
 
 
     # Releases and Struggle bypass initial failure/charge checks. Preserve
     # that priority before selecting Explosion or Electro Shot preparation.
-    called_blocked = v.sleep_talk_active[attacker_index, 0] & move_blocked_by_hit_restrictions(state, attacker_index, move)
+    called_blocked = v.called_move.sleep_talk_active[attacker_index, 0] & move_blocked_at_execution(
+        state, attacker_index, move, called=True)
     branch = jnp.select(
         (continued | struggle, fake_fails | sucker_fails | called_blocked, explosion, charge_move),
         (0, 1, 2, 3), default=0)
@@ -305,11 +309,15 @@ def _select_sleep_talk_move(k, s, *, eligible, player):
     selected = random.categorical(select_key, jnp.where(eligible, 0., -jnp.inf)).astype(jnp.int32)
     called = s.active_moves(player, selected)
     v = s.volatile_status
-    s = s.replace(event_move=called.identifier[0], volatile_status=v.replace(
-        sleep_talk_active=v.sleep_talk_active.at[player, 0].set(True),
-        sleep_talk_succeeded=v.sleep_talk_succeeded.at[player, 0].set(True),
-        called_move_id=v.called_move_id.at[player, 0].set(called.identifier[0]),
-        encore_overridden=v.encore_overridden.at[player, 0].set(True)))
+    s = s.replace(
+        event_context=s.event_context.replace(move_id=called.identifier[0]),
+        volatile_status=v.replace(
+            called_move=v.called_move.replace(
+                sleep_talk_active=v.called_move.sleep_talk_active.at[player, 0].set(True),
+                sleep_talk_succeeded=v.called_move.sleep_talk_succeeded.at[player, 0].set(True),
+                called_move_id=v.called_move.called_move_id.at[player, 0].set(called.identifier[0])),
+            queued_move=v.queued_move.replace(
+                encore_overridden=v.queued_move.encore_overridden.at[player, 0].set(True))))
 
     s = prepare_type_change(s, player, effective_move(s, player, called))
     s = emit(s, EventKind.MOVE, player, detail=called.identifier[0])
@@ -323,7 +331,7 @@ def _prepare_sleep_talk(key, state, player, move_index):
     eligible = moves.sleep_talk_eligible[:, 0] & moves.implemented[:, 0] & (moves.identifier[:, 0] != 0) & (moves.identifier[:, 0] != 214)
     eligible &= jnp.arange(4) != move_index
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(sleep_talk_succeeded=v.sleep_talk_succeeded.at[player, 0].set(False)))
+    state = state.replace(volatile_status=v.replace(called_move=v.called_move.replace(sleep_talk_succeeded=v.called_move.sleep_talk_succeeded.at[player, 0].set(False))))
     return jax.lax.cond(
         asleep & jnp.any(eligible),
         partial(_select_sleep_talk_move, eligible=eligible, player=player),
@@ -341,15 +349,18 @@ def _use_selected_slot(k, s, p, i):
 def _restore_sleep_talk_context(s, *, old_move, player, old_override):
     """Restore Sleep Talk's event and Encore context after success or failure."""
     v = s.volatile_status
-    return s.replace(event_move=old_move, volatile_status=v.replace(
-        sleep_talk_active=v.sleep_talk_active.at[player, 0].set(False),
-        encore_overridden=v.encore_overridden.at[player, 0].set(old_override)))
+    return s.replace(
+        event_context=s.event_context.replace(move_id=old_move),
+        volatile_status=v.replace(
+            called_move=v.called_move.replace(sleep_talk_active=v.called_move.sleep_talk_active.at[player, 0].set(False)),
+            queued_move=v.queued_move.replace(
+                encore_overridden=v.queued_move.encore_overridden.at[player, 0].set(old_override))))
 
 
 def _execute_selected_or_called_move(key, state, player, move_index, sleep_talk, continued=False):
     """Select the effective slot, dispatch once and restore called-move context."""
-    old_move = state.event_move
-    old_override = state.volatile_status.encore_overridden[player, 0]
+    old_move = state.event_context.move_id
+    old_override = state.volatile_status.queued_move.encore_overridden[player, 0]
     key, state, selected, ready = jax.lax.cond(sleep_talk, _prepare_sleep_talk,
         _use_selected_slot,
         key, state, player, move_index)
@@ -385,10 +396,11 @@ def _charge_selected_move(k, s, *, player, identifier):
                            SemiInvulnerability.UNDERWATER, SemiInvulnerability.VANISHED),
                           default=SemiInvulnerability.NONE)
     s = s.replace(volatile_status=v.replace(
-        charging_move_id=v.charging_move_id.at[player, 0].set(identifier),
-        semi_invulnerability=v.semi_invulnerability.at[player, 0].set(location),
-        charge_target_side=v.charge_target_side.at[player, 0].set(1-player),
-        charge_target_position=v.charge_target_position.at[player, 0].set(0)))
+        continuation=v.continuation.replace(
+            charging_move_id=v.continuation.charging_move_id.at[player, 0].set(identifier),
+            semi_invulnerability=v.continuation.semi_invulnerability.at[player, 0].set(location),
+            charge_target_side=v.continuation.charge_target_side.at[player, 0].set(1-player),
+            charge_target_position=v.continuation.charge_target_position.at[player, 0].set(0))))
     return k, emit(s, EventKind.CONDITION, player, detail=14, before=0, after=identifier)
 
 

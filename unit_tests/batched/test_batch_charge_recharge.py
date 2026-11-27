@@ -12,7 +12,7 @@ def test_forced_mask_transforms(neutral_type):
     env = Battle(state.team)
     episode, _ = env.reset(key)
     v = state.volatile_status
-    episode = episode.replace(battle=state.replace(volatile_status=v.replace(recharging=v.recharging.at[0, 0].set(True))))
+    episode = episode.replace(battle=state.replace(volatile_status=v.replace(continuation=v.continuation.replace(recharging=v.continuation.recharging.at[0, 0].set(True)))))
     batch = jax.tree.map(lambda x: jnp.stack([x, x]), episode)
     shape = jax.eval_shape(jax.vmap(env.legal_action_mask), batch)
     assert shape.shape == (2, 2, 15)

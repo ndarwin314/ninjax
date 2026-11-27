@@ -167,7 +167,7 @@ def effective_speed(state, player, weather):
     speed = jnp.floor(state.active_stats(player)[S.SPEED] * STAT_MULTIPLIER_LOOKUP[6 + stage]).astype(jnp.int32)
     return modify_speed(speed, state.active_field('item', player)[0], state.ability[player, 0],
         state.active_field('status', player)[0], weather, state.terrain.terrain,
-        state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
+        state.volatile_status.ability_state.paradox_stat[player, 0], state.side_conditions.tailwind[player, 0])
 
 
 def stat_modifier(state, player, indices, weather, *, ability=None):
@@ -176,9 +176,9 @@ def stat_modifier(state, player, indices, weather, *, ability=None):
         ability = state.ability[player, 0]
     return stat_modifier_from_fields(
         indices, state.active_field('item', player)[0], ability,
-        state.active_field('species', player)[0], state.effective_types(player),
+        state.active_field('species', player)[0], state.effective_types(player, include_added=True),
         state.active_field('status', player)[0], weather, state.terrain.terrain,
-        state.volatile_status.paradox_stat[player, 0], state.tailwind[player, 0])
+        state.volatile_status.ability_state.paradox_stat[player, 0], state.side_conditions.tailwind[player, 0])
 
 
 def modify_stats(state, player, stats, weather=None):

@@ -38,15 +38,21 @@ def _before_move_self_hit(s, *, player_idx, damage):
 
     mon = s.active[player_idx]
     hp = jnp.maximum(0, mon.current_hp - damage)
-    old_source, old_cause = s.event_source, s.event_cause
-    s = s.replace(event_source=jnp.asarray(player_idx, jnp.int32), event_cause=jnp.int32(Cause.CONFUSION))
+    old_source, old_cause = s.event_context.source, s.event_context.cause
+    s = s.replace(
+        event_context=s.event_context.replace(
+            source=jnp.asarray(player_idx, jnp.int32),
+            cause=jnp.int32(Cause.CONFUSION)))
     s = emit(s, EventKind.HP, player_idx, before=mon.current_hp, after=hp, hp_change=hp-mon.current_hp,
         hp_fraction_change=(jnp.ceil(hp/mon.max_hp*100)-jnp.ceil(mon.current_hp/mon.max_hp*100))/100,
         enabled=hp[0] != mon.current_hp[0])
     s = emit(s, EventKind.FAINT, player_idx, enabled=(mon.current_hp[0] > 0) & (hp[0] == 0))
     s = update_active_fields(s, player_idx, current_hp=hp, is_alive=mon.is_alive & (hp > 0))
     s = after_hp_change(s, player_idx)
-    return s.replace(event_source=old_source, event_cause=old_cause)
+    return s.replace(
+        event_context=s.event_context.replace(
+            source=old_source,
+            cause=old_cause))
 
 
 def _before_move_unchanged(s):

@@ -61,7 +61,7 @@ def resolve_move_category(key, move, level, attack, special_attack, defense, spe
 
 
 def effective_move(state, attacker_index, move):
-    """Return a transient type/power override without mutating the move slot."""
+    """Resolve transient type, priority and targeting without mutating the slot."""
     ability = state.ability[attacker_index]
     excluded = _excludes_type_conversion(move.identifier)
     # Normalize runs before move-specific type callbacks in the pinned rules.
@@ -77,7 +77,10 @@ def effective_move(state, attacker_index, move):
     move_type = jnp.where(normal & (ability == AbilityEnum.REFRIGERATE), Type.ICE, move_type)
     move_type = jnp.where(normal & (ability == AbilityEnum.GALVANIZE), Type.ELECTRIC, move_type)
     move_type = jnp.where((ability == AbilityEnum.LIQUID_VOICE) & move.sound, Type.WATER, move_type)
-    return move.replace(type=move_type, type_power_boost=normalize | changed)
+    expanding = ((move.identifier[0] == 797) & (state.terrain.terrain == T.PSYCHIC) &
+                 state.is_grounded(attacker_index)[0])
+    flags = move.move_flags | jnp.where(expanding, int(MoveFlags.SPREAD), 0)
+    return move.replace(type=move_type, type_power_boost=normalize | changed, move_flags=flags)
 
 
 def _excludes_type_conversion(identifier):
@@ -102,7 +105,7 @@ def effective_priority(state, player, move):
     ability = abilities[player]
     normalize = (ability == A.NORMALIZE) & ~_excludes_type_conversion(move.identifier)
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
-    types = state.effective_types(player)
+    types = state.effective_types(player, include_added=True)
     item = state.active_field('item', player)
     move_type = _override_type(state, player, move.identifier, jnp.where(normalize, Type.NORMAL, move.type),
                                weather, state.terrain.terrain, types, item)
@@ -153,7 +156,7 @@ def move_accuracy(state, attacker_index, move, absorption=None):
 
 def is_poison_type_user(state, attacker_index):
     """Resolve the user's current Poison typing, including ordinary Tera."""
-    types = state.effective_types(attacker_index)
+    types = state.effective_types(attacker_index, include_added=True)
     tera = state.active_field('is_terastallized', attacker_index)[0]
     tera_type = state.active_field('tera_type', attacker_index)[0]
     return jnp.where(tera & (tera_type != Type.NONE), tera_type == Type.POISON, jnp.any(types == Type.POISON))
@@ -225,7 +228,7 @@ def move_overrides(state, player, move):
     abilities = state.ability
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
     terrain = state.terrain.terrain
-    types = state.effective_types(player)
+    types = state.effective_types(player, include_added=True)
     item = state.active_field('item', player)
     # Weather Ball's power is a ModifyMove effect, coupled to its type change.
     # All BasePower callbacks are evaluated later from live hit-time inputs.
@@ -283,7 +286,7 @@ def _override_type(
     move_type = jnp.where(terrain_pulse & (terrain == T.MISTY), Type.FAIRY, move_type)
     move_type = jnp.where(terrain_pulse & (terrain == T.PSYCHIC), Type.PSYCHIC, move_type)
 
-    move_type = form_move_type(ident, move_type, state.active_field('form', player))
+    move_type = form_move_type(ident, move_type, state.active_identity('form', player))
     suppressed = item_is_suppressed(state.ability[player], state.magic_room_duration,
                                     state.volatile_status.embargo_turns[player])
     move_type = jnp.where((ident == 449) & ~suppressed, judgment_move_type(item), move_type)

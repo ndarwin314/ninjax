@@ -76,30 +76,31 @@ def test_flash_fire_activation_and_switch_reset(neutral_type):
     hit = jax.jit(lambda s: move_used(key, s, 0, 0)[1])
     activated = hit(state)
     assert activated.active.current_hp[1, 0] == state.active.current_hp[1, 0]
-    assert activated.volatile_status.flash_fire[1, 0]
-    assert not activated.volatile_status.flash_fire[0, 0]
+    assert activated.volatile_status.ability_state.flash_fire[1, 0]
+    assert not activated.volatile_status.ability_state.flash_fire[0, 0]
     repeated = hit(activated)
-    assert repeated.volatile_status.flash_fire[1, 0]
+    assert repeated.volatile_status.ability_state.flash_fire[1, 0]
     assert repeated.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     retaliate = jax.jit(lambda s: do_damaging_move(key, s, 1, s.active[1].moves[0], 0, 0)[1])
-    unboosted = activated.replace(volatile_status=activated.volatile_status.replace(
-        flash_fire=activated.volatile_status.flash_fire.at[1, 0].set(False)))
+    unboosted = activated.replace(volatile_status=activated.volatile_status.replace(ability_state=activated.volatile_status.ability_state.replace(flash_fire=activated.volatile_status.ability_state.flash_fire.at[1, 0].set(False))))
     assert retaliate(activated).active.current_hp[0, 0] < retaliate(unboosted).active.current_hp[0, 0]
     # Other fields reset for the leaving side and remain intact for its opponent.
-    marked = repeated.volatile_status.replace(confusion_turns=jnp.array([[3], [2]]),
-        transformed=jnp.array([[True], [True]]), flash_fire=jnp.ones((2, 1), bool))
+    marked = repeated.volatile_status.replace(
+        confusion_turns=jnp.array([[3], [2]]),
+        transformed=jnp.array([[True], [True]]),
+        ability_state=repeated.volatile_status.ability_state.replace(flash_fire=jnp.ones((2, 1), bool)))
     cleared = jax.jit(clear_volatile_status)(repeated.replace(volatile_status=marked), 1)
     assert cleared.volatile_status.confusion_turns[1, 0] == 0
     assert not cleared.volatile_status.transformed[1, 0]
-    assert not cleared.volatile_status.flash_fire[1, 0]
+    assert not cleared.volatile_status.ability_state.flash_fire[1, 0]
     assert cleared.volatile_status.confusion_turns[0, 0] == 3
-    assert cleared.volatile_status.flash_fire[0, 0]
+    assert cleared.volatile_status.ability_state.flash_fire[0, 0]
     switched = jax.jit(lambda s: step_switch(key, s, 1, 1, False)[1])(repeated.replace(volatile_status=marked))
     assert switched.active_index[1, 0] == 1
-    assert not switched.volatile_status.flash_fire[1, 0]
-    assert switched.volatile_status.flash_fire[0, 0]
+    assert not switched.volatile_status.ability_state.flash_fire[1, 0]
+    assert switched.volatile_status.ability_state.flash_fire[0, 0]
     batched = jax.jit(jax.vmap(clear_volatile_status, in_axes=(0, None)))(stack([state, repeated]), 1)
-    assert not jnp.any(batched.volatile_status.flash_fire[:, 1, 0])
+    assert not jnp.any(batched.volatile_status.ability_state.flash_fire[:, 1, 0])
 
 
 @pytest.mark.jit
@@ -113,12 +114,12 @@ def test_flash_fire_activation_under_vmap_and_scan(neutral_type):
     def hit(s):
         return move_used(key, s, 0, 0)[1]
     results = jax.jit(jax.vmap(hit))(stack([protected, ordinary]))
-    assert jnp.array_equal(results.volatile_status.flash_fire[:, 1, 0], jnp.array([True, False]))
+    assert jnp.array_equal(results.volatile_status.ability_state.flash_fire[:, 1, 0], jnp.array([True, False]))
     assert results.team.current_hp[0, 1, 0, 0] == protected.team.current_hp[1, 0, 0]
     assert results.team.current_hp[1, 1, 0, 0] < ordinary.team.current_hp[1, 0, 0]
     def turn(carry, unused):
         updated = hit(carry)
-        return updated, updated.volatile_status.flash_fire[1, 0]
+        return updated, updated.volatile_status.ability_state.flash_fire[1, 0]
     final, flags = jax.jit(lambda s: jax.lax.scan(turn, s, None, length=2))(protected)
     assert jnp.all(flags)
     assert final.team.moves.current_pp[0, 0, 0, 0] == 6
@@ -136,7 +137,11 @@ def test_observation_events_and_private_hp(neutral_type):
     assert jnp.all(first.observation.team['current_hp'][:, 1] == 0)
     assert jnp.array_equal(first.observation.team['stats'][0, 0], battle.team.stat_table.stats[0])
     def effects(b):
-        b = b.replace(events=EventBuffer.empty(), event_source=jnp.int32(0), event_cause=jnp.int32(Cause.MOVE))
+        b = b.replace(
+            events=EventBuffer.empty(),
+            event_context=b.event_context.replace(
+                source=jnp.int32(0),
+                cause=jnp.int32(Cause.MOVE)))
         b = take_damage_value(b, 1, 13, True)
         b = take_damage_value(b, 1, -5, False)
         _, b = set_status(key, b, 1, jnp.array([Status.BURN]))

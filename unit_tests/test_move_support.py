@@ -9,7 +9,7 @@ from ninjax.teams.construction import CATALOGUE, make_move, make_sandbox_teams
 from tools.audit_random_battle_mechanics import coverage_report
 
 
-@pytest.mark.parametrize('name', ['Wish', 'Smack Down', 'Fire Fang', 'Transform'])
+@pytest.mark.parametrize('name', ['Wish', 'Smack Down', 'Relic Song', 'Transform'])
 def test_catalogue_membership_does_not_enable_missing_effects(name):
     """Known metadata must not advertise moves with missing execution rules."""
     assert name in CATALOGUE

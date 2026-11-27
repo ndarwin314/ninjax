@@ -21,9 +21,9 @@ def test_effect_targets_and_healing():
     assert list(close_combat.self_stat[:2]) == [StatEnum.DEFENSE, StatEnum.SPECIAL_DEFENSE]
     assert list(close_combat.self_stages[:2]) == [-1, -1]
     flame_charge = make_move('Flame Charge')
-    assert int(flame_charge.self_stat[0]) == StatEnum.SPEED
-    assert float(flame_charge.self_chance[0]) == pytest.approx(1.0)
-    assert float(make_move('Charge Beam').self_chance[0]) == pytest.approx(0.7)
+    assert int(flame_charge.secondaries.user_stats[0, 0]) == StatEnum.SPEED
+    assert float(flame_charge.secondaries.probabilities[0]) == pytest.approx(1.0)
+    assert float(make_move('Charge Beam').secondaries.probabilities[0]) == pytest.approx(0.7)
 
 
 def test_catalogue_multihit_rules():

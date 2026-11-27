@@ -6,7 +6,8 @@ import jax.numpy as jnp
 
 from ninjax.enums.base import JaxEnum
 
-class SecondaryEffectType:
+class SecondaryEffectType(JaxEnum):
+    """How a move rolls the probabilities of its secondary slots."""
     DEFAULT = 0
     EXCLUSIVE = 1
 
@@ -66,6 +67,8 @@ class ProtectionKind(JaxEnum):
     KINGS_SHIELD = 6
     MAT_BLOCK = 7
     ENDURE = 8
+    QUICK_GUARD = 9
+    WIDE_GUARD = 10
 
 
 class SemiInvulnerability(JaxEnum):
@@ -75,6 +78,14 @@ class SemiInvulnerability(JaxEnum):
     UNDERGROUND = 2
     UNDERWATER = 3
     VANISHED = 4
+
+
+class LockedMoveKind(JaxEnum):
+    """Progression policies for forced sequences of repeated moves."""
+    NONE = 0
+    RAMPAGE = 1
+    ROLLOUT = 2
+    UPROAR = 3
 
 
 class MoveResult(JaxEnum):
@@ -114,6 +125,10 @@ class MoveFlags(IntFlag):
     WIND = auto()
     THAWS_TARGET = auto()
     IGNORE_ABILITY = auto()
+    BINDING = auto()
+    RECHARGE = auto()
+    CANNOT_REPEAT = auto()
+    SPREAD = auto()
 
     def __eq__(self, other):
         """Compare an enum value with a scalar or traced array value."""

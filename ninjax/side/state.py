@@ -1,16 +1,21 @@
 """Immutable battle PyTrees and read-only views; no reactive effect imports."""
 from dataclasses import field
 from functools import partial
+import warnings
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 
+from ninjax.ability_rules import TRANSFORM_SUPPRESSED_ABILITIES, UNCHANGEABLE_ABILITIES
 from ninjax.calculations.stat_formulas import STAT_MULTIPLIER_LOOKUP
 from ninjax.calculations.stats import StatBoosts
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, TurnType, Weather, WeatherEnum
+from ninjax.enums.items import ItemEnum
 from ninjax.enums.pokemon import StatEnum, Status, Type
+from ninjax.item_rules import item_is_suppressed
+from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventBuffer
 from ninjax.records.hits import HitResults
@@ -68,24 +73,10 @@ def _modify_stats_row(player, values, *, state):
     return modify_stats(state, player, values)
 
 
-class VolatileStatus(struct.PyTreeNode):
-    """Switch-reset effects for each active side, with shape (2, 1).
+class MoveRestrictions(struct.PyTreeNode):
+    """Switch-cleared move locks and restriction timers, each with shape (2, 1)."""
 
-    Confusion counts down on eligible action attempts; Transform remains reserved.
-    """
-    paradox_stat: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
-    # -1 means the active Pokémon retains its caller-provided ability.
-    ability_override: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
-    ability_suppressed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    paradox_booster: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     choice_lock: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
-    protected: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    protection_kind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    flinched: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    # Actual Pokémon or Substitute HP lost on the latest attack, before healing.
-    last_damage: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    protect_chain: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    last_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     disabled_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     disable_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     encore_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
@@ -93,23 +84,37 @@ class VolatileStatus(struct.PyTreeNode):
     taunt_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     throat_chop_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     heal_block_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    embargo_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    entry_turn: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    pending_move: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    pending_move_type: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    pending_actor_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
-    active_move_actions: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    # 0 = not attempted, 1 = failed, 2 = succeeded, 3 = skipped.
-    move_result: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    previous_move_result: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    queued_priority: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    queued_priority_valid: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    encore_overridden: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    libero_used: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    flash_fire: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    confusion_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    # Remaining Substitute HP; zero means no Substitute is present.
-    substitute_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    tormented: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    imprisoning: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class TrappingState(struct.PyTreeNode):
+    """Source-linked traps on each active target, with leaves of shape (2, 1)."""
+
+    # Opposing party slot in singles. Negative means no source.
+    binding_source_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    binding_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    binding_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    binding_divisor: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class LockedMove(struct.PyTreeNode):
+    """Persistent payload for repeated moves, with leaves of shape (2, 1)."""
+
+    # Zero move ID means no lock. The slot binds the sequence to its actor.
+    # The policy uses LockedMoveKind and determines how the sequence advances.
+    kind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    actor_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    target_side: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    target_position: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    turns_left: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    successful_hits: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class MoveContinuation(struct.PyTreeNode):
+    """Charge, recharge and repeat state for each active side."""
+
     # A stored move ID forces its second turn, independently of remaining PP.
     charging_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     # SemiInvulnerability enum, cleared on release, interruption or departure.
@@ -117,21 +122,116 @@ class VolatileStatus(struct.PyTreeNode):
     charge_target_side: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     charge_target_position: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     recharging: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    locked: LockedMove = field(default_factory=LockedMove)
+
+
+class MoveProtection(struct.PyTreeNode):
+    """Current Protect effect and consecutive-use counter, each with shape (2, 1)."""
+
+    protected: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    protection_kind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    protect_chain: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    stall_refreshed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class SideProtection(struct.PyTreeNode):
+    """One-turn guards that stay with a side through switching."""
+
+    quick_guard: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    wide_guard: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    mat_block: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class ActiveAbilityState(struct.PyTreeNode):
+    """Temporary ability changes and activation state, each with shape (2, 1)."""
+
+    # -1 means the active Pokémon retains its caller-provided ability.
+    ability_override: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    ability_suppressed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    paradox_stat: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    paradox_booster: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    libero_used: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    flash_fire: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class QueuedMove(struct.PyTreeNode):
+    """Pending action identity and priority, each with shape (2, 1)."""
+
+    pending_move: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    pending_move_type: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    pending_actor_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    queued_priority: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    queued_priority_valid: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    last_action: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    # A redirected or called move keeps the queued action's priority.
+    encore_overridden: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class MoveHistory(struct.PyTreeNode):
+    """Most recent move and action results by active side, each with shape (2, 1)."""
+
+    # Actual Pokémon or Substitute HP lost on the latest attack, before healing.
+    last_damage: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    last_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    last_move_type: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    active_move_actions: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    # 0 = not attempted, 1 = failed, 2 = succeeded, 3 = skipped.
+    move_result: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    previous_move_result: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class CalledMove(struct.PyTreeNode):
+    """Execution context for Sleep Talk, each with shape (2, 1)."""
+
+    sleep_talk_active: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    sleep_talk_succeeded: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    called_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class ActiveProperties(struct.PyTreeNode):
+    """Switch-cleared identity overlay by player, with raw stats shaped (2, 6)."""
+    added_type: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    form: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    species: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    weight_hg: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    stats: Array = field(default_factory=partial(_negative_ones, (2, 6), dtype=jnp.int32))
+    copied_slots: Array = field(default_factory=partial(jnp.zeros, (2, 4), dtype=jnp.bool_))
+
+
+class VolatileStatus(struct.PyTreeNode):
+    """Switch-reset effects for each active side, with shape (2, 1).
+
+    Confusion counts down on eligible action attempts.
+    """
+    restrictions: MoveRestrictions = field(default_factory=MoveRestrictions)
+    trapping: TrappingState = field(default_factory=TrappingState)
+    continuation: MoveContinuation = field(default_factory=MoveContinuation)
+    protection: MoveProtection = field(default_factory=MoveProtection)
+    ability_state: ActiveAbilityState = field(default_factory=ActiveAbilityState)
+    properties: ActiveProperties = field(default_factory=ActiveProperties)
+    queued_move: QueuedMove = field(default_factory=QueuedMove)
+    move_history: MoveHistory = field(default_factory=MoveHistory)
+    called_move: CalledMove = field(default_factory=CalledMove)
+    flinched: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    embargo_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    entry_turn: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    confusion_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    # Remaining Substitute HP; zero means no Substitute is present.
+    substitute_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     destiny_bond: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     roost: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     # Pre-faint HP for calculating an Explosion already committed this action.
     explosion_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    sleep_talk_active: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    sleep_talk_succeeded: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    called_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     transformed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
 
     def __getitem__(self, idx):
-        """Select one side of every volatile-state leaf."""
+        """Select one side of every volatile-state leaf (deprecated)."""
+        warnings.warn('VolatileStatus indexing is deprecated.', DeprecationWarning, stacklevel=2)
         return jax.tree.map(partial(_select_volatile_row, index=idx), self)
 
     def replace_row(self, idx: int, new_status: 'VolatileStatus'):
-        """Return a copy with one side's volatile leaves replaced."""
+        """Return a copy with one side's volatile leaves replaced (deprecated)."""
+        warnings.warn('VolatileStatus.replace_row is deprecated.', DeprecationWarning, stacklevel=2)
         return jax.tree.map(partial(_replace_volatile_row, index=idx), self, new_status)
 
 
@@ -144,6 +244,46 @@ def _active_pokemon(team, active_index):
     operations throughout move, item and status branches during tracing.
     """
     return team[jnp.arange(2), jnp.squeeze(active_index)]
+
+
+class Hazards(struct.PyTreeNode):
+    """Entry hazards by affected side, each with shape (2, 1)."""
+
+    stealth_rocks: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    sticky_webs: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    spikes: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    toxic_spikes: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class SideConditions(struct.PyTreeNode):
+    """Screen and Tailwind durations by side, each with shape (2, 1)."""
+
+    reflect: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    light_screen: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    aurora_veil: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    tailwind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class PendingFaints(struct.PyTreeNode):
+    """Deferred faint records, with one row per target side."""
+
+    # Pending faint records: target side is the row; slots preserve identity.
+    pending: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+    # Positive sequence within the pending faint batch; zero means empty.
+    order: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
+    source: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
+    source_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
+    target_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
+    cause: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
+    destiny_bond: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+
+
+class EventContext(struct.PyTreeNode):
+    """Scalar attribution for events emitted by the current action or effect."""
+
+    source: Array = field(default_factory=partial(jnp.int32, -1))
+    cause: Array = field(default_factory=partial(jnp.int32, 0))
+    move_id: Array = field(default_factory=partial(jnp.int32, 0))
 
 
 class BattleState(struct.PyTreeNode):
@@ -161,48 +301,38 @@ class BattleState(struct.PyTreeNode):
     here; player-relative observations are constructed separately.
     """
     team: Pokemon
+    # Original move banks of the two active slots while their moves are copied.
+    original_moves: Move | None = None
+    hazards: Hazards = field(default_factory=Hazards)
+    side_conditions: SideConditions = field(default_factory=SideConditions)
+    side_protection: SideProtection = field(default_factory=SideProtection)
+    pending_faints: PendingFaints = field(default_factory=PendingFaints)
+    event_context: EventContext = field(default_factory=EventContext)
     # Publicly revealed held items by owner and team slot; -1 means unknown.
     known_items: Array = field(default_factory=partial(_negative_ones, (2, 6), dtype=jnp.int32))
     # Public current ability knowledge; cleared when a temporary change ends.
     known_abilities: Array = field(default_factory=partial(_negative_ones, (2, 6), dtype=jnp.int32))
     events: EventBuffer = field(default_factory=EventBuffer.empty)
     hit_results: HitResults = field(default_factory=HitResults.empty)
-    # Pending faint records: target side is the row; slots preserve identity.
-    faint_pending: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
-    # Positive sequence within the pending faint batch; zero means empty.
-    faint_order: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
-    faint_source: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
-    faint_source_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
-    faint_target_slot: Array = field(default_factory=partial(_negative_ones, 2, dtype=jnp.int32))
-    faint_cause: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
-    faint_destiny_bond: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
-    event_source: Array = field(default_factory=partial(jnp.int32, -1))
-    event_cause: Array = field(default_factory=partial(jnp.int32, 0))
-    event_move: Array = field(default_factory=partial(jnp.int32, 0))
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
     active_index: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    stealth_rocks: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    sticky_webs: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
-    spikes: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    toxic_spikes: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    reflect: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    light_screen: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    aurora_veil: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
-    tailwind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     toxic_counter: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     boosts: StatBoosts = field(default_factory=_initial_boosts)
     legal_action_mask: Array = field(default_factory=partial(jnp.ones, (2, 15), dtype=jnp.bool_))
     can_tera: Array = field(default_factory=partial(jnp.ones, (2, 1), dtype=jnp.bool_))
     switch_requested: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+    revival_requested: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.bool_))
+    # Pending EntryRecovery flags by active position, including application order.
+    entry_recovery: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
+    # Recycle memory is carried by the party slot, independent of its held item.
+    consumed_items: Array = field(default_factory=partial(jnp.zeros, (2, 6), dtype=jnp.int32))
     # Replacement continuation: 0 normal, 1 Baton Pass, 2 Shed Tail.
     switch_transfer: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
     roster: Array = field(default_factory=partial(jnp.ones, (2, 6), dtype=jnp.bool_))
     winner: Array = field(default_factory=partial(jnp.int32, -1))
     perish_turns: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
-    # notably volatile status needs like wish, healing wish, and future sight things
-    # but those are lowish priority
-    volatile_status: VolatileStatus = field(default_factory=VolatileStatus) # TODO
+    volatile_status: VolatileStatus = field(default_factory=VolatileStatus)
 
     weather: Weather = Weather(WeatherEnum.NONE, 0)
     terrain: Terrain = Terrain(TerrainEnum.NONE, 0)
@@ -212,46 +342,49 @@ class BattleState(struct.PyTreeNode):
     magic_room_duration: int = 0
     turn_type: TurnType = TurnType.STANDARD
 
+    def __post_init__(self):
+        """Allocate shape-compatible backup banks for temporary moves."""
+        if self.original_moves is None:
+            object.__setattr__(self, 'original_moves', self.team.moves[:, 0])
+
     def __getitem__(self, idx):
-        """Select side-indexed fields while retaining shared field values.
+        """Select side-indexed fields while retaining shared field values (deprecated).
 
         This is a convenience view for side helpers, not a complete independent
         battle: fields not explicitly indexed here retain their original shape.
         """
+        warnings.warn('BattleState indexing is deprecated.', DeprecationWarning, stacklevel=2)
+        select_row = partial(_select_volatile_row, index=idx)
         return self.replace(
             team=self.team[idx], active_index=self.active_index[idx],
-            stealth_rocks=self.stealth_rocks[idx], sticky_webs=self.sticky_webs[idx],
-            spikes=self.spikes[idx], toxic_spikes=self.toxic_spikes[idx],
-            reflect=self.reflect[idx], light_screen=self.light_screen[idx],
-            aurora_veil=self.aurora_veil[idx], tailwind=self.tailwind[idx],
+            hazards=jax.tree.map(select_row, self.hazards),
+            side_conditions=jax.tree.map(select_row, self.side_conditions),
+            side_protection=jax.tree.map(select_row, self.side_protection),
             toxic_counter=self.toxic_counter[idx], boosts=self.boosts[idx],
             legal_action_mask=self.legal_action_mask[idx], can_tera=self.can_tera[idx],
-            volatile_status=self.volatile_status[idx])
+            volatile_status=jax.tree.map(select_row, self.volatile_status))
 
 
     def replace_row(self, idx: int, new_side: 'BattleState'):
-        """Replace the side fields listed below; shared field values are retained.
+        """Replace the listed side fields, retaining shared values (deprecated).
 
         Fields not listed in the replacement, including roster and pending switch
         information, remain unchanged.
         """
+        warnings.warn('BattleState.replace_row is deprecated.', DeprecationWarning, stacklevel=2)
         team = self.team.replace_row(idx, new_side.team)
         active_index = self.active_index.at[idx].set(new_side.active_index)
-        stealth_rocks = self.stealth_rocks.at[idx].set(new_side.stealth_rocks)
-        sticky_webs = self.sticky_webs.at[idx].set(new_side.sticky_webs)
-        spikes = self.spikes.at[idx].set(new_side.spikes)
-        toxic_spikes = self.toxic_spikes.at[idx].set(new_side.toxic_spikes)
-        reflect = self.reflect.at[idx].set(new_side.reflect)
-        light_screen = self.light_screen.at[idx].set(new_side.light_screen)
-        aurora_veil = self.aurora_veil.at[idx].set(new_side.aurora_veil)
-        tailwind = self.tailwind.at[idx].set(new_side.tailwind)
+        replace_row = partial(_replace_volatile_row, index=idx)
+        hazards = jax.tree.map(replace_row, self.hazards, new_side.hazards)
+        side_conditions = jax.tree.map(replace_row, self.side_conditions, new_side.side_conditions)
+        side_protection = jax.tree.map(replace_row, self.side_protection, new_side.side_protection)
         toxic_counter = self.toxic_counter.at[idx].set(new_side.toxic_counter)
         boosts = self.boosts.replace_row(idx, new_side.boosts)
-        volatile_status = self.volatile_status.replace_row(idx, new_side.volatile_status)
+        volatile_status = jax.tree.map(replace_row, self.volatile_status, new_side.volatile_status)
         return self.replace(
-            team=team, active_index=active_index, stealth_rocks=stealth_rocks, sticky_webs=sticky_webs, spikes=spikes,
-            toxic_spikes=toxic_spikes, reflect=reflect, light_screen=light_screen, aurora_veil=aurora_veil,
-            tailwind=tailwind, toxic_counter=toxic_counter, boosts=boosts, volatile_status=volatile_status
+            team=team, active_index=active_index, hazards=hazards, side_conditions=side_conditions,
+            side_protection=side_protection,
+            toxic_counter=toxic_counter, boosts=boosts, volatile_status=volatile_status
         )
 
 
@@ -286,12 +419,26 @@ class BattleState(struct.PyTreeNode):
         return self.team.moves[player, slot, move_index]
 
     def active_stats(self, player=None):
-        """Calculate stats after selecting the active slots' stat inputs."""
+        """Read raw stats after applying temporary stat replacements."""
         if player is None:
             index = (jnp.arange(2), self.active_index[:, 0])
         else:
             index = (player, self.active_index[player, 0])
-        return self.team.stat_table[index].stats
+        overrides = self.volatile_status.properties.stats
+        overrides = overrides if player is None else overrides[player]
+        return jnp.where(overrides >= 0, overrides, self.team.stat_table[index].stats)
+
+    def active_identity(self, name, player=None):
+        """Read effective form, species or weight, retaining immutable team identity."""
+        overrides = getattr(self.volatile_status.properties, name)
+        overrides = overrides if player is None else overrides[player]
+        return jnp.where(overrides >= 0, overrides, self.active_field(name, player))
+
+    @property
+    def ability_identity(self):
+        """Read current ability IDs before effect suppression."""
+        override = self.volatile_status.ability_state.ability_override
+        return jnp.where(override >= 0, override, self.active_field('ability'))
 
     @property
     def ability(self):
@@ -300,11 +447,17 @@ class BattleState(struct.PyTreeNode):
         Suppression removes the effect without erasing the underlying ability
         or override, so clearing it can restore the appropriate ability.
         """
-        override = self.volatile_status.ability_override
-        # This hot read needs one leaf, not the entire active Pokémon tree.
-        stored = self.team.ability[jnp.arange(2), self.active_index[:, 0]]
-        ability = jnp.where(override >= 0, override, stored)
-        return jnp.where(self.volatile_status.ability_suppressed, AbilityEnum.NONE, ability)
+        ability = self.ability_identity
+        v = self.volatile_status
+        immune = jnp.isin(ability, jnp.asarray(UNCHANGEABLE_ABILITIES))
+        shield = (self.active_field('item') == ItemEnum.ABILITY_SHIELD) & ~item_is_suppressed(
+            ability, self.magic_room_duration, v.embargo_turns)
+        gas = (ability == AbilityEnum.NEUTRALIZING_GAS) & ~v.ability_state.ability_suppressed & ~v.transformed
+        gas = gas & (self.active_field('current_hp') > 0)
+        suppressed = ~immune & (v.ability_state.ability_suppressed |
+            (gas[::-1] & ~shield & (ability != AbilityEnum.NEUTRALIZING_GAS)))
+        suppressed |= v.transformed & jnp.isin(ability, jnp.asarray(TRANSFORM_SUPPRESSED_ABILITIES))
+        return jnp.where(suppressed, AbilityEnum.NONE, ability)
 
     @property
     def effective_active(self):
@@ -313,20 +466,30 @@ class BattleState(struct.PyTreeNode):
         These snapshots must not be written back to the team: the stored team
         ability remains the original, including while an override is active.
         """
-        active = self.active
-        remove = self.volatile_status.roost & ~active.is_terastallized
-        return active.replace(ability=self.ability, type_list=_roost_types(active.type_list, remove))
+        return self.active.replace(ability=self.ability, type_list=self.effective_types(),
+            species=self.active_identity('species'), form=self.active_identity('form'),
+            weight_hg=self.active_identity('weight_hg'))
 
-    def effective_types(self, player=None):
-        """Read active types with Roost applied unless the Pokémon has Terastallized."""
+    @property
+    def combat_active(self):
+        """Read active snapshots with the added-type column used by mechanics."""
+        return self.effective_active.replace(type_list=self.effective_types(include_added=True))
+
+    def effective_types(self, player=None, *, include_added=False):
+        """Read active types with Roost and an optional added-type column."""
         original_types = self.active_field('type_list', player)
         roost = self.volatile_status.roost
         remove = (roost if player is None else roost[player]) & ~self.active_field('is_terastallized', player)
-        return _roost_types(original_types, remove)
+        types = _roost_types(original_types, remove)
+        if include_added:
+            extra = self.volatile_status.properties.added_type
+            extra = extra if player is None else extra[player]
+            types = jnp.concatenate((types, extra), axis=-1)
+        return types
 
     def is_status_immune(self, player, status, *, ability=None):
         """Check status immunity using active types, ability, item and field."""
-        types = self.effective_types(player)
+        types = self.effective_types(player, include_added=True)
         abilities = self.ability
         if ability is None:
             ability = abilities[player]
@@ -348,12 +511,12 @@ class BattleState(struct.PyTreeNode):
 
     def is_grounded(self, player):
         """Check grounding of an active player, including Gravity."""
-        airborne = is_floating_fields(self.effective_types(player), self.ability[player], self.active_field('item', player))
+        airborne = is_floating_fields(self.effective_types(player, include_added=True), self.ability[player], self.active_field('item', player))
         return ~airborne | (self.gravity_duration > 0)
 
     def is_immune_to_move(self, player, move):
         """Check an active player's move immunity in the current field."""
-        return move_immune_from_fields(self.effective_types(player), ability_against_move(self, player, move),
+        return move_immune_from_fields(self.effective_types(player, include_added=True), ability_against_move(self, player, move),
                                        self.active_field('item', player), move, self.gravity_duration > 0)
 
     @property
@@ -377,7 +540,7 @@ class BattleState(struct.PyTreeNode):
         weather = effective_weather(self.weather.weather, ability, self.active_field('current_hp'))
         return modify_speed(speed, self.active_field('item')[:, 0], ability[:, 0],
                             self.active_field('status')[:, 0], weather, self.terrain.terrain,
-                            self.volatile_status.paradox_stat[:, 0], self.tailwind[:, 0])
+                            self.volatile_status.ability_state.paradox_stat[:, 0], self.side_conditions.tailwind[:, 0])
 
     @property
     def accuracy_boosts(self):

@@ -32,7 +32,8 @@ def test_kings_rock_independent_secondary(neutral_type, ability):
     # Select a reproducible successful item roll, accounting for the native roll.
     key = next(jax.random.key(i) for i in range(100)
         if jax.random.uniform(jax.random.split(jax.random.split(jax.random.key(i))[0])[1]) < .1)
-    move = make_move('Lumina Crash').replace(secondary_chance=jnp.array([0.]))
+    move = make_move('Lumina Crash')
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(0.)))
     _, out = secondary_effects(key, state, 0, move)
     assert bool(out.volatile_status.flinched[1, 0]) == (ability == A.NONE)
     assert out.boosts.normal_boosts[1, 4] == 0

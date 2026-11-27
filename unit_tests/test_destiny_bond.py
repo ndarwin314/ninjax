@@ -34,7 +34,7 @@ def test_direct_faint_bypasses_damage_protections(neutral_type, ability, item):
     pending = pending.replace(events=EventBuffer.empty().replace(count=jnp.int32(128)))
     out = resolve_faints(pending)
     assert jnp.all(out.active.current_hp == 0)
-    assert not jnp.any(out.faint_pending)
+    assert not jnp.any(out.pending_faints.pending)
     assert out.active.item[0, 0] == item
     assert out.winner == 0  # Last to faint wins the simultaneous final KO.
 
@@ -43,7 +43,8 @@ def test_direct_faint_bypasses_damage_protections(neutral_type, ability, item):
 def test_indirect_and_self_damage_do_not_trigger(neutral_type, source, attack, cause):
     """Indirect causes and self-inflicted move damage cannot activate the bond."""
     key, state = neutral_type
-    state = bonded(key, state).replace(event_cause=jnp.int32(cause))
+    state = bonded(key, state)
+    state = state.replace(event_context=state.event_context.replace(cause=jnp.int32(cause)))
     out = resolve_faints(take_damage_value(state, 1, jnp.array([9999]), attack, source=source))
     assert out.active.current_hp[0, 0] == state.active.current_hp[0, 0]
     assert not out.volatile_status.destiny_bond[1, 0]
@@ -120,5 +121,5 @@ def test_faint_order_decides_double_knockout(neutral_type, first):
     state = direct_faint(state, last, -1, Cause.PERISH)
     state = resolve_faints(state)
     assert state.winner == last
-    assert not jnp.any(state.faint_pending)
+    assert not jnp.any(state.pending_faints.pending)
     assert resolve_faints(state).winner == last

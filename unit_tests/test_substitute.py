@@ -42,8 +42,9 @@ def test_substitute_absorbs_damage_and_blocks_reactions(neutral_type):
     key, state = neutral_type
     state = with_substitute(state, 1, 1)
     state = update_active(state, 1, state.active[1].replace(ability=jnp.array([A.ROUGH_SKIN]), item=jnp.array([I.ROCKY_HELMET])))
-    move = make_move('Flare Blitz').replace(secondary_chance=jnp.array([1.]))
-    _, out, _, _ = resolve_damaging_hit(key, state, 0, move)
+    move = make_move('Flare Blitz')
+    move = move.replace(secondaries=move.secondaries.replace(probabilities=move.secondaries.probabilities.at[0].set(1.)))
+    _, out = resolve_multi_hit(key, state, 0, move)
     assert out.active.current_hp[1, 0] == state.active.current_hp[1, 0]
     assert out.active.status[1, 0] == Status.NONE
     assert out.volatile_status.substitute_hp[1, 0] == 0
@@ -78,12 +79,12 @@ def test_status_and_bypasssub(neutral_type):
     assert out.hit_results[0].outcome == HitOutcome.BLOCKED
     state = equip_move(state, 'Encore')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(last_move_id=v.last_move_id.at[1, 0].set(state.active.moves.identifier[1, 0, 0])))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(last_move_id=v.move_history.last_move_id.at[1, 0].set(state.active.moves.identifier[1, 0, 0]))))
     _, out = move_hits(key, state, 0, 0)
     assert out.hit_results[0].outcome == HitOutcome.HIT
     state = equip_move(state, 'Stealth Rock')
     _, out = move_hits(key, state, 0, 0)
-    assert out.stealth_rocks[1, 0]
+    assert out.hazards.stealth_rocks[1, 0]
 
 
 def test_multihit_records_each_recipient(neutral_type):
@@ -151,4 +152,4 @@ def test_hazard_move_runs_after_substitute_damage(neutral_type):
     state = with_substitute(state, 1, 1)
     _, out, _, _ = resolve_damaging_hit(key, state, 0, make_move('Stone Axe'))
     assert out.hit_results[0].recipient == HitRecipient.SUBSTITUTE
-    assert out.stealth_rocks[1, 0]
+    assert out.hazards.stealth_rocks[1, 0]

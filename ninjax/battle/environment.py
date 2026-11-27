@@ -26,8 +26,9 @@ from ninjax.pokemon import Pokemon
 from ninjax.records.events import EventBuffer
 from ninjax.restrictions import active_restriction_mask
 from ninjax.side.item_effects import refresh_paradox
-from ninjax.side.queries import is_choice_item, is_floating_fields
+from ninjax.side.queries import is_choice_item
 from ninjax.side.state import BattleState
+from ninjax.side.trapping import voluntary_switch_blocked
 
 
 def _select_preview_leads(current, *, selection, self):
@@ -155,10 +156,8 @@ class Battle(Environment):
         battle = state.battle
         alive = (battle.team.current_hp[..., 0] > 0) & state.selected
         switches = alive & (jnp.arange(6)[None, :] != battle.active_index)
-        ability = battle.ability
+        revive = (battle.team.current_hp[..., 0] == 0) & state.selected
         hp = battle.active_field('current_hp')
-        base_types = battle.active_field('type_list')
-        types = battle.effective_types()
         items = battle.active_field('item')[:, 0]
         categories = battle.active_move_field('move_type')[..., 0]
         moves = (battle.active_move_field('current_pp')[..., 0] > 0) & ~battle.active_move_field('disabled')[..., 0]
@@ -166,24 +165,18 @@ class Battle(Environment):
         moves &= active_restriction_mask(battle)
 
         choice = is_choice_item(items)
-        lock = battle.volatile_status.choice_lock[:, 0]
+        lock = battle.volatile_status.restrictions.choice_lock[:, 0]
         moves &= ~choice[:, None] | (lock[:, None] < 0) | (jnp.arange(4)[None, :] == lock[:, None])
         moves &= (items[:, None] != ItemEnum.ASSAULT_VEST) | (categories != MoveType.STATUS)
-        trapped = (ability[::-1, 0] == AbilityEnum.SHADOW_TAG) & (hp[::-1, 0] > 0) & (ability[:, 0] != AbilityEnum.SHADOW_TAG) & ~jnp.any(base_types == Type.GHOST, axis=1)
-
-        opposing = ability[::-1, 0]
-        ghost = jnp.any(types == Type.GHOST, axis=1)
-        grounded = (~is_floating_fields(types, ability, items[:, None]) | (battle.gravity_duration > 0))[:, 0]
-        arena = (opposing == AbilityEnum.ARENA_TRAP) & grounded
-        magnet = (opposing == AbilityEnum.MAGNET_PULL) & jnp.any(types == Type.STEEL, axis=1)
-        trapped |= (arena | magnet) & ~ghost & (hp[::-1, 0] > 0)
+        trapped = voluntary_switch_blocked(battle)
         switches &= ~trapped[:, None] | (state.phase != Phase.TURN)
+        switches = jnp.where(state.phase == Phase.REVIVAL, revive, switches)
         forced = ~jnp.any(moves, axis=1) & (state.phase == Phase.TURN)
         moves &= state.phase == Phase.TURN
         mask = jnp.concatenate((moves, jnp.concatenate((forced[:, None], jnp.zeros((2, 3), bool)), axis=1), switches,
                                 jnp.zeros((2, 1), bool)), axis=1)
         v = battle.volatile_status
-        continuing = ((v.charging_move_id[:, 0] != 0) | v.recharging[:, 0]) & (state.phase == Phase.TURN) & (hp[:, 0] > 0)
+        continuing = ((v.continuation.charging_move_id[:, 0] != 0) | v.continuation.recharging[:, 0]) & (state.phase == Phase.TURN) & (hp[:, 0] > 0)
         mask = jnp.where(continuing[:, None], jnp.arange(15)[None, :] == 5, mask)
         # Inactive players supply a no-op; their actual input is ignored.
         return jnp.where(state.acting_player_mask[:, None], mask,
@@ -270,10 +263,11 @@ class Battle(Environment):
         actions: jax.Array,
         params: BattleParams,
     ) -> tuple[jax.Array, BattleState, jax.Array, jax.Array, dict[str, Any]]:
-        """Run the legacy transition using effective active abilities."""
-        act1, act2 = actions
+        """Validate switches on the starting state before resolving both choices."""
+        switches = (actions >= 8) & (actions < 14)
+        actions = jnp.where(switches & voluntary_switch_blocked(state), 14, actions)
         is_move, index, is_tera, is_no_op = decode_action(actions)
-        active = state.effective_active
+        active = state.combat_active
         moves = active.moves[(0, 1), index]
         is_gale_wings = triple_and(
             moves.type==Type.FLYING,
@@ -291,8 +285,12 @@ class Battle(Environment):
         priorities = moves.priority + is_triage + is_prankster + is_gale_wings
         priorities = priorities * is_move + (1-is_move) * 7
         first, second = action_order(key, state, priorities)
-        key, state = step_action(key, state, act1, first)
-        key, state = step_action(key, state, act2, second)
+        volatile = state.volatile_status
+        last_action = volatile.queued_move.last_action.at[first, 0].set(is_no_op[second]).at[second, 0].set(True)
+        state = state.replace(volatile_status=volatile.replace(
+            queued_move=volatile.queued_move.replace(last_action=last_action)))
+        key, state = step_action(key, state, actions[first], first, switch_committed=True)
+        key, state = step_action(key, state, actions[second], second, switch_committed=True)
 
         key, state = step_field(key, state)
         # should return obs, state, reward, done, info

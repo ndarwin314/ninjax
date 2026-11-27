@@ -15,7 +15,7 @@ from ninjax.calculations.modifiers import CRIT_STAGES
 from ninjax.calculations.stats import raw_boosted_stats
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.moves import MoveType, OffensiveStatOwner, MoveResult
+from ninjax.enums.moves import MoveFlags, MoveType, OffensiveStatOwner, MoveResult
 from ninjax.enums.pokemon import Status, Type
 from ninjax.item_rules import item_is_suppressed
 from ninjax.moves.effects import after_damage, after_every_hit, secondary_effects
@@ -24,7 +24,11 @@ from ninjax.moves.properties import substitute_intercepts
 from ninjax.records.events import EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.side.hp_effects import take_damage_value
-from ninjax.side.item_effects import after_hit, after_hp_change, consume, remove_item
+from ninjax.side.trapping import apply_binding
+from ninjax.side.item_effects import (
+    after_hit, after_hp_change, apply_flung_item, consume, destroy_opposing_berry,
+    eat_opposing_berry, held_item_active, release_fling_item, remove_item, steal_item,
+)
 from ninjax.side.queries import (
     ability_against_move,
     effective_weather,
@@ -43,7 +47,7 @@ def _damage_substitute(s, *, target_idx, damage):
     remaining = old - loss
     s = s.replace(volatile_status=v.replace(
         substitute_hp=v.substitute_hp.at[target_idx, 0].set(remaining),
-        last_damage=v.last_damage.at[target_idx, 0].set(loss)))
+        move_history=v.move_history.replace(last_damage=v.move_history.last_damage.at[target_idx, 0].set(loss))))
     # Public events expose presence, never the private remaining HP.
     s = emit(s, EventKind.CONDITION, target_idx, detail=13, before=1, after=remaining > 0)
     return s
@@ -77,9 +81,21 @@ def _knock_off_item(s, *, target_idx, attacker_idx):
     return remove_item(s, target_idx, attacker_idx)[0]
 
 
-def _run_secondary_effects(k, s, *, attacker_idx, move):
-    """Roll secondary effects only for hits that reach the Pokémon."""
-    return secondary_effects(k, s, attacker_idx, move)
+def _early_item_effects(state, *, player, target, move):
+    """Eat, destroy or deliver an item as a primary hit effect."""
+    ident = move.identifier[0]
+    branch = jnp.select(((ident == 450) | (ident == 365), ident == 510,
+                        move.flung_item[0] != ItemEnum.NONE), (1, 2, 3), default=0)
+    return jax.lax.switch(branch, (
+        _identity,
+        partial(eat_opposing_berry, player=player, target=target),
+        partial(destroy_opposing_berry, player=player, target=target),
+        partial(apply_flung_item, target=target, item=move.flung_item[0])), state)
+
+
+def _run_secondary_effects(k, s, *, attacker_idx, move, reached_target):
+    """Roll target effects on a direct hit, and user effects on either recipient."""
+    return secondary_effects(k, s, attacker_idx, move, reached_target=reached_target)
 
 
 def _run_after_damage(s, *, attacker_idx, move):
@@ -94,7 +110,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     The hit record stores actual loss before healing. Move finalization uses
     that loss for recoil. The defender snapshot is from before the hit.
     """
-    active = state.effective_active
+    active = state.combat_active
     attacker = active[attacker_idx]
     defender = active[1-attacker_idx]
     # Damage calculation reads the same weather before any HP changes.
@@ -122,8 +138,8 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         target_speed=target_speed,
         positive_stages=jnp.sum(jnp.maximum(state.boosts.normal_boosts[attacker_idx, 1:], 0)) +
                         jnp.sum(jnp.maximum(state.boosts.acc_boosts[attacker_idx], 0)),
-        previous_failed=state.volatile_status.previous_move_result[attacker_idx] == MoveResult.FAILED,
-        target_charging_move=state.volatile_status.charging_move_id[1-attacker_idx, 0],
+        previous_failed=state.volatile_status.move_history.previous_move_result[attacker_idx] == MoveResult.FAILED,
+        target_charging_move=state.volatile_status.continuation.charging_move_id[1-attacker_idx, 0],
         item_suppressed=item_is_suppressed(state.ability[attacker_idx], state.magic_room_duration,
                                             state.volatile_status.embargo_turns[attacker_idx]),
     )
@@ -140,7 +156,7 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
 
     # Select stage-adjusted stats before computing offensive and defensive
     # modifiers. Moves such as Body Press can select a nonstandard attack stat.
-    raw_stats = active.stats
+    raw_stats = state.active_stats()
     boosts = state.boosts
     attacker_stats, defender_stats = raw_boosted_stats(
         raw_stats,
@@ -167,14 +183,17 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         power,
         attacker.status,
         defender.status,
-        state.volatile_status.flash_fire[attacker_idx],
+        state.volatile_status.ability_state.flash_fire[attacker_idx],
         offensive_modifier=offensive_modifier, defensive_modifier=defensive_modifier,
     )
 
-    screen = jnp.where(move.move_type == MoveType.PHYSICAL, state.reflect[1-attacker_idx, 0] > 0,
-                       state.light_screen[1-attacker_idx, 0] > 0) | (state.aurora_veil[1-attacker_idx, 0] > 0)
-    charging = state.volatile_status.charging_move_id[1-attacker_idx, 0]
+    screen = jnp.where(move.move_type == MoveType.PHYSICAL, state.side_conditions.reflect[1-attacker_idx, 0] > 0,
+                       state.side_conditions.light_screen[1-attacker_idx, 0] > 0) | (state.side_conditions.aurora_veil[1-attacker_idx, 0] > 0)
+    charging = state.volatile_status.continuation.charging_move_id[1-attacker_idx, 0]
     ident = move.identifier[0]
+    early_item = (ident == 450) | (ident == 365) | (ident == 510) | (move.flung_item[0] != ItemEnum.NONE)
+    theft = (ident == 168) | (ident == 343)
+    defer_hp_items = early_item | theft | (ident == 282) | (ident == 917)
     # Exceptional moves strike these charge states at double damage; Bounce
     # uses a separate BasePower callback instead of Fly's damage callback.
     semi_bonus = ((charging == 19) & ((ident == 16) | (ident == 239))) | (
@@ -206,11 +225,11 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
             damage=damage,
             attacker_idx=attacker_idx,
             defender_ability=hit_defender.ability,
-            activate_items=ident != 917,
+            activate_items=~defer_hp_items,
         ),
         state,
     )
-    actual_loss = state.volatile_status.last_damage[target_idx]
+    actual_loss = state.volatile_status.move_history.last_damage[target_idx]
     state = record_hit(state, hit_index, target_idx, HitOutcome.HIT,
         jnp.where(intercepted, HitRecipient.SUBSTITUTE, HitRecipient.POKEMON), actual_loss[0])
     result = state.hit_results[hit_index]
@@ -218,6 +237,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     # the per-attempt record reports, including when the doll just broke.
     intercepted = result.recipient == HitRecipient.SUBSTITUTE
     actual_loss = jnp.reshape(result.damage, (1,))
+    state = release_fling_item(state, attacker_idx, move.flung_item[0])
+    state = jax.lax.cond(early_item & ~intercepted,
+        partial(_early_item_effects, player=attacker_idx, target=target_idx, move=move), _identity, state)
     # A damaging Fire move thaws its target after the hit, even if it faints.
     target_status = state.active_field('status', target_idx)
     thaw = (move.type == Type.FIRE) & (actual_loss > 0) & ~intercepted & (target_status == Status.FREEZE)
@@ -238,10 +260,9 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         key,
         state,
     )
-    # Air Balloon breaks on a hit to the Pokémon, including zero-HP KOs, but
-    # Substitute absorbs the hit without popping the held balloon.
-
-    state = consume(state, target_idx, ~intercepted & (defender.item[0] == ItemEnum.AIR_BALLOON))
+    # Damage to the Pokémon or its Substitute pops the balloon permanently.
+    state = consume(state, target_idx, (actual_loss[0] > 0) & held_item_active(state, target_idx) &
+                    (state.active_field('item', target_idx)[0] == ItemEnum.AIR_BALLOON), recoverable=False)
     state = jax.lax.cond(
         intercepted,
         _identity,
@@ -255,15 +276,17 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
         _identity,
         state,
     )
+    state = jax.lax.cond(theft & ~intercepted,
+        partial(steal_item, recipient=attacker_idx, holder=target_idx), _identity, state)
     key, state = jax.lax.cond(
-        intercepted,
+        ~intercepted | jnp.any(move.secondaries.user_stages != 0),
+        partial(_run_secondary_effects, attacker_idx=attacker_idx, move=move, reached_target=~intercepted),
         _unchanged_key_state,
-        partial(_run_secondary_effects, attacker_idx=attacker_idx, move=move),
         key,
         state,
     )
-    # Psychic Noise's secondary takes effect before threshold-based berries.
-    state = jax.lax.cond((ident == 917) & ~intercepted,
+    # Item mutation and Psychic Noise's Heal Block precede the berry HP check.
+    state = jax.lax.cond(defer_hp_items & ~intercepted,
         partial(after_hp_change, player=target_idx), _identity, state)
     # Explicit target thawing runs after secondaries, so Scald cannot burn a
     # frozen target on the same hit that thaws it. Substitute blocks the thaw.
@@ -271,6 +294,10 @@ def resolve_damaging_hit(key, state: BattleState, attacker_idx, move: Move, hit_
     thaw = (move.thaws_target & ~intercepted & (actual_loss > 0) &
             (state.active_field('current_hp', target_idx) > 0) & (target_status == Status.FREEZE))
     state = update_active_fields(state, target_idx, status=jnp.where(thaw, Status.NONE, target_status))
+    key, state = jax.lax.cond(
+        ~intercepted & ((move.move_flags[0] & MoveFlags.BINDING) != 0),
+        partial(apply_binding, source=attacker_idx, move_id=ident),
+        _unchanged_key_state, key, state)
     # These moves have explicit after-Substitute callbacks in Scarlet/Violet.
     after_sub = ((ident == 229) | (ident == 830) | (ident == 845)) & (state.active_field('current_hp', attacker_idx)[0] > 0)
     state = jax.lax.cond(

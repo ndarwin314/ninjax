@@ -26,7 +26,7 @@ def test_fake_out_first_action_and_reset(neutral_type):
     _, second = step_move(key, first, 0, 0, False)
     assert second.hit_results[0].outcome == HitOutcome.FAILED
     assert second.active.current_hp[1, 0] == first.active.current_hp[1, 0]
-    assert clear_volatile_status(second, 0).volatile_status.active_move_actions[0, 0] == 0
+    assert clear_volatile_status(second, 0).volatile_status.move_history.active_move_actions[0, 0] == 0
     v = state.volatile_status
     blocked = state.replace(volatile_status=v.replace(flinched=v.flinched.at[0, 0].set(True)))
     key, blocked = step_move(key, blocked, 0, 0, False)
@@ -42,8 +42,11 @@ def test_sucker_punch_queued_intent(neutral_type, pending, category, slot, works
     key, state = neutral_type
     state = equip_move(state, 'Sucker Punch')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(pending_move=v.pending_move.at[1, 0].set(pending),
-        pending_move_type=v.pending_move_type.at[1, 0].set(category), pending_actor_slot=v.pending_actor_slot.at[1, 0].set(slot)))
+    state = state.replace(volatile_status=v.replace(
+        queued_move=v.queued_move.replace(
+            pending_move=v.queued_move.pending_move.at[1, 0].set(pending),
+            pending_move_type=v.queued_move.pending_move_type.at[1, 0].set(category),
+            pending_actor_slot=v.queued_move.pending_actor_slot.at[1, 0].set(slot))))
     _, out = step_move(key, state, 0, 0, False)
     assert bool(out.active.current_hp[1, 0] < state.active.current_hp[1, 0]) == works
     assert bool(out.hit_results[0].outcome == HitOutcome.FAILED) != works
@@ -54,19 +57,19 @@ def test_previous_result_rollover_and_protect(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'Fake Out')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(active_move_actions=v.active_move_actions.at[0, 0].set(1)))
+    state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(active_move_actions=v.move_history.active_move_actions.at[0, 0].set(1))))
     key, failed = step_move(key, state, 0, 0, False)
-    assert failed.volatile_status.move_result[0, 0] == MoveResult.FAILED
+    assert failed.volatile_status.move_history.move_result[0, 0] == MoveResult.FAILED
     key, next_turn = step_field(key, failed)
-    assert next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED
-    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 150
+    assert next_turn.volatile_status.move_history.previous_move_result[0, 0] == MoveResult.FAILED
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.move_history.previous_move_result[0, 0] == MoveResult.FAILED) == 150
     state = equip_move(state, 'Dragon Pulse')
     v = state.volatile_status
-    state = state.replace(volatile_status=v.replace(protected=v.protected.at[1, 0].set(True)))
+    state = state.replace(volatile_status=v.replace(protection=v.protection.replace(protected=v.protection.protected.at[1, 0].set(True))))
     key, protected = step_move(key, state, 0, 0, False)
-    assert protected.volatile_status.move_result[0, 0] == MoveResult.SUCCEEDED
+    assert protected.volatile_status.move_history.move_result[0, 0] == MoveResult.SUCCEEDED
     _, next_turn = step_field(key, protected)
-    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 75
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=next_turn.volatile_status.move_history.previous_move_result[0, 0] == MoveResult.FAILED) == 75
 
 
 def test_scheduler_supplies_sucker_punch_intent(neutral_type):
@@ -81,7 +84,7 @@ def test_scheduler_supplies_sucker_punch_intent(neutral_type):
     out, ts = env.step(episode, actions)
     assert not ts.extras['invalid_action']
     assert out.battle.active.current_hp[1, 0] < episode.battle.active.current_hp[1, 0]
-    assert out.battle.volatile_status.previous_move_result[0, 0] == MoveResult.SUCCEEDED
+    assert out.battle.volatile_status.move_history.previous_move_result[0, 0] == MoveResult.SUCCEEDED
 
 
 def test_full_hp_healing_records_failure(neutral_type):
@@ -89,9 +92,9 @@ def test_full_hp_healing_records_failure(neutral_type):
     key, state = neutral_type
     state = equip_move(state, 'Recover')
     key, out = step_move(key, state, 0, 0, False)
-    assert out.volatile_status.move_result[0, 0] == MoveResult.FAILED
+    assert out.volatile_status.move_history.move_result[0, 0] == MoveResult.FAILED
     _, out = step_field(key, out)
-    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=out.volatile_status.previous_move_result[0, 0] == MoveResult.FAILED) == 150
+    assert resolve_hit_base_power(75, make_move('Stomping Tantrum').power_rule[0], previous_failed=out.volatile_status.move_history.previous_move_result[0, 0] == MoveResult.FAILED) == 150
 
 
 def test_observation_exposes_history_not_pending_intent(neutral_type):
@@ -101,8 +104,10 @@ def test_observation_exposes_history_not_pending_intent(neutral_type):
     env = Battle(state.team)
     episode, _ = env.reset(key)
     v = episode.battle.volatile_status
-    v = v.replace(previous_move_result=v.previous_move_result.at[0, 0].set(MoveResult.FAILED),
-                  active_move_actions=v.active_move_actions.at[0, 0].set(2))
+    v = v.replace(
+        move_history=v.move_history.replace(
+            previous_move_result=v.move_history.previous_move_result.at[0, 0].set(MoveResult.FAILED),
+            active_move_actions=v.move_history.active_move_actions.at[0, 0].set(2)))
     obs = env.observe(episode.replace(battle=episode.battle.replace(volatile_status=v)))
     env.observation_spec.validate(obs)
     assert obs.active.previous_move_result[0, 0] == MoveResult.FAILED

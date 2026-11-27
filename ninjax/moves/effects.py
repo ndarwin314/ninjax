@@ -12,10 +12,10 @@ from ninjax.calculations.modifiers import ROUGH_SKIN_DAMAGE
 from ninjax.enums.abilities import AbilityEnum, AbilityEnum as A
 from ninjax.enums.field import Terrain, TerrainEnum, TerrainEnum as T
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.moves import MoveType
+from ninjax.enums.moves import MoveType, SecondaryEffectType
 from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.knowledge import remember_item
-from ninjax.moves.model import Move
+from ninjax.moves.model import Move, SECONDARY_SLOTS
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.restrictions import apply_hit_restriction
 from ninjax.side.field_conditions import set_terrain
@@ -25,6 +25,7 @@ from ninjax.side.queries import ability_against_move, contact_reactions_allowed,
 from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import apply_confusion, set_status
+from ninjax.side.trapping import clear_binding
 from ninjax.side.updates import add_boosts, clear_boosts, conditional_add_boosts
 
 
@@ -53,21 +54,31 @@ def _after_damage_add_boosts(s, *, player):
     return add_boosts(s, player, 5, 1)
 
 
+def _clear_hazard_row(values, *, player):
+    """Clear one side's layers or presence flag for Rapid Spin."""
+    return values.at[player].set(jnp.zeros_like(values[player]))
+
+
 def _after_damage_spin(s, *, player):
     """Remove represented entry hazards and raise the surviving user's Speed."""
-    s = s.replace(**{name: getattr(s, name).at[player].set(jnp.zeros_like(getattr(s, name)[player]))
-                     for name in ('stealth_rocks', 'spikes', 'toxic_spikes', 'sticky_webs')})
+    s = s.replace(hazards=jax.tree.map(partial(_clear_hazard_row, player=player), s.hazards))
+    s = clear_binding(s, player)
     return jax.lax.cond(s.active_field('current_hp', player)[0] > 0,
         partial(_after_damage_add_boosts, player=player), _preserve_operand, s)
 
 
 def _innards_out_damage(state, *, attacker_idx, defender_idx, damage):
     """Attribute Innards Out damage to the fainted holder."""
-    previous_source, previous_cause = state.event_source, state.event_cause
-    state = state.replace(event_source=jnp.asarray(defender_idx, jnp.int32),
-                          event_cause=jnp.int32(Cause.INDIRECT))
+    previous_source, previous_cause = state.event_context.source, state.event_context.cause
+    state = state.replace(
+        event_context=state.event_context.replace(
+            source=jnp.asarray(defender_idx, jnp.int32),
+            cause=jnp.int32(Cause.INDIRECT)))
     state = apply_indirect_hp_change(state, attacker_idx, damage, source=defender_idx)
-    return state.replace(event_source=previous_source, event_cause=previous_cause)
+    return state.replace(
+        event_context=state.event_context.replace(
+            source=previous_source,
+            cause=previous_cause))
 
 
 def _skip_innards_out(state):
@@ -139,10 +150,10 @@ def after_every_hit(
     aftermath = ((defender_ability[0] == AbilityEnum.AFTERMATH) & ~defender_alive[0] & (hit_damage > 0) &
         move.contact[0] & contact_reactions_allowed(attacker_ability[0], attacker_item) & ~damp &
         (attacker_ability[0] != AbilityEnum.MAGIC_GUARD) & (state.active_field('current_hp', attacker_idx)[0] > 0))
-    source = state.event_source
-    state = state.replace(event_source=jnp.asarray(defender_idx, jnp.int32))
+    source = state.event_context.source
+    state = state.replace(event_context=state.event_context.replace(source=jnp.asarray(defender_idx, jnp.int32)))
     state = take_damage_percent(state, attacker_idx, jnp.where(aftermath, 1/4, 0), cause=Cause.CONTACT)
-    state = state.replace(event_source=source)
+    state = state.replace(event_context=state.event_context.replace(source=source))
     innards = ((defender_ability[0] == AbilityEnum.INNARDS_OUT) & ~defender_alive[0] &
                (hit_damage > 0) & (attacker_ability[0] != AbilityEnum.MAGIC_GUARD) &
                (state.active_field('current_hp', attacker_idx)[0] > 0))
@@ -225,30 +236,30 @@ def _unchanged_secondary(key, state, *unused):
     return key, state
 
 
-def _secondary_status(key, state, target, move):
+def _secondary_status(key, state, target, status):
     """Apply the move's represented major-status secondary."""
-    return set_status(key, state, target, move.secondary_status)
+    return set_status(key, state, target, jnp.reshape(status, (1,)))
 
 
-def _secondary_confusion(key, state, target, move):
+def _secondary_confusion(key, state, target):
     """Apply the move's represented confusion secondary."""
 
     return apply_confusion(key, state, target)
 
 
-def _apply_secondary(key, state, player, move, ability):
-    """Apply a successful secondary in status, confusion, stat and flinch order."""
-    target = 1-player
-    key, state = jax.lax.cond(move.secondary_status[0] != 0,
-        _secondary_status, _unchanged_secondary, key, state, target, move)
-    key, state = jax.lax.cond(move.secondary_confusion[0],
-        _secondary_confusion, _unchanged_secondary, key, state, target, move)
-    state = stat_changes(state, target, move.secondary_stat, move.secondary_stages, True)
-    identifier = move.identifier[0]
-    state = jax.lax.cond((identifier == 675) | (identifier == 917),
+def _apply_secondary(key, state, *, target, move, ability, index):
+    """Apply one successful slot in status, confusion, stat and flinch order."""
+    effects = move.secondaries
+    status = effects.status[index]
+    key, state = jax.lax.cond(status != Status.NONE,
+        _secondary_status, _unchanged_secondary, key, state, target, status)
+    key, state = jax.lax.cond(effects.confusion[index],
+        _secondary_confusion, _unchanged_secondary, key, state, target)
+    state = stat_changes(state, target, effects.stats[index], effects.stages[index], True)
+    state = jax.lax.cond(effects.restriction[index],
         apply_hit_restriction, _skip_hit_restriction, state, target, move, ability)
     v = state.volatile_status
-    flinch = move.secondary_flinch[0] & (ability != A.INNER_FOCUS)
+    flinch = effects.flinch[index] & (ability != A.INNER_FOCUS)
     return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
 
 
@@ -257,17 +268,54 @@ def _skip_hit_restriction(state, target, move, ability):
     return state
 
 
-def secondary_effects(key, state, player, move):
-    """Roll one supported secondary effect, respecting Shield Dust and survival."""
+def _roll_independent_secondary(roll_key, chances):
+    """Roll all slots independently, retaining the first slot's scalar draw."""
+    first = random.uniform(roll_key)
+    rest = random.uniform(random.fold_in(roll_key, 1), (SECONDARY_SLOTS - 1,))
+    return jnp.concatenate((first[None], rest)) < chances
+
+
+def _roll_exclusive_secondary(roll_key, chances):
+    """Select at most one slot, preserving relative odds if the total caps."""
+    chances = chances / jnp.maximum(1., jnp.sum(chances))
+    ends = jnp.cumsum(chances)
+    starts = jnp.concatenate((jnp.zeros_like(ends[:1]), ends[:-1]))
+    roll = random.uniform(roll_key)
+    return (roll >= starts) & (roll < ends)
+
+
+def _apply_user_secondary(state, *, player, stats, stages):
+    """Apply a secondary's stat changes to the move user."""
+    return stat_changes(state, player, stats, stages)
+
+
+def _apply_secondary_slot(index, carry, *, triggered, player, target, target_allowed, move, ability):
+    """Apply both recipients' effects from the same secondary roll."""
+    effects = move.secondaries
+    apply = partial(_apply_secondary, target=target, move=move, ability=ability, index=index)
+    key, state = jax.lax.cond(triggered[index] & target_allowed, apply, _unchanged_secondary, *carry)
+    user_stages = effects.user_stages[index]
+    user_allowed = jnp.any(user_stages != 0) & (state.active_field('current_hp', player)[0] > 0)
+    state = jax.lax.cond(triggered[index] & user_allowed,
+        partial(_apply_user_secondary, player=player, stats=effects.user_stats[index], stages=user_stages),
+        _preserve_operand, state)
+    return key, state
+
+
+def secondary_effects(key, state, player, move, reached_target=True):
+    """Roll each secondary once and gate the user and target effects separately."""
     key, roll_key = jax.random.split(key)
     target = 1-player
     ability = ability_against_move(state, target, move)[0]
-    chance = move.secondary_chance[0] * jnp.where(state.ability[player, 0] == A.SERENE_GRACE, 2., 1.)
-    triggered = (jax.random.uniform(roll_key) < chance) & (ability != A.SHIELD_DUST) & (state.active_field('current_hp', target)[0] > 0)
-    key, state = jax.lax.cond(triggered, _apply_secondary, _unchanged_secondary,
-                              key, state, player, move, ability)
+    chances = move.secondaries.probabilities * jnp.where(state.ability[player, 0] == A.SERENE_GRACE, 2., 1.)
+    triggered = jax.lax.cond(move.secondaries.mode[0] == SecondaryEffectType.EXCLUSIVE,
+        _roll_exclusive_secondary, _roll_independent_secondary, roll_key, chances)
+    target_allowed = reached_target & (ability != A.SHIELD_DUST) & (state.active_field('current_hp', target)[0] > 0)
+    apply = partial(_apply_secondary_slot, triggered=triggered, player=player, target=target,
+                    target_allowed=target_allowed, move=move, ability=ability)
+    key, state = jax.lax.fori_loop(0, SECONDARY_SLOTS, apply, (key, state))
 
-    return kings_rock_flinch(key, state, player, move)
+    return kings_rock_flinch(key, state, player, move, reached_target=reached_target)
 
 
 def after_damage(state, player, move):
@@ -275,8 +323,9 @@ def after_damage(state, player, move):
     ident = move.identifier[0]
     target = 1-player
     state = state.replace(
-        stealth_rocks=state.stealth_rocks.at[target].set(state.stealth_rocks[target] | (ident == 830)),
-        spikes=state.spikes.at[target].set(jnp.minimum(3, state.spikes[target] + (ident == 845))))
+        hazards=state.hazards.replace(
+            stealth_rocks=state.hazards.stealth_rocks.at[target].set(state.hazards.stealth_rocks[target] | (ident == 830)),
+            spikes=state.hazards.spikes.at[target].set(jnp.minimum(3, state.hazards.spikes[target] + (ident == 845)))))
     # Clear Smog, Ice Spinner and Rapid Spin each have one distinct callback.
     branch = jnp.select((ident == 499, ident == 861, ident == 229), (0, 1, 2), default=3)
     return jax.lax.switch(branch,

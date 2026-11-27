@@ -64,8 +64,9 @@ def test_plate_typing_and_power_suppression(neutral_type, suppression):
     state = update_active(state, 0, mon)
     v = state.volatile_status
     state = state.replace(magic_room_duration=jnp.int32(2 if suppression == 'magic_room' else 0),
-        volatile_status=v.replace(embargo_turns=v.embargo_turns.at[0, 0].set(2 if suppression == 'embargo' else 0),
-                                  ability_suppressed=v.ability_suppressed.at[0, 0].set(suppression == 'suppressed_klutz')))
+        volatile_status=v.replace(
+            embargo_turns=v.embargo_turns.at[0, 0].set(2 if suppression == 'embargo' else 0),
+            ability_state=v.ability_state.replace(ability_suppressed=v.ability_state.ability_suppressed.at[0, 0].set(suppression == 'suppressed_klutz'))))
     suppressed = suppression in ('klutz', 'magic_room', 'embargo')
     judgment = effective_move(state, 0, make_move('Judgment'))
     assert judgment.type[0] == (Type.NORMAL if suppressed else Type.FIRE)
