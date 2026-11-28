@@ -103,7 +103,7 @@ items. The result validates this single eager rollout; it does not establish
 compiled, batched or scanned full-battle acceptance or exhaustive mechanics
 parity.
 
-Subsequent [compilation-memory work](compilation-performance.md) reduced the
+Subsequent [compilation-memory work](../compilation/README.md) reduced the
 full-step trace from 802,117 to 70,666 equations and peak tracing RSS from
 1,801 to 619 MiB. At that stage, whole-step backend compilation still exceeded
 the tested memory budgets. Focused regression and shared-helper transformation checks

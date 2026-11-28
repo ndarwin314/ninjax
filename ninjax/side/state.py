@@ -1,6 +1,7 @@
 """Immutable battle PyTrees and read-only views; no reactive effect imports."""
 from dataclasses import field
 from functools import partial
+from math import prod
 import warnings
 
 import jax
@@ -13,10 +14,11 @@ from ninjax.calculations.stats import StatBoosts
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import Terrain, TerrainEnum, TurnType, Weather, WeatherEnum
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.pokemon import StatEnum, Status, Type
-from ninjax.item_rules import item_is_suppressed
-from ninjax.moves.model import Move
+from ninjax.enums.moves import LockedMoveKind
+from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
+from ninjax.item_rules import ability_shield_active, item_is_suppressed, plate_type
 from ninjax.pokemon import Pokemon
+from ninjax.records.battle_history import DamageHistory
 from ninjax.records.events import EventBuffer
 from ninjax.records.hits import HitResults
 from ninjax.side.queries import (
@@ -45,6 +47,19 @@ def _roost_types(original_types, remove):
     primary = jnp.where(primary == Type.NONE, Type.NORMAL, primary)
     secondary = jnp.where(promote, Type.NONE, second)
     return jnp.where(remove, jnp.stack((primary, secondary), axis=-1), original_types)
+
+
+@jax.jit
+def _effective_abilities(ability, hp, item, magic_room, embargo, acid, transformed):
+    """Apply field and local suppression to two active ability identities."""
+    immune = jnp.isin(ability, jnp.asarray(UNCHANGEABLE_ABILITIES))
+    shield = ability_shield_active(item, magic_room, embargo)
+    gas = (ability == AbilityEnum.NEUTRALIZING_GAS) & ~acid & ~transformed
+    gas = gas & (hp > 0)
+    suppressed = ~immune & (acid |
+        (gas[::-1] & ~shield & (ability != AbilityEnum.NEUTRALIZING_GAS)))
+    suppressed |= transformed & jnp.isin(ability, jnp.asarray(TRANSFORM_SUPPRESSED_ABILITIES))
+    return jnp.where(suppressed, AbilityEnum.NONE, ability)
 
 
 def _negative_ones(shape, dtype):
@@ -96,6 +111,28 @@ class TrappingState(struct.PyTreeNode):
     binding_move_id: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     binding_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     binding_divisor: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    lock_source_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    no_retreat: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+
+
+class ActiveResiduals(struct.PyTreeNode):
+    """Per-active condition lifetimes, shape (2, 1). Zero is inactive and -1 is indefinite."""
+
+    aqua_ring: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    ingrain: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    leech_seed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    curse: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    salt_cure: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    syrup_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    syrup_source_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    yawn_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+
+
+class SlotResiduals(struct.PyTreeNode):
+    """Delayed recovery by active position, with leaves of shape (2, 1)."""
+
+    wish_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    wish_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
 
 
 class LockedMove(struct.PyTreeNode):
@@ -151,6 +188,7 @@ class ActiveAbilityState(struct.PyTreeNode):
     paradox_stat: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
     paradox_booster: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     libero_used: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    tera_shell: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     flash_fire: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
 
 
@@ -165,6 +203,8 @@ class QueuedMove(struct.PyTreeNode):
     last_action: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     # A redirected or called move keeps the queued action's priority.
     encore_overridden: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    preparation: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    focus_lost: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
 
 
 class MoveHistory(struct.PyTreeNode):
@@ -195,6 +235,7 @@ class ActiveProperties(struct.PyTreeNode):
     species: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
     weight_hg: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
     stats: Array = field(default_factory=partial(_negative_ones, (2, 6), dtype=jnp.int32))
+    power_trick: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
     copied_slots: Array = field(default_factory=partial(jnp.zeros, (2, 4), dtype=jnp.bool_))
 
 
@@ -205,6 +246,7 @@ class VolatileStatus(struct.PyTreeNode):
     """
     restrictions: MoveRestrictions = field(default_factory=MoveRestrictions)
     trapping: TrappingState = field(default_factory=TrappingState)
+    residuals: ActiveResiduals = field(default_factory=ActiveResiduals)
     continuation: MoveContinuation = field(default_factory=MoveContinuation)
     protection: MoveProtection = field(default_factory=MoveProtection)
     ability_state: ActiveAbilityState = field(default_factory=ActiveAbilityState)
@@ -223,6 +265,14 @@ class VolatileStatus(struct.PyTreeNode):
     # Pre-faint HP for calculating an Explosion already committed this action.
     explosion_hp: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     transformed: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    stockpile_count: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    # Net Defense and Special Defense stages credited to Stockpile.
+    stockpile_stages: Array = field(default_factory=partial(jnp.zeros, (2, 2), dtype=jnp.int32))
+    magnet_rise_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    focus_energy: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
+    lock_on_turns: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    lock_on_target_slot: Array = field(default_factory=partial(_negative_ones, (2, 1), dtype=jnp.int32))
+    defense_curl: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.bool_))
 
     def __getitem__(self, idx):
         """Select one side of every volatile-state leaf (deprecated)."""
@@ -256,12 +306,14 @@ class Hazards(struct.PyTreeNode):
 
 
 class SideConditions(struct.PyTreeNode):
-    """Screen and Tailwind durations by side, each with shape (2, 1)."""
+    """Timed side conditions, each with shape (2, 1)."""
 
     reflect: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     light_screen: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     aurora_veil: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
     tailwind: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    safeguard: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
+    mist: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
 
 
 class PendingFaints(struct.PyTreeNode):
@@ -302,10 +354,12 @@ class BattleState(struct.PyTreeNode):
     """
     team: Pokemon
     # Original move banks of the two active slots while their moves are copied.
-    original_moves: Move | None = None
+    original_moves: Array | None = None
+    last_executed_move: Array | None = None
     hazards: Hazards = field(default_factory=Hazards)
     side_conditions: SideConditions = field(default_factory=SideConditions)
     side_protection: SideProtection = field(default_factory=SideProtection)
+    slot_residuals: SlotResiduals = field(default_factory=SlotResiduals)
     pending_faints: PendingFaints = field(default_factory=PendingFaints)
     event_context: EventContext = field(default_factory=EventContext)
     # Publicly revealed held items by owner and team slot; -1 means unknown.
@@ -314,6 +368,7 @@ class BattleState(struct.PyTreeNode):
     known_abilities: Array = field(default_factory=partial(_negative_ones, (2, 6), dtype=jnp.int32))
     events: EventBuffer = field(default_factory=EventBuffer.empty)
     hit_results: HitResults = field(default_factory=HitResults.empty)
+    damage_history: DamageHistory = field(default_factory=DamageHistory)
     # figure out how to represent no pokemon on field, maybe active_index=-1?
     # or make a flag variable?
     active_index: Array = field(default_factory=partial(jnp.zeros, (2, 1), dtype=jnp.int32))
@@ -326,7 +381,12 @@ class BattleState(struct.PyTreeNode):
     # Pending EntryRecovery flags by active position, including application order.
     entry_recovery: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
     # Recycle memory is carried by the party slot, independent of its held item.
+    ability_once_used: Array = field(default_factory=partial(jnp.zeros, (2, 6, 2), dtype=jnp.bool_))
     consumed_items: Array = field(default_factory=partial(jnp.zeros, (2, 6), dtype=jnp.int32))
+    # Belch and Last Resort prerequisites by party slot and move slot.
+    ate_berry: Array = field(default_factory=partial(jnp.zeros, (2, 6), dtype=jnp.bool_))
+    used_move_ids: Array = field(default_factory=partial(jnp.zeros, (2, 6, 4), dtype=jnp.int32))
+    original_used_move_ids: Array = field(default_factory=partial(jnp.zeros, (2, 4), dtype=jnp.int32))
     # Replacement continuation: 0 normal, 1 Baton Pass, 2 Shed Tail.
     switch_transfer: Array = field(default_factory=partial(jnp.zeros, 2, dtype=jnp.int32))
     roster: Array = field(default_factory=partial(jnp.ones, (2, 6), dtype=jnp.bool_))
@@ -340,12 +400,18 @@ class BattleState(struct.PyTreeNode):
     trick_room_duration: int = 0
     gravity_duration: int = 0
     magic_room_duration: int = 0
+    wonder_room_duration: int = 0
+    fairy_lock_turns: int = 0
     turn_type: TurnType = TurnType.STANDARD
 
     def __post_init__(self):
         """Allocate shape-compatible backup banks for temporary moves."""
         if self.original_moves is None:
-            object.__setattr__(self, 'original_moves', self.team.moves[:, 0])
+            # One buffer keeps this backup out of the per-move PyTree leaf count.
+            width = sum(prod(leaf.shape[2:]) for leaf in jax.tree.leaves(self.team.moves))
+            object.__setattr__(self, 'original_moves', jnp.zeros((2, width), jnp.int32))
+        if self.last_executed_move is None:
+            object.__setattr__(self, 'last_executed_move', jnp.zeros(self.original_moves.shape[-1] // 4, jnp.int32))
 
     def __getitem__(self, idx):
         """Select side-indexed fields while retaining shared field values (deprecated).
@@ -447,17 +513,18 @@ class BattleState(struct.PyTreeNode):
         Suppression removes the effect without erasing the underlying ability
         or override, so clearing it can restore the appropriate ability.
         """
-        ability = self.ability_identity
         v = self.volatile_status
-        immune = jnp.isin(ability, jnp.asarray(UNCHANGEABLE_ABILITIES))
-        shield = (self.active_field('item') == ItemEnum.ABILITY_SHIELD) & ~item_is_suppressed(
-            ability, self.magic_room_duration, v.embargo_turns)
-        gas = (ability == AbilityEnum.NEUTRALIZING_GAS) & ~v.ability_state.ability_suppressed & ~v.transformed
-        gas = gas & (self.active_field('current_hp') > 0)
-        suppressed = ~immune & (v.ability_state.ability_suppressed |
-            (gas[::-1] & ~shield & (ability != AbilityEnum.NEUTRALIZING_GAS)))
-        suppressed |= v.transformed & jnp.isin(ability, jnp.asarray(TRANSFORM_SUPPRESSED_ABILITIES))
-        return jnp.where(suppressed, AbilityEnum.NONE, ability)
+        return _effective_abilities(self.ability_identity, self.active_field('current_hp'),
+            self.active_field('item'), self.magic_room_duration, v.embargo_turns,
+            v.ability_state.ability_suppressed, v.transformed)
+
+    def effective_item(self, player=None):
+        """Read held items after Magic Room, Embargo and Klutz suppression."""
+        ability = self.ability if player is None else self.ability[player]
+        embargo = self.volatile_status.embargo_turns
+        embargo = embargo if player is None else embargo[player]
+        suppressed = item_is_suppressed(ability, self.magic_room_duration, embargo)
+        return jnp.where(suppressed, ItemEnum.NONE, self.active_field('item', player))
 
     @property
     def effective_active(self):
@@ -475,25 +542,43 @@ class BattleState(struct.PyTreeNode):
         """Read active snapshots with the added-type column used by mechanics."""
         return self.effective_active.replace(type_list=self.effective_types(include_added=True))
 
-    def effective_types(self, player=None, *, include_added=False):
-        """Read active types with Roost and an optional added-type column."""
+    def effective_types(self, player=None, *, include_added=False, apply_roost=True, ignore_tera=False):
+        """Read current defensive types or the original types used for STAB."""
         original_types = self.active_field('type_list', player)
+        v = self.volatile_status
+        transformed = v.transformed if player is None else v.transformed[player]
+        abilities = self.ability_identity if player is None else self.ability_identity[player]
+        plate = plate_type(self.active_field('item', player))
+        arceus = (self.active_identity('species', player) == 493) & (abilities == AbilityEnum.MULTITYPE) & ~transformed
+        mapped = jnp.concatenate((jnp.where(plate == Type.NONE, Type.NORMAL, plate), jnp.zeros_like(plate)), axis=-1)
+        original_types = jnp.where(arceus, mapped, original_types)
         roost = self.volatile_status.roost
         remove = (roost if player is None else roost[player]) & ~self.active_field('is_terastallized', player)
+        remove &= apply_roost
         types = _roost_types(original_types, remove)
         if include_added:
             extra = self.volatile_status.properties.added_type
             extra = extra if player is None else extra[player]
+            # Roost promotes a surviving added type instead of creating Normal.
+            only_added = remove & (extra != Type.NONE) & jnp.all(
+                (original_types == Type.NONE) | (original_types == Type.FLYING), axis=-1, keepdims=True)
+            types = jnp.where(only_added, jnp.zeros_like(types), types)
             types = jnp.concatenate((types, extra), axis=-1)
+        if not ignore_tera:
+            tera = self.active_field('tera_type', player)
+            transformed = self.active_field('is_terastallized', player) & (tera != Type.NONE)
+            types = jnp.where(transformed, jnp.zeros_like(types).at[..., 0].set(tera[..., 0]), types)
         return types
 
-    def is_status_immune(self, player, status, *, ability=None):
+    def is_status_immune(self, player, status, *, ability=None, check_terrain=True):
         """Check status immunity using active types, ability, item and field."""
         types = self.effective_types(player, include_added=True)
         abilities = self.ability
         if ability is None:
             ability = abilities[player]
         item = self.active_field('item', player)
+        suppressed = item_is_suppressed(ability, self.magic_room_duration, self.volatile_status.embargo_turns[player])
+        item = jnp.where(suppressed, ItemEnum.NONE, item)
         sunny = effective_weather(self.weather.weather, abilities, self.active_field('current_hp')) == WeatherEnum.SUN
 
         immune = (((status == Status.POISON) | (status == Status.TOXIC)) &
@@ -502,22 +587,40 @@ class BattleState(struct.PyTreeNode):
         immune |= (status == Status.PARALYZE) & (jnp.any(types == Type.ELECTRIC) | jnp.any(jnp.asarray(PARALYSIS_IMMUNE_ABILITIES) == ability))
         immune |= (status == Status.BURN) & (jnp.any(types == Type.FIRE) | jnp.any(jnp.asarray(BURN_IMMUNE_ABILITIES) == ability))
         immune |= (status == Status.FREEZE) & (jnp.any(types == Type.ICE) | jnp.any(jnp.asarray(FREEZE_IMMUNE_ABILITIES) == ability) | sunny)
-        immune |= (status == Status.SLEEP) & jnp.any(jnp.asarray(SLEEP_IMMUNE_ABILITIES) == ability)
+        uproar = jnp.any((self.volatile_status.continuation.locked.kind[:, 0] == LockedMoveKind.UPROAR) &
+                         (self.active_field('current_hp')[:, 0] > 0))
+        immune |= (status == Status.SLEEP) & (uproar | jnp.any(jnp.asarray(SLEEP_IMMUNE_ABILITIES) == ability))
         immune |= (ability == AbilityEnum.LEAF_GUARD) & sunny
-        grounded = ~is_floating_fields(types, ability, item) | (self.gravity_duration > 0)
-        immune |= grounded & ((self.terrain.terrain == TerrainEnum.MISTY) |
+        rising = self.volatile_status.magnet_rise_turns[player] > 0
+        grounded = ~(is_floating_fields(types, ability, item) | rising) | self.grounding_override(player)
+        immune |= check_terrain & grounded & ((self.terrain.terrain == TerrainEnum.MISTY) |
                               ((self.terrain.terrain == TerrainEnum.ELECTRIC) & (status == Status.SLEEP)))
-        return immune | (ability == AbilityEnum.COMATOSE)
+        meteor = (ability == AbilityEnum.SHIELDS_DOWN) & (self.active_identity('form', player)[0] == FormEnum.MINIOR_METEOR)
+        return immune | meteor | (ability == AbilityEnum.COMATOSE)
+
+    def grounding_override(self, player=None):
+        """Return grounding imposed independently of type, item and ability."""
+        ingrain = self.volatile_status.residuals.ingrain
+        rooted = ingrain if player is None else ingrain[player]
+        return (rooted != 0) | (self.gravity_duration > 0)
 
     def is_grounded(self, player):
-        """Check grounding of an active player, including Gravity."""
-        airborne = is_floating_fields(self.effective_types(player, include_added=True), self.ability[player], self.active_field('item', player))
-        return ~airborne | (self.gravity_duration > 0)
+        """Check grounding from field overrides and airborne effects."""
+        ability = self.ability[player]
+        item = self.active_field('item', player)
+        suppressed = item_is_suppressed(ability, self.magic_room_duration, self.volatile_status.embargo_turns[player])
+        airborne = is_floating_fields(self.effective_types(player, include_added=True), ability,
+                                      jnp.where(suppressed, ItemEnum.NONE, item))
+        rising = self.volatile_status.magnet_rise_turns[player] > 0
+        return ~(airborne | rising) | self.grounding_override(player)
 
     def is_immune_to_move(self, player, move):
         """Check an active player's move immunity in the current field."""
+        override = self.grounding_override(player)
+        rising = self.volatile_status.magnet_rise_turns[player, 0] > 0
         return move_immune_from_fields(self.effective_types(player, include_added=True), ability_against_move(self, player, move),
-                                       self.active_field('item', player), move, self.gravity_duration > 0)
+                                       self.effective_item(player), move, override) | (
+            rising & (move.type[0] == Type.GROUND) & ~override[0])
 
     @property
     def raw_boosted_stats(self):
@@ -538,7 +641,7 @@ class BattleState(struct.PyTreeNode):
         speed = jnp.floor(base * STAT_MULTIPLIER_LOOKUP[6 + stages])
         ability = self.ability
         weather = effective_weather(self.weather.weather, ability, self.active_field('current_hp'))
-        return modify_speed(speed, self.active_field('item')[:, 0], ability[:, 0],
+        return modify_speed(speed, self.effective_item()[:, 0], ability[:, 0],
                             self.active_field('status')[:, 0], weather, self.terrain.terrain,
                             self.volatile_status.ability_state.paradox_stat[:, 0], self.side_conditions.tailwind[:, 0])
 

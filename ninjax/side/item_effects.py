@@ -203,12 +203,12 @@ def is_berry(item):
     return (item == I.SITRUS_BERRY) | (item == I.CHESTO_BERRY) | (item == I.LUM_BERRY)
 
 
-def consume(state, player, enabled=True, *, recoverable=True):
+def consume(state, player, enabled=True, *, recoverable=True, eaten=True):
     """Consume a held item and remember its publicly visible disappearance."""
-    return _consume_held_item(state, player, state.active_field('item', player), enabled, recoverable)
+    return _consume_held_item(state, player, state.active_field('item', player), enabled, recoverable, eaten)
 
 
-def _consume_held_item(state, player, item, enabled, recoverable=True):
+def _consume_held_item(state, player, item, enabled, recoverable=True, eaten=True):
     """Consume the supplied current item and publish its disappearance."""
     used = jnp.asarray(enabled).reshape(()) & (item[0] != I.NONE)
     state = emit(state, EventKind.ITEM, player, detail=item[0], enabled=used)
@@ -219,6 +219,8 @@ def _consume_held_item(state, player, item, enabled, recoverable=True):
     lock = v.restrictions.choice_lock[player, 0]
     state = state.replace(
         consumed_items=state.consumed_items.at[player, slot].set(jnp.where(used & recoverable, item[0], old)),
+        ate_berry=state.ate_berry.at[player, slot].set(
+            state.ate_berry[player, slot] | (used & eaten & is_berry(item[0]))),
         volatile_status=v.replace(restrictions=v.restrictions.replace(
             choice_lock=v.restrictions.choice_lock.at[player, 0].set(jnp.where(used & is_choice_item(item[0]), -1, lock)))))
     return update_active_fields(state, player, item=jnp.where(used, I.NONE, item))
@@ -359,7 +361,7 @@ def force_eat_berry(state, player, enabled=True):
 
 def release_fling_item(state, player, item):
     """Spend the prepared Fling item once, even after a failed hit."""
-    return consume(state, player, (item != I.NONE) & (state.active_field('item', player)[0] == item))
+    return consume(state, player, (item != I.NONE) & (state.active_field('item', player)[0] == item), eaten=False)
 
 
 def destroy_opposing_berry(state, player, target):

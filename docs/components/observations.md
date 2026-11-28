@@ -24,10 +24,16 @@ boolean, or floating-point types. Each leaf starts with the observer axis `(2,)`
   `active_move_actions` counts attempts since entry and `previous_move_result`
   uses the `MoveResult` enum. Queued move categories remain private.
 - `sides`: public hazards and screen/tailwind counters, each `(2, 2)`.
-- `field`: turn, weather, terrain, durations, Trick Room and gravity, each `(2,)`.
+- `sides` also includes Safeguard and Mist timers.
+- `field`: turn, weather, terrain, durations, Trick Room, Gravity, Magic Room
+  and Wonder Room, each `(2,)`.
 - `decision`: phase, acting flag, legacy legal-action mask `(2, 15)` and team
   selection eligibility `(2, 6)`. Selection must still be nonempty per player.
   The original `extras` entries remain available.
+  `tera_actions` uses the same `(2, 15)` columns for legal Tera declarations.
+
+Team views expose the owner's Tera types. Open sheets show an opponent's Tera
+type before activation, and activation reveals it in other information modes.
 
 Opponent HP is rounded up to percentage points. Unrevealed values use zero plus
 a false known mask. Team and move slots currently retain the engine's ordering;
@@ -40,8 +46,9 @@ exchanged items. Sleep Talk reveals the called move independently of PP usage.
 
 `observation.transitions` is a `TransitionEvents` PyTree. Event arrays have shape
 `(2, 128)`; `count` and `overflow` have shape `(2,)`. Read entries with `valid=True`.
-Reset produces an empty buffer. Every `step` starts a fresh buffer, including
-invalid and terminal steps. A turn suspended for a pivot therefore produces one
+Reset initializes a buffer that can contain initial entry events. Each accepted
+step starts a fresh buffer. Rejected actions and calls on a terminal state
+preserve the previous buffer. A turn suspended for a pivot therefore produces one
 segment before replacement and another segment when resolution resumes. The
 field turn counter and decision phase distinguish these segments. It is not a
 rolling history of earlier turns.

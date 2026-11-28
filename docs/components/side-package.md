@@ -14,6 +14,10 @@ their owning submodules; the package initializer does not load effect handlers.
 | `side.faint_effects` | Faint records, direct faints and deferred Destiny Bond resolution |
 | `side.field_conditions` | Weather and terrain setters |
 | `side.item_effects` | Item mutation and update hooks built on basic state writes |
+| `side.property_effects` | Effective ability, type and moveset changes |
+| `side.form_effects` | Form changes and restoration |
+| `side.residual_conditions` | Persistent and delayed effects processed at turn boundaries |
+| `side.trapping` | Voluntary switch eligibility and trap application |
 
 The foundation (`state`, `queries`, `updates`) does not import reactive modules
 or high-level ability handlers. Item update hooks use basic writes rather

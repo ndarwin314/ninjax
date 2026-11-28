@@ -6,15 +6,17 @@ callers import their concrete owners:
 
 | Module | Responsibility |
 | --- | --- |
-| `moves.model` | Move fields, defaults and metadata normalization |
+| `moves.model` | Move fields, defaults and metadata normalization, including damage and HP cost rules |
 | `moves.execution` | PP and selection bookkeeping, called moves, charge setup and attempt dispatch |
 | `moves.routing` | Accuracy, immunity, protection and damage/status branch selection |
+| `moves.protection` | Guard setup and move-specific protection rules |
 | `moves.properties` | Effective typing, power, priority, accuracy and interception queries |
-| `moves.hit_resolution` | One damaging hit, Substitute damage, drain, recoil and hit callback ordering |
+| `moves.hit_resolution` | One damaging hit, fixed damage and HP floors, Substitute damage, drain and hit callback ordering |
 | `moves.multi_hit` | Hit-count sampling, per-hit accuracy and repeated-hit execution |
 | `moves.status` | Status move execution, including Rest, Pain Split, Substitute, Destiny Bond and Memento |
 | `moves.effects` | Contact reactions, secondary effects and guaranteed after-damage effects |
-| `moves.finalization` | Once-per-move completion, item hooks, recharge and outcome-dependent effects |
+| `moves.finalization` | Once-per-move completion, item hooks, recharge, recoil and attempt-dependent HP costs |
+| `moves.support` | Explicit list of catalogue moves with reviewed singles effects |
 
 Generic stage-vector application belongs to `side.stat_effects`; field-wide
 status moves belong to `side.field_conditions`. These are shared by damaging
@@ -27,8 +29,8 @@ operations. Finalization does not import multi-hit execution. Status execution
 can invoke switching but does not import damage routing or move selection.
 
 `moves.execution` calls `moves.routing`, which calls damage/status mechanics
-without importing selection or the battle scheduler. The scheduler in
-`battle.actions` imports the execution entry points directly. The compatibility files
+without importing selection or the battle scheduler. `battle.actions` imports
+the execution entry points and is called by `battle.scheduler`. The compatibility files
 `game_logic.py`, `move.py`, `move_effects.py` and `held_effects.py` have been
 removed; callers must import the concrete owners. The public package exports
 remain `ninjax.moves.Move` and `ninjax.side.BattleState`/`VolatileStatus`.
@@ -40,3 +42,8 @@ and JIT boundaries are preserved. Pain Split still assigns HP directly before
 reactive berries; Rest still defers berry activation until healing completes.
 Substitute handling still reports the actual recipient and capped HP loss.
 This migration does not change mechanics or claim full generation 9 parity.
+
+See [dispatch flow](move-dispatch-flow.md) for the execution diagrams,
+[move construction](move-construction.md) for metadata and shapes, and
+[move coverage and design](../mechanics/remaining-move-design.md) for the gaps
+and lifecycle proposals.

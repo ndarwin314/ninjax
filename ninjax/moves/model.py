@@ -4,7 +4,7 @@ from dataclasses import field, fields
 import jax
 import jax.numpy as jnp
 
-from ninjax.enums.moves import HitRule, MoveFlags, PowerRule, SecondaryEffectType
+from ninjax.enums.moves import DamageRule, HitRule, MoveFlags, MoveHpCost, PowerRule, SecondaryEffectType
 from ninjax.tree import ArrayTree, is_tree_placeholder
 
 
@@ -74,6 +74,7 @@ class Move(ArrayTree):
     self_ko: jax.Array = field(default_factory=lambda: jnp.array([False]))
     perish_effect: jax.Array = field(default_factory=lambda: jnp.array([False]))
     identifier: jax.Array = field(default_factory=lambda: jnp.array([0]))
+    native_pp: jax.Array = field(default_factory=lambda: jnp.array([0]))
     flung_item: jax.Array = field(default_factory=lambda: jnp.array([0]))
     switch_out: jax.Array = field(default_factory=lambda: jnp.array([False]))
     implemented: jax.Array = field(default_factory=lambda: jnp.array([True]))
@@ -105,6 +106,8 @@ class Move(ArrayTree):
     encore_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
     sleep_talk_eligible: jax.Array = field(default_factory=lambda: jnp.array([True]))
     effectiveness_rule: jax.Array = field(default_factory=lambda: jnp.array([0]))
+    damage_rule: jax.Array = field(default_factory=lambda: jnp.array([DamageRule.STANDARD]))
+    hp_cost: jax.Array = field(default_factory=lambda: jnp.array([MoveHpCost.NONE]))
 
     def __post_init__(self):
         """Normalize scalar metadata and pad stat-change arrays to seven slots.
@@ -157,6 +160,41 @@ class Move(ArrayTree):
     @property
     def powder(self):
         return (self.move_flags & MoveFlags.POWDER) == MoveFlags.POWDER
+
+    @property
+    def crashes(self):
+        """Whether a failed hit costs half of the user's maximum HP."""
+        return (self.identifier == 136) | (self.identifier == 853) | (self.identifier == 916)
+
+    @property
+    def source_hp_damage(self):
+        """Whether a landed attack trades the user's current HP for damage."""
+        return self.damage_rule == DamageRule.SOURCE_HP
+
+    @property
+    def ohko(self):
+        """Whether the move uses one-hit knockout rules."""
+        return (self.damage_rule == DamageRule.OHKO) | self.ohko_ice
+
+    @property
+    def ohko_ice(self):
+        """Whether the move uses Sheer Cold's Ice-type eligibility rules."""
+        return self.damage_rule == DamageRule.OHKO_ICE
+
+    @property
+    def nonlethal(self):
+        """Whether direct target damage must leave at least one HP."""
+        return self.damage_rule == DamageRule.NONLETHAL
+
+    @property
+    def present(self):
+        """Whether an attempted move rolls between damage and healing."""
+        return self.damage_rule == DamageRule.PRESENT
+
+    @property
+    def detonates(self):
+        """Whether the user faints before the hit unless Damp stops it."""
+        return (self.identifier == 120) | (self.identifier == 153) | (self.identifier == 802)
 
     @property
     def defrost(self):

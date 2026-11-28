@@ -21,8 +21,8 @@ TAUNT_TURNS = 3
 
 
 def gravity_blocks_move(identifier, gravity_duration):
-    """Block represented airborne moves and High Jump Kick under Gravity."""
-    return (gravity_duration > 0) & ((identifier == 136) | (identifier == 19) | (identifier == 340))
+    """Enforce the catalogue's Gen 9 Gravity flags at selection and execution."""
+    return (gravity_duration > 0) & jnp.isin(identifier, jnp.array([19, 136, 150, 340, 393, 560]))
 
 
 def blocked_by_hit_restrictions(is_sound, is_healing, throat_chop_turns, heal_block_turns):
@@ -77,7 +77,25 @@ def active_restriction_mask(state):
         throat_chop_turns=restrictions.throat_chop_turns, heal_block_turns=restrictions.heal_block_turns,
         gravity_duration=state.gravity_duration)
     stuff_cheeks_blocked = (ids == 747) & ~is_berry(state.active_field('item'))
-    return legal & ~imprisoned & ~(cannot_repeat & repeated) & ~stuff_cheeks_blocked
+    eaten = state.ate_berry[jnp.arange(2), state.active_index[:, 0]][:, None]
+    belch_blocked = (ids == 562) & ~eaten
+    return legal & ~imprisoned & ~(cannot_repeat & repeated) & ~stuff_cheeks_blocked & ~belch_blocked
+
+
+def last_resort_fails(state, player, move):
+    """Check Last Resort against the currently held moves and their use history.
+
+    The move is selectable before this prerequisite is met. It fails during
+    execution after paying PP, including when called from another move.
+    """
+    slot = state.active_index[player, 0]
+    move_ids = state.active_move_field('identifier', player)[:, 0]
+    used = state.used_move_ids[player, slot]
+    present = move_ids != 0
+    last_resort = move_ids == 387
+    others_used = jnp.all(~present | last_resort | (used == move_ids))
+    return (move.identifier[0] == 387) & (
+        (jnp.sum(present) < 2) | ~jnp.any(last_resort) | ~others_used)
 
 
 def resolve_move(move_ids, move_types, current_pp, index, *, disabled_move_id,

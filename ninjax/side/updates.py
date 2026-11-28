@@ -51,11 +51,22 @@ def add_boosts(state: BattleState, side_idx, idx, val) -> BattleState:
     # contrary
     idx = jnp.asarray(idx)
     val = jnp.asarray(val) * (2 * (state.ability[side_idx]!=AbilityEnum.CONTRARY)[0]-1)
+    val = val * jnp.where(state.ability[side_idx, 0] == AbilityEnum.SIMPLE, 2, 1)
     if idx.ndim == 0:
         val = val.reshape(())
-    new_boosts = state.boosts.normal_boosts[side_idx]
-    new_boosts = new_boosts.at[idx].add(val)
-    return set_boosts(state, side_idx, StatBoosts(normal_boosts=new_boosts, acc_boosts=state.boosts.acc_boosts[side_idx]))
+    old = state.boosts.normal_boosts[side_idx]
+    new = StatBoosts(normal_boosts=old.at[idx].add(val), acc_boosts=state.boosts.acc_boosts[side_idx])
+    state = set_boosts(state, side_idx, new)
+    return remember_stat_drop(state, side_idx, jnp.any(new.normal_boosts < old))
+
+
+def remember_stat_drop(state, player, lowered):
+    """Track an actual stage loss for Lash Out until the Pokémon departs."""
+    slot = state.active_index[player, 0]
+    history = state.damage_history
+    lowered = history.stats_lowered_this_turn[player, slot] | lowered
+    return state.replace(damage_history=history.replace(
+        stats_lowered_this_turn=history.stats_lowered_this_turn.at[player, slot].set(lowered)))
 
 
 def conditional_set_boosts(state: BattleState, side_idx, new_boosts, cond):

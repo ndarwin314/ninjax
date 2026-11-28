@@ -15,9 +15,64 @@ from ninjax.enums.field import (
     WeatherEnum,
 )
 from ninjax.enums.items import ItemEnum as I
+from ninjax.enums.moves import SemiInvulnerability
 from ninjax.side.queries import effective_weather
 from ninjax.side.state import BattleState, Hazards
 from ninjax.side.updates import add_boosts, clear_boosts, set_boosts
+
+
+FIELD_CONDITION_MOVES = (54, 116, 170, 199, 219, 356, 393, 472, 478)
+
+
+def field_condition_effect(state, player, move):
+    """Apply a supported field or active condition and return its success."""
+    ident = move.identifier[0]
+    v = state.volatile_status
+    side = state.side_conditions
+    target = 1 - player
+    gravity = ident == 356
+    magic = ident == 478
+    wonder = ident == 472
+    safeguard = ident == 219
+    mist = ident == 54
+    magnet = ident == 393
+    focus = ident == 116
+    lock = (ident == 199) | (ident == 170)
+    # Gravity cannot be restarted, whereas Magic and Wonder Room toggle.
+    gravity_ok = gravity & (state.gravity_duration == 0)
+    safeguard_ok = safeguard & (side.safeguard[player, 0] == 0)
+    mist_ok = mist & (side.mist[player, 0] == 0)
+    magnet_ok = magnet & (state.gravity_duration == 0) & (
+        v.magnet_rise_turns[player, 0] == 0) & (v.residuals.ingrain[player, 0] == 0)
+    focus_ok = focus & ~v.focus_energy[player, 0]
+    lock_ok = lock & (v.lock_on_turns[player, 0] == 0)
+    success = gravity_ok | magic | wonder | safeguard_ok | mist_ok | magnet_ok | focus_ok | lock_ok
+
+    # Gravity grounds both sides and cancels airborne charge volatiles.
+    continuation = v.continuation
+    airborne = gravity_ok & (continuation.semi_invulnerability == SemiInvulnerability.AIRBORNE)
+    continuation = continuation.replace(
+        charging_move_id=jnp.where(airborne, 0, continuation.charging_move_id),
+        semi_invulnerability=jnp.where(airborne, SemiInvulnerability.NONE, continuation.semi_invulnerability))
+    v = v.replace(
+        continuation=continuation,
+        magnet_rise_turns=v.magnet_rise_turns.at[player, 0].set(
+            jnp.where(magnet_ok, 5, v.magnet_rise_turns[player, 0])),
+        focus_energy=v.focus_energy.at[player, 0].set(v.focus_energy[player, 0] | focus_ok),
+        lock_on_target_slot=v.lock_on_target_slot.at[player, 0].set(
+            jnp.where(lock_ok, state.active_index[target, 0], v.lock_on_target_slot[player, 0])),
+        lock_on_turns=v.lock_on_turns.at[player, 0].set(
+            jnp.where(lock_ok, 2, v.lock_on_turns[player, 0])))
+    v = v.replace(magnet_rise_turns=jnp.where(gravity_ok, 0, v.magnet_rise_turns))
+    side = side.replace(
+        safeguard=side.safeguard.at[player, 0].set(jnp.where(safeguard_ok, 5, side.safeguard[player, 0])),
+        mist=side.mist.at[player, 0].set(jnp.where(mist_ok, 5, side.mist[player, 0])))
+    state = state.replace(
+        volatile_status=v, side_conditions=side,
+        gravity_duration=jnp.where(gravity_ok, 5, state.gravity_duration),
+        magic_room_duration=jnp.where(magic, jnp.where(state.magic_room_duration > 0, 0, 5), state.magic_room_duration),
+        wonder_room_duration=jnp.where(wonder, jnp.where(state.wonder_room_duration > 0, 0, 5), state.wonder_room_duration))
+    return state, success
 
 
 def clear_target_screens(state, target, enabled):

@@ -12,13 +12,14 @@ from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum, WeatherEnum
 from ninjax.enums.items import ItemEnum as I
 from ninjax.enums.moves import SemiInvulnerability
-from ninjax.enums.pokemon import StatEnum, Status
+from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.records.events import Cause
 from ninjax.restrictions import tick
 from ninjax.side.faint_effects import resolve_faints
-from ninjax.side.hp_effects import take_damage_percent
+from ninjax.side.hp_effects import take_damage_percent, take_damage_value
 from ninjax.side.item_effects import cure_status
-from ninjax.side.queries import effective_weather, is_floating, is_sand_immune
+from ninjax.side.queries import effective_weather, is_sand_immune
+from ninjax.side.residual_conditions import root_healing
 from ninjax.side.state import BattleState, SideProtection
 from ninjax.side.status_effects import set_status
 from ninjax.side.updates import add_boosts, conditional_add_boosts
@@ -44,6 +45,13 @@ class ResidualHPPhase(IntEnum):
     BURN = 3
     BAD_DREAMS = 4
     BINDING = 5
+    WISH = 6
+    AQUA_RING = 7
+    INGRAIN = 8
+    LEECH_SEED = 9
+    CURSE = 10
+    SALT_CURE = 11
+    BINDING_AND_SALT = 12
 
 
 def residual_speed_order(state):
@@ -74,8 +82,7 @@ def _residual_fraction(state, player, phase):
     hidden = state.volatile_status.continuation.semi_invulnerability[player, 0]
     sand = effective_weather(state.weather.weather, state.ability, state.active_field('current_hp')) == WeatherEnum.SANDSTORM
     weather = jnp.where(sand & ((hidden == SemiInvulnerability.UNDERGROUND) | (hidden == SemiInvulnerability.UNDERWATER)), 0., weather)
-    grassy = ((state.terrain.terrain == TerrainEnum.GRASSY) &
-              (~is_floating(mon)[0] | (state.gravity_duration > 0)))
+    grassy = (state.terrain.terrain == TerrainEnum.GRASSY) & state.is_grounded(player)[0]
     poison = jnp.where(status == Status.POISON, 1 / 8,
                         jnp.where(status == Status.TOXIC, state.toxic_counter[player, 0] / 16, 0.))
     poison = jnp.where((ability == AbilityEnum.POISON_HEAL) & (poison > 0), -1 / 8, poison)
@@ -87,7 +94,15 @@ def _residual_fraction(state, player, phase):
     traps = state.volatile_status.trapping
     binding = jnp.where(traps.binding_turns[player, 0] > 0,
                         1 / jnp.maximum(1, traps.binding_divisor[player, 0]), 0.)
-    fractions = jnp.stack((weather, jnp.where(grassy, -1 / 16, 0.), poison, burn, dreams / 8, binding))
+    r = state.volatile_status.residuals
+    seed = (r.leech_seed[player, 0] != 0) & (state.active_field('current_hp', source)[0] > 0)
+    salt_vulnerable = jnp.any((mon.type_list == Type.WATER) | (mon.type_list == Type.STEEL))
+    salt = (r.salt_cure[player, 0] != 0) * jnp.where(salt_vulnerable, 1 / 4, 1 / 8)
+    wish = state.slot_residuals
+    wish_due = (wish.wish_turns[player, 0] == 1) & (wish.wish_hp[player, 0] > 0)
+    fractions = jnp.stack((weather, jnp.where(grassy, -1 / 16, 0.), poison, burn, dreams / 8, binding,
+        -wish_due.astype(jnp.float32), -(r.aqua_ring[player, 0] != 0).astype(jnp.float32) / 16,
+        -(r.ingrain[player, 0] != 0).astype(jnp.float32) / 16, seed / 8, (r.curse[player, 0] != 0) / 4, salt))
     fraction = fractions[phase]
     return jnp.where((mon.current_hp[0] > 0) &
                      ((ability != AbilityEnum.MAGIC_GUARD) | (fraction < 0)), fraction, 0.)
@@ -95,14 +110,44 @@ def _residual_fraction(state, player, phase):
 
 def _apply_residual_hp(state, player, fraction, phase):
     """Attribute and commit a single residual HP change."""
-    causes = jnp.array([Cause.WEATHER, Cause.TERRAIN, Cause.STATUS, Cause.STATUS, Cause.INDIRECT, Cause.INDIRECT])
+    causes = jnp.array([Cause.WEATHER, Cause.TERRAIN, Cause.STATUS, Cause.STATUS] + [Cause.INDIRECT] * 8)
     context = state.event_context
     binding = phase == ResidualHPPhase.BINDING
-    source = jnp.where(binding | (phase == ResidualHPPhase.BAD_DREAMS), 1 - player, context.source)
-    move_id = jnp.where(binding, state.volatile_status.trapping.binding_move_id[player, 0], context.move_id)
-    state = state.replace(event_context=context.replace(source=source, move_id=move_id))
-    state = take_damage_percent(state, player, fraction, cause=causes[phase])
+    seed = phase == ResidualHPPhase.LEECH_SEED
+    wish = phase == ResidualHPPhase.WISH
+    passive_healing = (phase == ResidualHPPhase.AQUA_RING) | (phase == ResidualHPPhase.INGRAIN)
+    opposing = binding | seed | (phase == ResidualHPPhase.BAD_DREAMS) | (
+        phase == ResidualHPPhase.CURSE) | (phase == ResidualHPPhase.SALT_CURE)
+    source = jnp.where(opposing, 1-player, jnp.where(passive_healing | wish, player, context.source))
+    ids = jnp.array([0, 0, 0, 0, 0, 0, 273, 392, 275, 73, 174, 864])
+    move_id = jnp.where(binding, state.volatile_status.trapping.binding_move_id[player, 0], ids[phase])
+    state = state.replace(event_context=context.replace(source=source, move_id=move_id, cause=causes[phase]))
+    amount = jnp.maximum(1, jnp.floor(jnp.abs(fraction) * state.active_stats(player)[0]).astype(jnp.int32))
+    amount = jnp.where(passive_healing, root_healing(state, player, amount), amount)
+    amount = jnp.where(wish, state.slot_residuals.wish_hp[player, 0], amount)
+    # Seed drains actual damage before reactive healing, including on a KO.
+    drained = jnp.minimum(amount, state.active_field('current_hp', player)[0])
+    signed = jnp.where(fraction < 0, -amount, amount)
+    state = take_damage_value(state, player, jnp.array([signed]), False, source=source)
+    state = jax.lax.cond(seed, _leech_heal, _skip_leech_heal, state, player, drained)
     return state.replace(event_context=context)
+
+
+def _leech_heal(state, victim, drained):
+    """Heal the opposing position or reverse the transfer with Liquid Ooze."""
+    holder = 1-victim
+    amount = root_healing(state, holder, drained)
+    ooze = state.ability[victim, 0] == AbilityEnum.LIQUID_OOZE
+    damage = jnp.where(state.ability[holder, 0] == AbilityEnum.MAGIC_GUARD, 0, amount)
+    old = state.event_context
+    state = state.replace(event_context=old.replace(source=victim))
+    state = take_damage_value(state, holder, jnp.array([jnp.where(ooze, damage, -amount)]), False, source=victim)
+    return state.replace(event_context=old)
+
+
+def _skip_leech_heal(state, victim, drained):
+    """Preserve HP for residuals that do not transfer it."""
+    return state
 
 
 def _skip_residual_hp(state, player, fraction, phase):
@@ -112,7 +157,9 @@ def _skip_residual_hp(state, player, fraction, phase):
 
 def _apply_hp_phase_to_player(index, state, *, phase, order):
     """Run the current phase for one holder in the Speed order."""
-    player = order[index]
+    grouped = phase == ResidualHPPhase.BINDING_AND_SALT
+    player = order[jnp.where(grouped, index // 2, index)]
+    phase = jnp.where(grouped, jnp.where(index % 2 == 0, ResidualHPPhase.BINDING, ResidualHPPhase.SALT_CURE), phase)
     fraction = _residual_fraction(state, player, phase)
     return jax.lax.cond((state.winner < 0) & (fraction != 0),
                         _apply_residual_hp, _skip_residual_hp, state, player, fraction, phase)
@@ -120,10 +167,12 @@ def _apply_hp_phase_to_player(index, state, *, phase, order):
 
 def _run_hp_phase(state, phase, *, order):
     """Apply a phase and resolve its faints before the next phase."""
-    state = jax.lax.fori_loop(0, 2, partial(_apply_hp_phase_to_player, phase=phase, order=order), state)
+    count = jnp.where(phase == ResidualHPPhase.BINDING_AND_SALT, 4, 2)
+    state = jax.lax.fori_loop(0, count, partial(_apply_hp_phase_to_player, phase=phase, order=order), state)
     return resolve_faints(state), None
 
 
+@jax.jit
 def run_hp_residuals(state, phases, order=None):
     """Scan a fixed list of residual phases with one shared HP update body."""
     if order is None:
@@ -133,7 +182,10 @@ def run_hp_residuals(state, phases, order=None):
 
 def end_turn_damage(state: BattleState) -> BattleState:
     """Run all represented HP phases for callers excluding timer and item effects."""
-    return run_hp_residuals(state, tuple(ResidualHPPhase))
+    phase = ResidualHPPhase
+    return run_hp_residuals(state, (phase.WEATHER, phase.WISH, phase.GRASSY_TERRAIN, phase.AQUA_RING,
+        phase.INGRAIN, phase.LEECH_SEED, phase.POISON, phase.BURN, phase.CURSE, phase.BINDING_AND_SALT,
+        phase.BAD_DREAMS))
 
 
 def _tick_side_timer(turns):

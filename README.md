@@ -2,6 +2,9 @@
 
 A Pokémon battle environment using JAX, Flax PyTrees, and Jumanji.
 
+[Requirements](docs/requirements.md) · [Architecture](docs/architecture.md) ·
+[Tasks](docs/tasks.md) · [Documentation index](docs/README.md)
+
 ## Prototype status
 
 The initial singles environment is implemented: caller-provided teams, optional
@@ -17,9 +20,10 @@ Focused mechanics and environment checks have passed during implementation.
 Three compiled singles rollouts with abilities and items enabled have passed;
 the latest engine still needs full-environment `vmap`/`scan` acceptance. Remaining work includes interaction
 audits against the pinned Showdown reference, additional item interactions, and complete
-curated rollouts with enabled abilities/items. Doubles and transformations remain
-future work. See [mechanics progress](docs/design/curated-mechanics-progress.md)
-for the current scope and validation gaps, and [remaining mechanics](docs/design/remaining-mechanics.md)
+curated rollouts with enabled abilities/items. Eligible singles Pokémon can
+Terastallize into an ordinary type. Doubles, Stellar, and special Tera forms
+remain future work. See [mechanics progress](docs/mechanics/curated-mechanics-progress.md)
+for the current scope and validation gaps, and [remaining mechanics](docs/tasks.md)
 for a prioritized inventory.
 
 ## Minimal trace-derived sandbox
@@ -45,7 +49,7 @@ Struggle is available. Move reference parameters are loaded from [moves.json](ni
 The catalogue contains moves with effects beyond the subset implemented by the engine.
 Supported families include plain damage, priority, pivots, single-stat boosts,
 status, healing, weather, terrain, and entry hazards. Generic move effects are
-described in [the design guide](docs/design/implemented-move-effects.md).
+described in [the design guide](docs/components/move-construction.md).
 
 The first JIT compilation can take substantial time; subsequent decisions reuse
 the compiled function. No running Showdown server is needed for this example.
@@ -60,7 +64,8 @@ The [reference corpus](unit_tests/fixtures/showdown/README.md) includes ten comp
 Showdown games, full traces, controlled probes, and a reproduction command.
 Prototype checks cover an end-to-end battle, policy sampling, explicit omissions,
 and boost-stage handling. Broad move/ability/item parity and full trace replay
-remain future work; the design decisions live in [docs/design](docs/design/README.md).
+remain future work. See the [requirements](docs/requirements.md) for the
+environment contract and the [task backlog](docs/tasks.md) for remaining work.
 
 ## Curated random teams
 
@@ -137,7 +142,7 @@ reuse the same input state; this is a microbenchmark, not full training throughp
 
 For phase-by-phase graph and memory profiling, use `tools/profile_compile.py`.
 It can stop after tracing or lowering and supports an explicit RSS watchdog.
-See [compilation memory measurements](docs/design/compilation-performance.md)
+See [compilation memory measurements](docs/compilation/README.md)
 for bounded commands, measured improvements and the remaining backend limit.
 
 ## Curated ability mode
@@ -152,7 +157,7 @@ explicit:
 This mode recognizes all 30 named abilities in the current curated file, with
 initial, incomplete protection support for Unseen Fist. Friend Guard is enabled
 as a no-effect ability in singles; its doubles reduction is not validated.
-See the [remaining-ability validation matrix](docs/design/remaining-ability-validation.md)
+See the [remaining-ability validation matrix](docs/mechanics/remaining-ability-validation.md)
 for scope and limitations. Unsupported abilities are listed in `omissions`;
 an enabled ability has `ability: null` in that report. Items are still neutral.
 Python callers can build these teams with `ninjax.teams.curated.make_ability_pool`.

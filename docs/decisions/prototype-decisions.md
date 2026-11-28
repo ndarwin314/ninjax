@@ -2,9 +2,9 @@
 
 These questions supplement the project instructions. The current implementation
 is still a prototype with incomplete battle mechanics. The current observation
-contract is documented in [observations and events](observations.md). The prompts
+contract is documented in [observations and events](../components/observations.md). The prompts
 and answers below record the original milestone decisions; see
-[mechanics progress](curated-mechanics-progress.md) for current implementation
+[mechanics progress](../mechanics/curated-mechanics-progress.md) for current implementation
 and validation status.
 
 ## Decisions with the most impact
@@ -60,12 +60,12 @@ The current interface uses a `BattleAction` PyTree with `(2,)` `index`,
 `move_type` and `transformation` leaves, plus `(2, 6)` preview selection.
 `ActionType` distinguishes attacks, switches, continuations and inactive no-ops.
 Attack index 4 is forced Struggle; continued actions release Electro Shot or
-spend Hyper Beam's recharge turn without another PP cost. Transformations are
-represented but non-`NONE` requests are rejected. Legacy mask columns 0–3 are
+spend Hyper Beam's recharge turn without another PP cost. Typed attacks can
+request ordinary-type Tera when the Tera action mask allows it. Legacy mask columns 0–3 are
 moves, 4 Struggle, 5 continuation, 8–13 switches and 14 no-op; 6–7 are reserved.
 The environment exposes an acting-player mask and pauses for replacements.
 Invalid active-player actions leave state unchanged and set an extras flag.
-See [environment interfaces](implemented-move-effects.md#environment-interfaces).
+See [team selection and actions](../components/environment.md#team-selection-and-actions).
 
 The following questions and answers are the original design discussion:
 

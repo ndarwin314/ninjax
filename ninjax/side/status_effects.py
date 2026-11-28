@@ -11,7 +11,7 @@ from ninjax.calculations.logic import triple_or
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import TerrainEnum
 from ninjax.enums.pokemon import Status
-from ninjax.records.events import EventKind, emit
+from ninjax.records.events import Cause, EventKind, emit
 from ninjax.side.item_effects import status_berry
 from ninjax.side.state import BattleState
 from ninjax.side.updates import update_active_fields
@@ -38,6 +38,19 @@ def _activate_status_berry(s, *, side_idx):
     return status_berry(s, side_idx)
 
 
+def safeguard_blocks(state, target):
+    """Block opposing status effects while Safeguard is active.
+
+    Infiltrator bypasses the shield for an opposing move. A delayed Yawn
+    resolves as a field effect after its application was checked separately.
+    """
+    source = state.event_context.source
+    opposing = (source >= 0) & (source < 2) & (source != target)
+    infiltrator = ((state.event_context.cause == Cause.MOVE) &
+                   (state.ability[jnp.clip(source, 0, 1), 0] == AbilityEnum.INFILTRATOR))
+    return (state.side_conditions.safeguard[target, 0] > 0) & opposing & ~infiltrator
+
+
 def apply_confusion(key, state, player):
     """Apply a 2–5 counter confusion volatile when the target is eligible.
 
@@ -45,7 +58,8 @@ def apply_confusion(key, state, player):
     """
     v = state.volatile_status
     blocked = ((v.confusion_turns[player, 0] > 0) | (state.ability[player, 0] == AbilityEnum.OWN_TEMPO) |
-               ((state.terrain.terrain == TerrainEnum.MISTY) & state.is_grounded(player)[0]))
+               ((state.terrain.terrain == TerrainEnum.MISTY) & state.is_grounded(player)[0]) |
+               safeguard_blocks(state, player))
     apply = partial(_apply_confusion_apply, player=player)
     return jax.lax.cond(blocked, _identity, apply, (key, state))
 
@@ -93,7 +107,7 @@ def set_status(key: chex.PRNGKey, state: BattleState, side_idx, status: Status, 
     old_status = state.active_field('status', side_idx)
     old_sleep = state.active_field('sleep_counter', side_idx)
     already_statused = old_status != Status.NONE
-    is_immune = state.is_status_immune(side_idx, status, ability=target_ability)
+    is_immune = state.is_status_immune(side_idx, status, ability=target_ability) | safeguard_blocks(state, side_idx)
     fainted = state.active_field('current_hp', side_idx) <= 0
     # Keep the conditional operands limited to the fields changed by status.
     key, new_status, new_sleep = jax.lax.cond(

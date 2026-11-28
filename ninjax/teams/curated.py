@@ -119,7 +119,7 @@ def make_sandbox_pool(sets):
             raise ValueError(f'Unknown species {config.species!r}')
         species = dex[species_id]
         plus, minus = NATURES[config.nature]
-        records.append(dict(set=dict(species=config.species, level=config.level,
+        records.append(dict(set=dict(species=config.species, level=config.level, tera_type=config.tera_type,
             ability=config.ability, item=config.item,
             moves=[re.sub('[^a-z0-9]', '', m.lower()) for m in config.moves],
             evs=dict(zip(STAT_NAMES, config.evs)), ivs=dict(zip(STAT_NAMES, config.ivs))),
@@ -219,6 +219,13 @@ CURATED_ABILITIES = {
     'Cheek Pouch': 'CHEEK_POUCH', 'Aftermath': 'AFTERMATH', 'Bad Dreams': 'BAD_DREAMS',
     'Wind Rider': 'WIND_RIDER',
     'Arena Trap': 'ARENA_TRAP', 'Magnet Pull': 'MAGNET_PULL',
+    'Color Change': 'COLOR_CHANGE', 'Trace': 'TRACE', 'Imposter': 'IMPOSTER',
+    'Lingering Aroma': 'LINGERING_AROMA', 'Mummy': 'MUMMY', 'Wandering Spirit': 'WANDERING_SPIRIT',
+    'Neutralizing Gas': 'NEUTRALIZING_GAS', 'Simple': 'SIMPLE', 'Hunger Switch': 'HUNGER_SWITCH',
+    'Multitype': 'MULTITYPE', 'Disguise': 'DISGUISE', 'Ice Face': 'ICE_FACE',
+    'Shields Down': 'SHIELDS_DOWN', 'Zero to Hero': 'ZERO_TO_HERO',
+    'Intrepid Sword': 'INTREPID_SWORD', 'Dauntless Shield': 'DAUNTLESS_SHIELD',
+    'Gulp Missile': 'GULP_MISSILE', 'Tera Shift': 'TERA_SHIFT', 'Tera Shell': 'TERA_SHELL',
 }
 
 
@@ -267,6 +274,10 @@ CURATED_ITEMS = {
     'Mind Plate': 'MIND_PLATE', 'Icicle Plate': 'ICICLE_PLATE', 'Draco Plate': 'DRACO_PLATE',
     'Dread Plate': 'DREAD_PLATE', 'Pixie Plate': 'PIXIE_PLATE',
     'Shed Shell': 'SHED_SHELL', 'Grip Claw': 'GRIP_CLAW', 'Binding Band': 'BINDING_BAND',
+    'Ability Shield': 'ABILITY_SHIELD', 'Griseous Core': 'GRISEOUS_CORE',
+    'Adamant Crystal': 'ADAMANT_CRYSTAL', 'Lustrous Globe': 'LUSTROUS_GLOBE',
+    'Big Root': 'BIG_ROOT',
+    'Rusted Sword': 'RUSTED_SWORD', 'Rusted Shield': 'RUSTED_SHIELD',
 }
 
 

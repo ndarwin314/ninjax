@@ -1,65 +1,83 @@
-# Project Instructions
+# Ninjax project instructions
 
-## Stack
-- Python
-- JAX
-- Jumanji
-- pytest
+## Source of truth
+
+Start at the [documentation index](docs/README.md). The `docs/` directory
+defines the project contract, architecture, and backlog. This file defines
+how to work in the repository.
+
+| Question | Source |
+| --- | --- |
+| What behavior and formats are in scope? | [Requirements](docs/requirements.md) |
+| Where does a change belong? | [Architecture and component guides](docs/architecture.md#component-ownership) |
+| What work and validation remain? | [Tasks](docs/tasks.md) |
+| What mechanics can team construction enable? | [Gen 9 coverage report](docs/mechanics/gen9-random-coverage.json) |
+| Which ruleset and fixtures guide parity checks? | [Pinned Showdown reference](docs/mechanics/showdown-reference.md) and [fixture corpus](unit_tests/fixtures/showdown/README.md) |
+| How were compilation measurements collected? | [Compilation results](docs/compilation/README.md) |
+
+Inspect the relevant implementation and tests before editing. If a change
+updates a contract, component responsibility, or task status, update the
+corresponding page in `docs/` as part of the change. Use the coverage report
+for projection and report interaction parity based on behavior checks.
 
 ## Development
-- Use the existing project virtual environment.
-- Preserve JAX compatibility with jit, vmap, and scan.
-- Prefer pure functions and immutable state.
-- Avoid Python-side control flow on traced JAX values.
-- Use explicit PRNG keys for randomness.
-- Aim for parity with gen 9 scarlet and violet mechanics
-- Look towards future compatibility with slightly different versions of mechanics
-- Add docstrings to functions you modify or create
-- Add comments to code in difficult to understand locations
-- Add comments to explain what mechanic different parts of the code are implementing
-- Avoid using nested functions or lambda functions when possible. Prefer adding helpers with static arguments
-- Make all imports at top level
-- Try to have functions pass minimal values needed for their own execution or of parallel branches
-- Prioritize unified design over preserving old implementations and ordering when adding functionality
 
-## Workflow
-- Inspect existing code before making changes.
-- Prefer minimal, focused changes.
-- Run relevant tests after modifying code.
-- Run ordinary tests with JIT enabled and the persistent compilation cache.
-- Place `vmap` and `scan` tests in `unit_tests/batched` and run them only at major checkpoints or when explicitly requested: `pytest --run-batched unit_tests/batched`. Ordinary runs and `--run-jit` exclude them.
-- Do not add dependencies without approval.
-- Do not modify unrelated files.
-- Enable JAX's persistent compilation cache for ordinary test runs.
-  Use <project-root>/.profiling/jax-cache.
-- Explicitly disable persistent compilation caching for compilation
-  benchmarks, including benchmarks launched through pytest.
-- Run compilation benchmarks in fresh processes and record the cache
-  setting alongside timing and memory results.
-- Use --jax-explain-cache-misses on pytest or tools/profile_compile.py when
-  diagnosing cache misses; retain the log with benchmark results.
-- Use persistent cache for mechanic tests
-- Limit memory usage to 8GB during tests
+- Use the existing project virtual environment. Keep changes focused, preserve
+  unrelated work, and get approval before adding dependencies.
+- Preserve `jit`, `vmap`, and `scan` compatibility. Use pure functions,
+  immutable PyTrees with documented shapes, and explicit PRNG keys. Use JAX
+  control flow for decisions that depend on traced values.
+- Keep player handling symmetric. Keep policy training and opponent selection
+  outside the battle engine. Prioritize singles and keep ruleset-dependent
+  behavior explicit.
+- Reuse shared mechanics in their owning modules. Verify changes to action,
+  effect, or event ordering against the expected mechanic and relevant tests.
+- Keep imports at module scope. Prefer module-level helpers over nested
+  functions or lambdas where practical. Pass the inputs each helper and its
+  branches need.
+- Add docstrings to new and modified functions. Comment mechanic-specific
+  rules and control flow where the behavior needs explanation.
 
-## Initial environment contract
-- Battle format: Singles and doubles 6 pokemon per team.
-- Team setup: Caller Provided.
-- Actions: One action per player. In singles this is a move or a switch. In doubles this is a pair of move or switch
-- Observations: Each player can see battle state and their own team. View of opponents team may either be none before battle, or OTS format with all info about the opponents team except EVS and IVS
-- Episode ends when: When all of one players team is fainted or 100 turns pass as a failsafe.
-- 
-## Implementation priorities
-- Prioritize implementing Single battles although aim to make it easy to add support for Doubles
-- First milestone: Small working subset.
-- Keep battle state as immutable JAX PyTrees, with documented array shapes.
-- A single battle contains the player axis; use vmap for independent battles.
-- Validate reset and step under jit, vmap, and scan.
- 
-## Self-play architecture
-- Battle receives caller-provided teams.
-- One step accepts one action for each player.
-- Keep the battle engine symmetric between players.
-- Use player-relative observations and legal-action masks.
-- A single battle owns the player axis; vmap runs independent battles.
-- Keep state and randomness explicit and compatible with jit, vmap, and scan.
-- Keep policy training and opponent selection separate from battle mechanics.
+## Tests and compilation
+
+- Run relevant tests using the project environment after changing code. Ordinary
+  mechanic tests run with JIT enabled. Pytest enables the persistent cache at
+  `.profiling/jax-cache` by default.
+- Use `pytest --run-jit` when the change needs opt-in compiled integration tests.
+  Put `vmap` and `scan` tests in `unit_tests/batched`. Run
+  `pytest --run-batched unit_tests/batched` at major checkpoints or on explicit
+  request. Ordinary runs and `--run-jit` exclude that directory.
+- Keep total test memory usage within 8 GB, including concurrent test jobs.
+- Run compilation benchmarks in fresh processes with the persistent cache
+  explicitly disabled, including benchmarks launched through pytest. Use
+  `JAX_ENABLE_COMPILATION_CACHE=false` for standalone benchmarks that do not set
+  it themselves. Pytest accepts `--no-jax-compilation-cache`.
+- Record the cache setting with timing and peak memory results. When diagnosing
+  cache misses, use `--jax-explain-cache-misses` with pytest or
+  `tools/profile_compile.py` and retain the log with the benchmark results.
+
+## Multi-agent workflow
+
+The main Codex session coordinates the work and owns the integrated result. Use
+the project roles from `.codex/agents/` when a task benefits from independent
+investigation, implementation, or verification. Handle small, tightly coupled
+changes directly. The coordinator delegates to specialists, and specialists
+report back to the coordinator.
+
+| Role | Responsibility |
+| --- | --- |
+| `ninjax_explorer` | Trace the affected battle path, mechanics, and existing tests. Return evidence and candidate files without editing them. |
+| `ninjax_implementer` | Make the scoped change in assigned source and data files. Report changed files, behavior decisions, and checks. |
+| `ninjax_tester` | Verify behavior and add focused regression coverage when needed in assigned test files. Report exact commands, outcomes, and coverage gaps. |
+| `ninjax_reviewer` | Inspect the integrated diff for mechanics, JAX compatibility, and regressions. Report findings with file locations without editing them. |
+
+1. Give each specialist a goal, expected result, and explicit file ownership.
+   Assign one editor per file at a time and preserve existing worktree changes.
+2. Use exploration findings to settle the expected behavior and affected paths.
+   Implementation and test design can proceed in parallel once the behavior
+   contract is clear and file assignments are disjoint.
+3. Hand off the implementation before running dependent tests. The coordinator
+   schedules JAX test and profiling jobs within the shared memory budget and
+   avoids duplicate compilations.
+4. The coordinator reviews the combined diff, resolves findings with the
+   appropriate owner, verifies the final state, and reports results and gaps.

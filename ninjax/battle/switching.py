@@ -11,21 +11,20 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 
-from ninjax.ability_effects import frisk
-from ninjax.calculations.logic import quad_or
+from ninjax.ability_effects import refresh_trace_player, resume_ability, start_ability, suppress_ability
 from ninjax.calculations.type_effectiveness import calculate_effectiveness_multiplier
 from ninjax.enums.abilities import AbilityEnum
-from ninjax.enums.field import TerrainEnum, WeatherEnum
 from ninjax.enums.items import ItemEnum
 from ninjax.enums.pokemon import StatEnum, Type
 from ninjax.knowledge import remember_item
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
-from ninjax.side.field_conditions import set_terrain, set_weather
+from ninjax.side.form_effects import held_crowned_form, held_origin_form, palafin_departure, reactive_form_update, tera_shift
 from ninjax.side.hp_effects import take_damage_percent
 from ninjax.side.item_effects import cure_status, update_items
-from ninjax.side.queries import ability_against_move, is_floating
-from ninjax.side.trapping import clear_binding
+from ninjax.side.property_effects import pass_power_trick, restore_move_bank, transform
+from ninjax.side.queries import ability_against_move
+from ninjax.side.trapping import clear_source_linked
 from ninjax.side.stat_effects import conditional_reduce_boosts
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
@@ -33,7 +32,6 @@ from ninjax.side.updates import (
     add_boosts,
     clear_boosts,
     clear_volatile_status,
-    conditional_add_boosts,
     update_active_fields,
 )
 
@@ -118,7 +116,8 @@ def _wind_rider_boost(s, *, target):
 def _fail_forced_switch(k, s, *, wind_rider, anchored, immune, allowed, target, ability, attacker, damaging):
     """Record failure and reveal represented ability-based prevention."""
     s = jax.lax.cond(wind_rider, partial(_wind_rider_boost, target=target), _identity, s)
-    reveal = wind_rider | immune | (anchored & jnp.any(allowed))
+    anchoring_ability = (ability == AbilityEnum.SUCTION_CUPS) | (ability == AbilityEnum.GUARD_DOG)
+    reveal = wind_rider | immune | (anchoring_ability & anchored & jnp.any(allowed))
     slot = s.active_index[target, 0]
     s = s.replace(known_abilities=s.known_abilities.at[target, slot].set(jnp.where(reveal, ability, s.known_abilities[target, slot])))
     s = emit(s, EventKind.ABILITY, target, detail=ability, enabled=reveal)
@@ -154,7 +153,8 @@ def prepare_forced_switch(key, state, attacker, *, wind=True, damaging=False):
     target = 1-attacker
     ability = state.ability[target, 0]
     wind_rider = (ability == AbilityEnum.WIND_RIDER) & wind
-    anchored = (ability == AbilityEnum.SUCTION_CUPS) | (ability == AbilityEnum.GUARD_DOG)
+    rooted = state.volatile_status.residuals.ingrain[target, 0] != 0
+    anchored = rooted | (ability == AbilityEnum.SUCTION_CUPS) | (ability == AbilityEnum.GUARD_DOG)
     immune = ~jnp.asarray(damaging) & ((ability == AbilityEnum.GOOD_AS_GOLD) |
                                       (~jnp.asarray(wind) & (ability == AbilityEnum.SOUNDPROOF)))
     allowed = state.roster[target] & (state.team.current_hp[target, :, 0] > 0) & (jnp.arange(6) != state.active_index[target, 0])
@@ -220,7 +220,23 @@ def reset_switch_effects(state, side_idx, transfer=0):
     volatile = state.volatile_status
     # Disable, Encore, Destiny Bond and ability-specific effects are noCopy;
     # Taunt, confusion, Substitute and Perish Song are passable.
+    residuals = volatile.residuals
+    previous = old.residuals
+    # Only these indefinite residuals follow Baton Pass's recipient.
+    residuals = residuals.replace(
+        aqua_ring=residuals.aqua_ring.at[side_idx].set(jnp.where(baton, previous.aqua_ring[side_idx], 0)),
+        ingrain=residuals.ingrain.at[side_idx].set(jnp.where(baton, previous.ingrain[side_idx], 0)),
+        leech_seed=residuals.leech_seed.at[side_idx].set(jnp.where(baton, previous.leech_seed[side_idx], 0)),
+        curse=residuals.curse.at[side_idx].set(jnp.where(baton, previous.curse[side_idx], 0)))
     volatile = volatile.replace(
+        residuals=residuals,
+        # Focus Energy and Magnet Rise pass with Baton Pass. Lock-On's source
+        # and its target must both stay in battle.
+        focus_energy=volatile.focus_energy.at[side_idx].set(baton & old.focus_energy[side_idx]),
+        magnet_rise_turns=volatile.magnet_rise_turns.at[side_idx].set(
+            jnp.where(baton, old.magnet_rise_turns[side_idx], 0)),
+        lock_on_turns=volatile.lock_on_turns.at[1-side_idx].set(0),
+        lock_on_target_slot=volatile.lock_on_target_slot.at[1-side_idx].set(-1),
         substitute_hp=volatile.substitute_hp.at[side_idx].set(jnp.where(substitute, old.substitute_hp[side_idx], 0)),
         confusion_turns=volatile.confusion_turns.at[side_idx].set(jnp.where(baton, old.confusion_turns[side_idx], 0)),
         restrictions=volatile.restrictions.replace(taunt_turns=volatile.restrictions.taunt_turns.at[side_idx].set(jnp.where(baton, old.restrictions.taunt_turns[side_idx], 0))))
@@ -228,7 +244,16 @@ def reset_switch_effects(state, side_idx, transfer=0):
     current = current.replace(
         normal_boosts=current.normal_boosts.at[side_idx].set(jnp.where(baton, boosts.normal_boosts[side_idx], current.normal_boosts[side_idx])),
         acc_boosts=current.acc_boosts.at[side_idx].set(jnp.where(baton, boosts.acc_boosts[side_idx], current.acc_boosts[side_idx])))
-    return state.replace(volatile_status=volatile, boosts=current,
+    slot = state.active_index[side_idx, 0]
+    history = state.damage_history
+    history = history.replace(
+        hurt_this_turn=history.hurt_this_turn.at[side_idx, slot].set(False),
+        stats_lowered_this_turn=history.stats_lowered_this_turn.at[side_idx, slot].set(False),
+        counter_prepared=history.counter_prepared.at[side_idx].set(-1),
+        counter_damage=history.counter_damage.at[side_idx, slot].set(0),
+        counter_category=history.counter_category.at[side_idx, slot].set(-1),
+        counter_source_slot=history.counter_source_slot.at[side_idx, slot].set(-1))
+    return state.replace(volatile_status=volatile, boosts=current, damage_history=history,
                          perish_turns=state.perish_turns.at[side_idx].set(jnp.where(baton, perish, -1)))
 
 
@@ -261,7 +286,13 @@ def swap_out(
             cause=jnp.int32(Cause.SWITCH)))
     state = emit(state, EventKind.SWITCH, side_idx, before=state.active_index[side_idx, 0], after=new_active)
     outgoing = state.active[side_idx]
-    state = clear_binding(state, 1 - side_idx)
+    other_ability = state.ability[1-side_idx, 0]
+    prior = state.volatile_status
+    baton = transfer == 1
+    carry_trick = baton & prior.properties.power_trick[side_idx, 0]
+    carry_acid = baton & prior.ability_state.ability_suppressed[side_idx, 0]
+    state = palafin_departure(restore_move_bank(state, side_idx), side_idx)
+    state = clear_source_linked(state, side_idx)
     state = jax.lax.cond(
         (state.ability[side_idx, 0] == AbilityEnum.NATURAL_CURE) & (outgoing.current_hp[0] > 0),
         partial(_cure_switch_status, side_idx=side_idx),
@@ -285,15 +316,23 @@ def swap_out(
     # this update could be saved since we need an update later but idk if it will matter
     active = state.active_index.at[side_idx].set(new_active)
     toxic_counter = state.toxic_counter.at[side_idx].set(0)
-    state = state.replace(active_index=active, toxic_counter=toxic_counter)
+    # Last Resort counts only uses since this entry. Belch's Berry history is
+    # independent and remains with the Pokémon for the rest of the battle.
+    state = state.replace(active_index=active, toxic_counter=toxic_counter,
+        used_move_ids=state.used_move_ids.at[side_idx, new_active].set(0))
+    state = jax.lax.cond(carry_trick, partial(pass_power_trick, player=side_idx), _identity, state)
+    state, _ = suppress_ability(state, side_idx, carry_acid)
+    state = resume_ability(state, 1-side_idx, other_ability)
     state = jax.lax.cond(state.entry_recovery[side_idx] != 0,
                          partial(_apply_entry_recovery, player=side_idx), _identity, state)
+
+    state = tera_shift(held_origin_form(held_crowned_form(state, side_idx), side_idx), side_idx)
 
     # hazards
     active = state.combat_active[side_idx]
 
     boots = active.item == ItemEnum.HEAVY_DUTY_BOOTS
-    is_not_flying = (1 - is_floating(active)) * ~boots
+    is_not_flying = state.is_grounded(side_idx) & ~boots
     is_not_hazard_immune = (1 - (active.ability == AbilityEnum.MAGIC_GUARD)) * ~boots
     is_poison = active.is_type(Type.POISON)
     is_poison_immune = jnp.any(active.type_list == Type.STEEL)
@@ -366,59 +405,16 @@ def swap_is_alive(
     state: BattleState,
     side_idx) -> BattleState:
     """Apply represented weather, terrain, Intimidate and Frisk entry abilities."""
+    state = tera_shift(state, side_idx)
     active = state.combat_active
     attacker = active[side_idx]
-    defender_ability = active[1-side_idx].ability
 
-    # activate weather abilities if target is alive
-    # we abuse the choice to WeatherEnum.NONE=0 to simplify the logic
-
-    ability = attacker.ability[0]
-    previous_weather = state.weather.weather
-    previous_terrain = state.terrain.terrain
-    new_weather = (jnp.logical_or(ability==AbilityEnum.DROUGHT, ability==AbilityEnum.ORICHALCUM_PULSE) * WeatherEnum.SUN +
-                   (ability==AbilityEnum.DRIZZLE) * WeatherEnum.RAIN +
-                   (ability==AbilityEnum.SAND_STREAM) * WeatherEnum.SANDSTORM +
-                   (ability==AbilityEnum.SNOW_WARNING) * WeatherEnum.SNOW)
-    state = set_weather(state, new_weather, 5)
-
-    # terrain, same deal as weather
-    new_terrain = (jnp.logical_or(ability==AbilityEnum.ELECTRIC_SURGE, ability==AbilityEnum.HADRON_ENGINE) * TerrainEnum.ELECTRIC +
-                   (ability==AbilityEnum.PSYCHIC_SURGE) * TerrainEnum.PSYCHIC +
-                   (ability==AbilityEnum.GRASSY_SURGE) * TerrainEnum.GRASSY +
-                   (ability==AbilityEnum.MISTY_SURGE) * TerrainEnum.MISTY)
-    state = set_terrain(state, new_terrain, 5)
-
-    # intimidate
-    is_intimidate = attacker.ability == AbilityEnum.INTIMIDATE
-    is_intimidate_immune = quad_or(
-        defender_ability==AbilityEnum.OBLIVIOUS,
-        defender_ability==AbilityEnum.OWN_TEMPO,
-        defender_ability==AbilityEnum.INNER_FOCUS,
-        defender_ability==AbilityEnum.SCRAPPY,
-    )
-    intimidate_activated = jnp.logical_and(is_intimidate, 1-is_intimidate_immune)
-    old_attack = state.boosts.normal_boosts[1-side_idx, StatEnum.ATTACK]
-    state = conditional_reduce_boosts(state, 1-side_idx, intimidate_activated, StatEnum.ATTACK, 1, True)
-    rattled = ((ability == AbilityEnum.INTIMIDATE) & (defender_ability[0] == AbilityEnum.RATTLED) &
-               (state.active.current_hp[1-side_idx, 0] > 0) &
-               (state.boosts.normal_boosts[1-side_idx, StatEnum.ATTACK] != old_attack))
-    state = conditional_add_boosts(state, 1-side_idx, rattled, StatEnum.SPEED, 1)
-    # Download compares stage-adjusted defenses without item/ability modifiers.
-    defenses = state.raw_boosted_stats[1-side_idx]
-    download_stat = jnp.where(defenses[StatEnum.DEFENSE] < defenses[StatEnum.SPECIAL_DEFENSE], StatEnum.ATTACK, StatEnum.SPECIAL_ATTACK)
-    state = conditional_add_boosts(state, side_idx, (ability == AbilityEnum.DOWNLOAD) & (state.active.current_hp[1-side_idx, 0] > 0), download_stat, 1)
-    state = conditional_add_boosts(state, side_idx,
-        (ability == AbilityEnum.WIND_RIDER) & (state.side_conditions.tailwind[side_idx, 0] > 0), StatEnum.ATTACK, 1)
-    old_source = state.event_context.source
-    state = state.replace(event_context=state.event_context.replace(source=jnp.asarray(side_idx, jnp.int32)))
-    state = emit(state, EventKind.ABILITY, side_idx, detail=ability,
-                 enabled=(state.weather.weather != previous_weather) | (state.terrain.terrain != previous_terrain))
-    state = state.replace(event_context=state.event_context.replace(source=old_source))
-
-
+    state = start_ability(state, side_idx, entering=True)
+    state, _ = transform(state, side_idx, attacker.ability[0] == AbilityEnum.IMPOSTER)
+    state = refresh_trace_player(side_idx, state)
+    state = reactive_form_update(state, side_idx, True)
     balloon = attacker.item[0] == ItemEnum.AIR_BALLOON
 
     state = remember_item(state, side_idx, ItemEnum.AIR_BALLOON, balloon)
     state = emit(state, EventKind.ITEM_REVEALED, side_idx, detail=ItemEnum.AIR_BALLOON, enabled=balloon)
-    return update_items(frisk(state, side_idx))
+    return update_items(state)

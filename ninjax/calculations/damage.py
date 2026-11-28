@@ -18,7 +18,7 @@ from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.item_rules import plate_type
 from ninjax.moves.model import Move
 from ninjax.pokemon import Pokemon
-from ninjax.side.queries import chain_defense_ability, is_floating, item_transfer_allowed
+from ninjax.side.queries import chain_defense_ability, is_floating, is_floating_fields, item_transfer_allowed
 
 
 Array = chex.Array
@@ -113,7 +113,9 @@ def compute_base_power(
         move: Move,
         terrain: Terrain, weather=WeatherEnum.NONE, gravity_active=False, *, raw_effectiveness=None,
         user_speed=1, target_speed=1, positive_stages=0, previous_failed=False,
-        target_charging_move=0, item_suppressed=False) -> chex.Array:
+        target_charging_move=0, item_suppressed=False, rooted_user=False, rooted_target=False,
+        times_attacked=0, total_fainted=0, target_hurt=False, user_stats_lowered=False,
+        last_successful_move=0, stockpile_count=0, tera_floor=False) -> chex.Array:
     """Resolve live intrinsic power, then apply ordered power modifiers.
 
     BasePower event factors are chained as 4096-based integers in descending
@@ -125,8 +127,10 @@ def compute_base_power(
     """
     if raw_effectiveness is None:
         raw_effectiveness = calculate_effectiveness_multiplier(move.type, defender.type_list, move.effectiveness_rule)
-    grounded_user = ~is_floating(attacker) | jnp.asarray(gravity_active)
-    grounded_target = ~is_floating(defender) | jnp.asarray(gravity_active)
+    suppressed = jnp.asarray(item_suppressed) | (attacker.ability == AbilityEnum.KLUTZ)
+    grounding_item = jnp.where(suppressed, ItemEnum.NONE, attacker.item)
+    grounded_user = ~is_floating_fields(attacker.type_list, attacker.ability, grounding_item) | jnp.asarray(gravity_active) | rooted_user
+    grounded_target = ~is_floating(defender) | jnp.asarray(gravity_active) | rooted_target
     # Rising Voltage is a basePowerCallback, before Technician's power check.
     power = resolve_hit_base_power(move.base_power, move.power_rule, attacker.current_hp,
         attacker.max_hp, defender.current_hp, defender.max_hp, defender.status,
@@ -136,6 +140,10 @@ def compute_base_power(
         user_weight=effective_weight(attacker.weight_hg, attacker.ability),
         target_weight=effective_weight(defender.weight_hg, defender.ability),
         terrain_type=terrain.terrain, grounded_target=grounded_target)
+    # These callbacks set intrinsic power before Technician's eligibility check.
+    power = jnp.where(move.identifier == 889, jnp.minimum(350, 50 + 50 * times_attacked), power)
+    power = jnp.where(move.identifier == 854, 50 + 50 * total_fainted, power)
+    power = jnp.where(move.identifier == 255, 100 * stockpile_count, power)
     # Supported effects have a fixed priority sequence. Equal-priority attacker
     # abilities are mutually exclusive; matching auras contribute only once.
     modifier = jnp.ones_like(power, dtype=jnp.int32) * 4096
@@ -153,9 +161,21 @@ def compute_base_power(
     solar = (move.identifier == 76) | (move.identifier == 669)
     modifier = chain_modifier(modifier, 2048, solar & ((weather == WeatherEnum.RAIN) | (weather == WeatherEnum.SANDSTORM) | (weather == WeatherEnum.SNOW)))
     modifier = chain_move_power_modifiers(modifier, move, terrain.terrain, grounded_user, raw_effectiveness, defender, attacker.status)
+    # BasePower modifiers chain at the same priority as the other move effects.
+    history_boost = ((move.identifier == 372) & target_hurt) | (
+        (move.identifier == 808) & user_stats_lowered) | (
+        (move.identifier == 559) & (last_successful_move == 558)) | (
+        (move.identifier == 558) & (last_successful_move == 559))
+    modifier = chain_modifier(modifier, 8192, history_boost)
+    # Field conditions supply a priority-zero boost for these attacks.
+    field_boost = ((move.identifier == 788) & jnp.asarray(gravity_active)) | (
+        (move.identifier == 802) & (terrain.terrain == TerrainEnum.MISTY) & grounded_user)
+    modifier = chain_modifier(modifier, 6144, field_boost)
     # Bounce doubles Gust/Twister at BasePower; Fly does so later at damage.
     modifier = chain_modifier(modifier, 8192, (target_charging_move == 340) & ((move.identifier == 16) | (move.identifier == 239)))
-    return jnp.maximum(1, apply_modifier(power, modifier))
+    power = jnp.maximum(1, apply_modifier(power, modifier))
+    # Terastallization applies its floor after the BasePower event chain.
+    return jnp.where(tera_floor, jnp.maximum(60, power), power)
 
 
 def chain_attacker_power_modifiers(modifier, power, move, ability, weather):
@@ -164,7 +184,7 @@ def chain_attacker_power_modifiers(modifier, power, move, ability, weather):
         (ability == AbilityEnum.TECHNICIAN) & (apply_modifier(power, modifier) <= 60))
     # Priority 23: move-property abilities and type-conversion boosts.
     property_boost = (((ability == AbilityEnum.IRON_FIST) & move.punching) |
-        ((ability == AbilityEnum.RECKLESS) & (move.recoil | (move.identifier == 136))) |
+        ((ability == AbilityEnum.RECKLESS) & (move.recoil | move.crashes)) |
         move.type_power_boost)
     modifier = chain_modifier(modifier, 4915, property_boost)
     # Priority 21; these abilities are mutually exclusive on the user.
@@ -206,8 +226,16 @@ def chain_item_power_modifiers(modifier, move_type, item, form, species, item_su
         ((item == ItemEnum.SILK_SCARF) & (move_type == Type.NORMAL)) |
         ((item == ItemEnum.SOUL_DEW) & ((species == 380) | (species == 381)) &
             ((move_type == Type.DRAGON) | (move_type == Type.PSYCHIC))) |
-        ((item == ItemEnum.LUSTROUS_ORB) & (species == 484) &
+        (((item == ItemEnum.LUSTROUS_ORB) | (item == ItemEnum.LUSTROUS_GLOBE)) & (species == 484) &
             ((move_type == Type.DRAGON) | (move_type == Type.WATER))))
+    origin_boost = (((item == ItemEnum.GRISEOUS_CORE) & (species == 487) &
+        ((move_type == Type.DRAGON) | (move_type == Type.GHOST))) |
+        ((item == ItemEnum.ADAMANT_CRYSTAL) & (species == 483) &
+        ((move_type == Type.DRAGON) | (move_type == Type.STEEL))) |
+        ((item == ItemEnum.LUSTROUS_GLOBE) & (species == 484) &
+        ((move_type == Type.DRAGON) | (move_type == Type.WATER))))
+    type_boost = jnp.where((item == ItemEnum.GRISEOUS_CORE) | (item == ItemEnum.ADAMANT_CRYSTAL) |
+        (item == ItemEnum.LUSTROUS_GLOBE), origin_boost & ~jnp.asarray(item_suppressed), type_boost)
     # Plates boost matching-type attacks at the same priority as other items.
     plate = plate_type(item)
     plate_boost = (plate != Type.NONE) & (plate == move_type) & ~jnp.asarray(item_suppressed)
@@ -379,7 +407,7 @@ def compute_damage_multipliers(
         weather, move, base_damage,
         is_crit, damage_roll,
         gravity_active=False, *,effectiveness=None, screen=False,
-        user_speed=1, target_speed=1, semi_damage_boost=False) -> Array:
+        user_speed=1, target_speed=1, semi_damage_boost=False, stab_types=None) -> Array:
     """Apply weather, crit, random, STAB, types, burn and final modifiers.
 
     Critical hits, random rolls and type resistance truncate independently.
@@ -395,7 +423,9 @@ def compute_damage_multipliers(
     damage = apply_weather_damage(move.identifier, base_damage, move.type, weather)
     damage = jnp.where(is_crit, damage * 3 // 2, damage)
     damage = jnp.floor(damage * damage_roll).astype(jnp.int32)
-    damage = apply_modifier(damage, stab_damage_modifier(attacker.type_list,
+    if stab_types is None:
+        stab_types = attacker.type_list
+    damage = apply_modifier(damage, stab_damage_modifier(stab_types,
         attacker.tera_type, attacker.is_terastallized, attacker.ability, move.type))
     damage = jnp.floor(damage * effectiveness).astype(jnp.int32)
     damage = apply_burn_penalty(damage, attacker.status, attacker.ability,

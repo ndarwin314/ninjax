@@ -16,10 +16,10 @@ from ninjax.enums.items import ItemEnum, ItemEnum as I
 from ninjax.enums.moves import MoveFlags, MoveType, PowerRule
 from ninjax.enums.pokemon import FormEnum, StatEnum, Type
 from ninjax.item_rules import item_is_suppressed, plate_type
+from ninjax.side.residual_conditions import ghost_curse_user
 from ninjax.side.queries import (
     ability_against_move,
     effective_weather,
-    is_floating_fields,
 )
 
 
@@ -49,7 +49,7 @@ def resolve_move_category(key, move, level, attack, special_attack, defense, spe
     key, physical_tie = jax.lax.cond(shell_side_arm & (physical == special),
         _shell_side_arm_tie, _shell_side_arm_unequal, key)
     use_physical = jnp.where(shell_side_arm, (physical > special) | physical_tie, attack > special_attack)
-    dynamic_category = shell_side_arm | (identifier == 722)
+    dynamic_category = shell_side_arm | (identifier == 722) | (identifier == 851)
     contact = int(MoveFlags.CONTACT)
     flags = (move.move_flags & ~contact) | jnp.where(use_physical, contact, 0)
     return key, move.replace(
@@ -63,7 +63,8 @@ def resolve_move_category(key, move, level, attack, special_attack, defense, spe
 def effective_move(state, attacker_index, move):
     """Resolve transient type, priority and targeting without mutating the slot."""
     ability = state.ability[attacker_index]
-    excluded = _excludes_type_conversion(move.identifier)
+    tera_blast = (move.identifier == 851) & state.active_field('is_terastallized', attacker_index)
+    excluded = _excludes_type_conversion(move.identifier) | tera_blast
     # Normalize runs before move-specific type callbacks in the pinned rules.
     normalize = (ability == AbilityEnum.NORMALIZE) & ~excluded
     move = move.replace(type=jnp.where(normalize, Type.NORMAL, move.type))
@@ -103,13 +104,14 @@ def effective_priority(state, player, move):
     """Resolve queued priority without computing base-power overrides."""
     abilities = state.ability
     ability = abilities[player]
-    normalize = (ability == A.NORMALIZE) & ~_excludes_type_conversion(move.identifier)
+    tera_blast = (move.identifier == 851) & state.active_field('is_terastallized', player)
+    normalize = (ability == A.NORMALIZE) & ~(_excludes_type_conversion(move.identifier) | tera_blast)
     weather = effective_weather(state.weather.weather, abilities, state.active_field('current_hp'))
     types = state.effective_types(player, include_added=True)
     item = state.active_field('item', player)
     move_type = _override_type(state, player, move.identifier, jnp.where(normalize, Type.NORMAL, move.type),
                                weather, state.terrain.terrain, types, item)
-    priority = _terrain_priority(state, move.identifier, move.priority, types, ability, item)
+    priority = _terrain_priority(state, player, move.identifier, move.priority)
     return _ability_priority(state, player, move, move_type, priority, ability)
 
 
@@ -162,19 +164,28 @@ def is_poison_type_user(state, attacker_index):
     return jnp.where(tera & (tera_type != Type.NONE), tera_type == Type.POISON, jnp.any(types == Type.POISON))
 
 
+def lock_on_matches(state, attacker, target):
+    """Check whether Lock-On still identifies the target's active party slot."""
+    v = state.volatile_status
+    return ((v.lock_on_turns[attacker, 0] > 0) &
+            (v.lock_on_target_slot[attacker, 0] == state.active_index[target, 0]))
+
+
 def accuracy_fields(state, attacker_index, move):
     """Read the current values needed to check a move's accuracy."""
     abilities = state.ability
     target = 1 - attacker_index
     poison_user = is_poison_type_user(state, attacker_index)
-    return (abilities[attacker_index], ability_against_move(state, target, move), state.active_field('item', attacker_index),
+    return (abilities[attacker_index], ability_against_move(state, target, move), state.effective_item(attacker_index),
             state.weather.weather, abilities, state.active_field('current_hp'),
             state.boosts.acc_boosts[attacker_index, 0], state.boosts.acc_boosts[target, 1],
-            state.volatile_status.confusion_turns[target], poison_user)
+            state.volatile_status.confusion_turns[target], poison_user,
+            state.gravity_duration > 0, lock_on_matches(state, attacker_index, target))
 
 
 def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, field_weather,
-                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns, poison_user=False, *, absorption=None):
+                              abilities, hp, accuracy_stage, evasion_stage, confusion_turns, poison_user=False,
+                              gravity_active=False, lock_on=False, *, absorption=None):
     """Calculate accuracy from the current move and relevant battle fields."""
     weather = effective_weather(field_weather, abilities, hp)
     is_hustle = jnp.logical_and((attacker_ability == AbilityEnum.HUSTLE), move.move_type==MoveType.PHYSICAL)
@@ -198,6 +209,8 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
     modifiers = jnp.array([COMPOUND_EYES_MULTIPLIER, VICTORY_STAR, WEATHER_VEIL_MODIFIER])
     accuracy = accuracy * jnp.prod(jnp.power(modifiers, conditions))
     accuracy *= jnp.where(item == ItemEnum.WIDE_LENS, 1.1, 1.)
+    # Gravity chains a 6840/4096 accuracy modifier before integer truncation.
+    accuracy *= jnp.where(gravity_active, 6840 / 4096, 1.)
     # The simulator samples an integer percentage after accuracy modifiers.
     accuracy = jnp.floor(accuracy * 100 + 1e-5) / 100
     no_guard_active = jnp.logical_or(
@@ -211,7 +224,8 @@ def move_accuracy_from_fields(move, attacker_ability, defender_ability, item, fi
     weather_always = ((move.identifier == 59) & (weather == WeatherEnum.SNOW)) | (rain_sensitive & (weather == WeatherEnum.RAIN))
     accuracy = jnp.where((defender_ability == AbilityEnum.TANGLED_FEET) & (confusion_turns > 0), accuracy * .5, accuracy)
     toxic_always = (move.identifier == 92) & poison_user
-    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always | absorption.active | toxic_always, 1., accuracy)
+    accuracy = jnp.where(move.target_self | move.always_hit | no_guard_active | weather_always |
+                         absorption.active | toxic_always | lock_on, 1., accuracy)
 
     return accuracy
 
@@ -230,14 +244,17 @@ def move_overrides(state, player, move):
     terrain = state.terrain.terrain
     types = state.effective_types(player, include_added=True)
     item = state.active_field('item', player)
-    # Weather Ball's power is a ModifyMove effect, coupled to its type change.
+    # Weather Ball and Terrain Pulse change type and power during preparation.
     # All BasePower callbacks are evaluated later from live hit-time inputs.
     double_in_weather = (move.power_rule == PowerRule.DOUBLE_IN_WEATHER) & (weather != W.NONE)
-    double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != W.NONE) & (state.is_grounded(player))
+    double_in_terrain = (move.power_rule == PowerRule.DOUBLE_IN_TERRAIN) & (terrain != T.NONE) & state.is_grounded(player)
     power = jnp.where(double_in_weather | double_in_terrain, move.base_power * 2, move.base_power)
     move_type = _override_type(state, player, ident, move.type, weather, terrain, types, item)
-    priority = _terrain_priority(state, ident, move.priority, types, abilities[player], item)
-    return move.replace(base_power=power, type=move_type, priority=priority)
+    priority = _terrain_priority(state, player, ident, move.priority)
+    target_self = jnp.where(ident == 174, ~ghost_curse_user(state, player), move.target_self)
+    sunny_growth = (ident == 74) & (weather == W.SUN)
+    stages = jnp.where(sunny_growth, 2 * move.boost_stages, move.boost_stages)
+    return move.replace(base_power=power, type=move_type, priority=priority, boost_stages=stages, target_self=target_self)
 
 
 # Match on form identity so temporary type changes never change these moves.
@@ -291,14 +308,15 @@ def _override_type(
                                     state.volatile_status.embargo_turns[player])
     move_type = jnp.where((ident == 449) & ~suppressed, judgment_move_type(item), move_type)
     # Revelation Dance uses the first current type; ordinary Tera overrides it.
-    first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], Type.NORMAL))
+    first_type = jnp.where(types[0] != Type.NONE, types[0], jnp.where(types[1] != Type.NONE, types[1], jnp.where(types[2] != Type.NONE, types[2], Type.NORMAL)))
     tera_type = state.active_field('tera_type', player)[0]
     tera = state.active_field('is_terastallized', player)[0]
     dance_type = jnp.where(tera & (tera_type != Type.NONE), tera_type, first_type)
+    move_type = jnp.where((ident == 851) & tera, tera_type, move_type)
     return jnp.where(ident == 686, dance_type, move_type)
 
 
-def _terrain_priority(state, ident, priority, types, ability, item):
+def _terrain_priority(state, player, ident, priority):
     """Raise Grassy Glide's priority for a grounded user on Grassy Terrain."""
-    grounded = ~is_floating_fields(types, ability, item) | (state.gravity_duration > 0)
+    grounded = state.is_grounded(player)
     return jnp.where((ident == 803) & grounded & (state.terrain.terrain == T.GRASSY), 1, priority)

@@ -83,7 +83,9 @@ def test_transformation_metadata_and_rejection(neutral_type):
         action = BattleAction(jnp.zeros(2, jnp.int32), jnp.full(2, ActionType.ATTACK), transformation=kind)
         assert action.transformation.shape == (2,)
         assert jnp.all(action.transformation == kind)
-        if kind != Transformation.NONE:
+        if kind in (Transformation.NONE, Transformation.TERA):
+            assert jnp.all(action.encode() == 0)
+        else:
             assert jnp.all(action.encode() == -1)
     env = Battle(battle.team)
     state, _ = env.reset(key)

@@ -11,6 +11,7 @@ from ninjax.battle.switching import swap_out
 from ninjax.battle.types import ActionType, BattleAction, Transformation
 from ninjax.enums.moves import MoveResult
 from ninjax.moves.execution import move_interrupted, move_used
+from ninjax.moves.locked import clear_lock, interrupt_lock
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults
 from ninjax.restrictions import gravity_blocks_move, move_blocked_at_execution, resolve_move
@@ -90,12 +91,21 @@ def step_move(
         partial(_prepare_selected_or_continued, continued=continued, is_tera=is_tera), key, state, player_idx, index)
     selected_move = state.active_moves(player_idx, index)
     restriction_blocked |= ~struggle & move_blocked_at_execution(state, player_idx, selected_move)
+    # Focus Punch's preparation is disrupted before PP payment when the user
+    # took qualifying damage from an earlier queued action.
+    restriction_blocked |= ((selected_move.identifier[0] == 264) &
+                            state.volatile_status.queued_move.focus_lost[player_idx, 0])
+    sleep_usable = (selected_move.identifier[0] == 214) | (selected_move.identifier[0] == 173)
     key, state, is_interrupted = before_move(key, state, player_idx, restriction_blocked=restriction_blocked,
-        defrost_move=selected_move.defrost & ~struggle, sleep_usable=(selected_move.identifier[0] == 214) & ~jnp.asarray(continued) & ~struggle)
+        defrost_move=selected_move.defrost & ~struggle, sleep_usable=sleep_usable & ~jnp.asarray(continued) & ~struggle)
     key, state = jax.lax.cond(
         is_interrupted.reshape(()), move_interrupted,
         partial(_execute_prepared_move, continued=continued, struggle=struggle),
         key, state, player_idx, index)
+    # Forced sequences use their own interruption and expiry policies.
+    key, state = jax.lax.cond(is_interrupted.reshape(()) & continued &
+        (state.volatile_status.continuation.locked.move_id[player_idx, 0] != 0),
+        partial(interrupt_lock, player=player_idx), _keep_key_state, key, state)
     # The release may hit, miss or be interrupted; in every case the user
     # becomes targetable again once that action has ended.
     v = state.volatile_status
@@ -114,6 +124,8 @@ def step_move(
 
 def _prepare_struggle_action(key, state, player, unused_index):
     """Count a forced attempt without applying Encore or paying move-slot PP."""
+    # Struggle ends any repeat lock, including Uproar.
+    state = clear_lock(state, player)
     v = state.volatile_status
     state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(active_move_actions=v.move_history.active_move_actions.at[player, 0].add(1))))
     return key, state, jnp.int32(0), jnp.bool_(False)
@@ -141,8 +153,6 @@ def _prepare_selected_action(key, state, player_idx, index, is_tera):
         queued_move=v.queued_move.replace(
             queued_priority=v.queued_move.queued_priority.at[player_idx, 0].set(priority),
             encore_overridden=v.queued_move.encore_overridden.at[player_idx, 0].set(index != original_index))))
-    state = update_active_fields(state, player_idx,
-        is_terastallized=state.active_field('is_terastallized', player_idx) | jnp.bool([is_tera]))
     return key, state, jnp.asarray(index, jnp.int32), restriction_blocked
 
 
@@ -150,7 +160,8 @@ def _prepare_charge_release(key, state, player, unused_index):
     """Clear the stored charge and ignore Encore/PP while honoring Disable."""
 
     v = state.volatile_status
-    identifier = v.continuation.charging_move_id[player, 0]
+    charging = v.continuation.charging_move_id[player, 0]
+    identifier = jnp.where(charging != 0, charging, v.continuation.locked.move_id[player, 0])
     matches = (state.active_move_field('identifier', player)[:, 0] == identifier) & (identifier != 0)
     index = jnp.argmax(matches).astype(jnp.int32)
     state = state.replace(
@@ -213,7 +224,9 @@ def _ordinary_action(key, state, action, player_index, *, switch_committed=False
     """Dispatch an attack, charge release, switch, recharge or explicit no-op."""
     v = state.volatile_status
     continued = action.move_type == ActionType.CONTINUED
-    release = continued & ~v.continuation.recharging[player_index, 0] & (v.continuation.charging_move_id[player_index, 0] != 0)
+    release = continued & ~v.continuation.recharging[player_index, 0] & (
+        (v.continuation.charging_move_id[player_index, 0] != 0) |
+        (v.continuation.locked.move_id[player_index, 0] != 0))
     switching = action.move_type == ActionType.SWITCH
     if not switch_committed:
         switching &= ~voluntary_switch_blocked(state)[player_index]

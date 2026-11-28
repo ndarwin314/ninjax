@@ -11,9 +11,9 @@ the chosen dedicated-field approach.
 
 ## Current coverage contract
 
-The catalogue contains **685 moves**, including **500** with represented singles
-effects and **185** unavailable or unreviewed. The pinned random-battle inventory
-has **288 of 348** moves supported, leaving **60** gaps.
+The catalogue contains **685 moves**, including **619** with represented singles
+effects and **66** unavailable or unreviewed. The pinned random-battle inventory
+has **330 of 348** moves supported, leaving **18** gaps.
 These are implementation counts, not exhaustive interaction-parity counts.
 
 The current inventory includes Judgment, Freeze-Dry and Flying Press, as well as
@@ -23,6 +23,26 @@ supports all 17 typed Plates.
 All catalogue moves with `selfSwitch` or `forceSwitch` are supported for singles.
 Healing Wish, Lunar Dance and Revival Blessing are also supported. Sky Drop
 still needs a charge continuation that carries another Pokémon.
+
+### Review of partially wired moves
+
+| Moves | Current singles behavior |
+| --- | --- |
+| Flail, Reversal | Both use the six-bracket low-HP power table at the hit boundary. |
+| Terrain Pulse | The grounded user's terrain sets the type and doubles base power during move preparation. The resolved type reaches immunity and damage, and ordinary terrain bonuses apply in the modifier chain. |
+| Photon Geyser, Shell Side Arm | The shared category resolver is active. Photon Geyser uses staged Attack and Special Attack, stays Special on a tie, and bypasses breakable abilities unless Ability Shield is active. |
+| Grass Knot, Heat Crash, Power Trip, Temper Flare | Existing weight, stage and previous-failure rules are available through the catalogue. |
+| Thunder, Bleakwind Storm, Wildbolt Storm, Sandsear Storm, Gust, Twister | Weather accuracy, represented secondary effects and the existing airborne-hit rules are wired. Gust and Twister double damage against Fly and base power against Bounce. |
+| Seismic Toss, Supercell Slam, Axe Kick, Self-Destruct, Misty Explosion | Use the shared level-damage, crash or pre-hit self-faint rules. Damp also covers the new explosion entries. |
+| Dream Eater, Life Dew, Snore, Growth, Grav Apple, First Impression | Reuse the drain, healing, sleep, stat-stage, field-power and first-action paths with move-specific conditions. |
+| Psychic Fangs, Mortal Spin, Steel Roller, Hyper Drill, Mighty Cleave | Reuse screen clearing, hazard and binding cleanup, terrain removal, or protection bypass. Hyper Drill and Mighty Cleave leave the guard active. |
+| Bone Rush, Freezing Glare, Inferno, Smart Strike | Use existing multi-hit, status-secondary or sure-hit metadata. |
+
+Focused checks are in `unit_tests/test_partial_move_wiring.py`,
+`test_move_category.py`, `test_ability_bypassing_moves.py` and
+`test_freeze_confusion.py`. Effects attached to unavailable conditions or battle
+formats, including Minimize, Sky Drop and Dynamax, remain outside the reviewed
+singles behavior.
 
 Rising Voltage is now enabled for singles: Electric Terrain doubles intrinsic
 power when the target is grounded, independently of the user's ordinary terrain
@@ -54,7 +74,7 @@ of the particular effects they exercise, not certifications of whole moves.
 Regenerate the machine-readable report with the configured project interpreter:
 
 ```sh
-.venv/bin/python -m tools.audit_random_battle_mechanics > docs/design/gen9-random-coverage.json
+.venv/bin/python -m tools.audit_random_battle_mechanics > docs/mechanics/gen9-random-coverage.json
 ```
 
 The [coverage report](gen9-random-coverage.json) lists all unavailable catalogue
@@ -115,7 +135,7 @@ host and pass numeric, fixed-shape metadata into traced execution.
 | Moves | What the fields provide | Work still required |
 | --- | --- | --- |
 | Mist, Safeguard | Named `sideCondition` values | Add timers and checks in stat and status routing. |
-| Aqua Ring, Attract, Charge, Curse, Defense Curl, Dragon Cheer, Focus Energy, Gastro Acid, Ingrain, Leech Seed, Magnet Rise, Minimize, No Retreat, Power Trick, Smack Down, Stockpile, Tar Shot, Yawn | Their condition identity | Move-specific condition payloads, application rules, consumers and expiry. The condition string identifies the required handler. |
+| Attract, Charge, Defense Curl, Dragon Cheer, Focus Energy, Magnet Rise, Minimize, Smack Down, Stockpile, Tar Shot | Their condition identity | Move-specific condition payloads, application rules, consumers and expiry. The condition string identifies the required handler. |
 
 `selfSwitch` must retain its distinction between boolean `true`, `copyvolatile`
 and `shedtail`; reducing all three to a boolean loses transfer semantics.
@@ -147,10 +167,9 @@ Construction projects `thawsTarget` separately from the user's `defrost` flag.
 Hydro Steam, Matcha Gotcha, Scald, Scorching Sands and Steam Eruption thaw a
 surviving frozen target after secondary effects when the hit reaches it.
 
-Freeze-Dry and Flying Press now use shared move-aware effectiveness rules; Wish
-and Future Sight still need pending-effect state, and Seismic Toss still needs
-fixed-damage dispatch.
-None becomes implemented merely through the new condition/switch/stat fields.
+Freeze-Dry and Flying Press use shared move-aware effectiveness rules, and
+Seismic Toss shares level-based damage with Night Shade. Wish uses a delayed
+position effect. Future Sight and Doom Desire need delayed attack payloads.
 Transformations, richer battle history and doubles target resolution remain
 architectural work as described below.
 
@@ -226,22 +245,19 @@ transformations remain outside this batch.
 
 ### Move-to-stage map
 
-The function names below record the implementation plan. The conditional-power
-helpers described in the batch above are implemented; other **new** helpers
-remain proposals. **Existing** functions are integration points. Numeric
-helpers take scalar/array facts and return arrays; state access stays at the
-execution boundary. Extend rule metadata only when implementing its consumers.
+Numeric helpers take scalar or array facts, with state access at the execution
+boundary. The transformation row describes work that still needs a consumer.
 
 | Rule family | Moves | Specific owner and call path |
 | --- | --- | --- |
 | Intrinsic status-dependent power | Hex, Infernal Parade | **Implemented:** `resolve_hit_base_power` dispatches status-dependent intrinsic power before the modifier chain, including effective Comatose. |
-| Intrinsic user-HP power | Eruption, Water Spout, Dragon Energy; Flail, Reversal | The proportional-HP family is **implemented**. Flail and Reversal still need their discrete low-HP table and support review. |
+| Intrinsic user-HP power | Eruption, Water Spout, Dragon Energy, Flail, Reversal | The hit-time dispatcher uses proportional power for the first three moves and `low_hp_base_power` for Flail and Reversal. |
 | Intrinsic target-HP power | Crush Grip, Hard Press | **Implemented:** the shared nested fixed-point calculation uses the move's scale and live target HP. |
 | Intrinsic speed-ratio power | Electro Ball, Gyro Ball | **Implemented:** `resolve_hit_base_power` uses hit-time effective Speeds from `side.queries.effective_speed`, independent of action order and crit/Unaware damage-stat adjustment. |
 | Priority-0 conditional power factors | Facade; Venoshock, Barb Barrage; Brine | **Implemented:** `chain_conditional_move_power_modifiers` adds eligible factors without an intermediate application to power. |
 | Priority-0 terrain/effectiveness factors | Psyblade, Collision Course | **Implemented:** `chain_field_matchup_move_modifiers` handles Electric Terrain's presence and the resolved super-effective matchup. Psyblade has no user-grounding requirement. |
-| Type override plus intrinsic change | Terrain Pulse | **New** `properties.terrain_pulse_type(default_type, terrain_type, grounded_user)` integrates through **existing** `_override_type`. **New** `properties.terrain_pulse_properties(move, terrain_type, grounded_user)`, called once by **existing** `move_overrides`, doubles the intrinsic power under the same condition. These are ModifyType/ModifyMove effects before accuracy/immunity; do not reevaluate the doubling at each hit. Ordinary terrain bonuses stay in the modifier chain. |
-| Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break and is enabled for singles. Aura Wheel has typing for the supplied form. Its species eligibility and Hunger Switch lifecycle remain open. |
+| Type override plus intrinsic change | Terrain Pulse | `move_overrides` prepares the doubled power and calls `_override_type` before accuracy and immunity. Both use the grounded user's current terrain. |
+| Form-dependent type override | Ivy Cudgel, Raging Bull, Aura Wheel | **Implemented** `properties.form_move_type(identifier, default_type, form)` resolves the transient type through `_override_type`. Raging Bull shares the screen-breaking hook with Brick Break. Aura Wheel checks Morpeko's species and uses the current Hunger Switch form. |
 | Item-dependent type override | Judgment | **Implemented:** shared Plate lookup resolves Judgment's type and the matching-type BasePower modifier. Klutz and the represented Magic Room/Embargo timers suppress these Plate effects. Arceus Plate transfer restrictions are checked. |
 | Special effectiveness | Freeze-Dry, Flying Press | **Implemented:** `type_effectiveness_factors` applies the move rule per defending type. Early immunity, hit-time matchup and fallback damage calculation consume the rule; Ground, Gravity and Levitate remain contextual checks. |
 | Weather damage exception | Hydro Steam | **Implemented.** `apply_weather_damage` boosts Hydro Steam by 1.5 in sun and applies the ordinary Water boost in rain. Both use weather-stage rounding. |
@@ -249,7 +265,7 @@ execution boundary. Extend rule metadata only when implementing its consumers.
 | Ability bypass | Moongeist Beam, Photon Geyser, Sunsteel Strike | Move metadata bypasses represented breakable abilities during accuracy, damage and hit reactions. Ability Shield preserves the holder's ability while the item is active. |
 | Transformation-dependent type/category | Tera Blast, Tera Starstorm | **New** `properties.transformed_move_type(type_rule, default_type, tera_type, is_terastallized, form)` integrates through `_override_type`. Extend `resolve_move_category` for Tera Blast and use **new** `properties.transformation_move_properties(move, tera_type, is_terastallized, form)` for power, target and self-effect changes. Implement these only with the transformation lifecycle and eligibility checks; the existing type/category fields do not unlock complete moves. |
 
-### Proposed helper contracts and orchestration
+### Hit preparation and damage orchestration
 
 Keep the hit-time power boundary explicit:
 
@@ -265,25 +281,16 @@ resolve_damaging_hit
      -> one final application to intrinsic power
 ```
 
-`resolve_hit_base_power` returns a power array and dispatches to the small
-formula helpers above. `compute_base_power` already receives the effective
-Pokémon snapshots needed for HP/status rules, so its only new external numeric
-inputs for this batch are the two speeds. The boundary may initially gather
-both speeds in a shared branch; keep any guard JAX-compatible and measure
-whether conditional gathering actually saves work. None of these helpers
-consumes PRNG keys. Extend `PowerRule` to identify each intrinsic formula and
-priority-0 modifier rule explicitly.
+`resolve_hit_base_power` dispatches to the formula helpers using `PowerRule`.
+`compute_base_power` receives effective Pokémon snapshots, speeds and the field
+and move-history facts needed by those formulas. Power evaluation consumes no
+PRNG keys.
 
-The intrinsic-power paths are now unified: `move_overrides` resolves only
-Weather Ball's property-time power, typing and priority. The old
-`resolve_variable_base_power` and separate `resolve_terrain_base_power`
-functions have been removed. `resolve_hit_base_power` handles the migrated
-rules using live effective weights, held-item presence, positive stage counts
-and previous-turn failure state supplied at the hit boundary. Stored Power uses
-the supplied base power plus 20 per positive stage, matching the reference.
-Weather Ball and fixed hit-plan contributions pass through without reapplication.
-Terrain Pulse will likewise resolve type and ModifyMove doubling together during
-property preparation, not from a later terrain snapshot.
+`move_overrides` prepares Weather Ball and Terrain Pulse's intrinsic power and
+type. `resolve_hit_base_power` handles live weights, held-item presence, positive
+stages and previous-turn failure. Stored Power and Power Trip add 20 power per
+positive stage, including accuracy and evasion. Prepared weather and terrain
+power and fixed hit-plan contributions pass through the intrinsic dispatcher.
 
 Both hit entry points use
 `routing.prepare_hit_move(key, state, player, move) -> (key, resolved_move)`.
@@ -294,15 +301,10 @@ Geyser keeps Special on a tie. Shell Side Arm compares integer damage estimates
 and draws from the supplied key only on ties. Damage calculation applies its
 normal ability, item and critical-hit rules after category selection.
 
-For effectiveness, add `Move.effectiveness_rule` with a host-assigned enum.
-The shared factor helper accepts that rule alongside the resolved type; it does
-not change the move's type for STAB, absorption or type-based abilities. Extend
-`hit_type_effectiveness` with the rule operand and pass it to the fallback in
-`compute_damage_multipliers`, as well as the ordinary hit path. Preserve the
-existing distinction between chart factors and ability/grounding effects; audit
-both early immunity and downstream raw-effectiveness consumers in the same
-change. Do not maintain separate Freeze-Dry/Flying Press lookup logic in routing
-and damage.
+Construction sets `Move.effectiveness_rule` for Freeze-Dry and Flying Press.
+The factor helper uses it alongside the resolved move type in early immunity,
+hit resolution and fallback damage. STAB, absorption and type-based abilities
+read the resolved type.
 
 Facade has one additional owner: **implemented**
 `damage.apply_burn_penalty(damage, status, ability, category, identifier)`, called
@@ -316,10 +318,10 @@ sleep; use the checked callback rather than inferring eligibility from prose.
 
 Moongeist Beam, Photon Geyser and Sunsteel Strike read a move-scoped defender
 ability. Type immunities, Focus Sash and unbreakable abilities such as Rough
-Skin still apply. Aura Wheel's species and form lifecycle and transformation
-side effects remain separate requirements.
+Skin still apply. Aura Wheel uses the user's Morpeko form, which Hunger Switch
+updates at the residual checkpoint.
 
-Raging Bull and Brick Break share the `apply_pre_damage_move_effects` hook.
+Raging Bull, Brick Break and Psychic Fangs share the `apply_pre_damage_move_effects` hook.
 The pinned Showdown callbacks run after the accuracy, protection and immunity
 gates and before Substitute interception. Hit resolution reads the resulting
 screen state when calculating damage.
@@ -334,11 +336,10 @@ execution-local context can carry effective speeds or selected category when
 the existing Pokémon snapshot does not contain them. No generic full-state
 parameter is needed for a pure numeric formula.
 
-The priority-0 factors, Facade burn exception, HP-based intrinsic formulas and
-speed ratios are implemented in the batch above. Next are shared effectiveness
-rules and property/category changes.
-Existing state supplies most numeric inputs; party/history-based powers such as
-Last Respects and Rage Fist remain in their separate history workstream.
+The implemented rules cover priority-zero factors, Facade's burn exception,
+HP and Speed formulas, special effectiveness and the listed property and
+category changes. Party and history mechanics such as Last Respects and Rage
+Fist still need durable counters.
 
 Validation should compare the relevant stage and full damage against Showdown:
 Technician threshold probes for intrinsic versus modifier doubling; odd powers
@@ -359,6 +360,16 @@ has its mechanics, focused tests and support-inventory entry.
 | Move-specific effectiveness | Freeze-Dry and Flying Press use the shared type rules in early immunity, hit resolution and damage. |
 | [Switching composition and state transfer](#switching-composition-and-state-transfer) | Pivots, forced switches, switch-entry recovery and party revival are implemented for singles. |
 | [Item lifecycle](#item-lifecycle) | Catalogue moves for item swap, theft, destruction, forced consumption, throwing and recovery are implemented for represented items. |
+| [Ability, type, form and moveset mutation](#ability-type-form-and-moveset-mutation) | Switch-cleared identity changes and battle-persistent form changes use shared readers, effect handlers and restoration. |
+| [Residual conditions and trapping](#residual-conditions-and-trapping) | Passive healing, repeated damage and stat drops use the end-of-turn scheduler. Field, source-linked and self-imposed traps share switch eligibility. |
+| [Special damage outcomes](#special-damage-outcomes) | Final Gambit, the four OHKO moves, False Swipe, Present, Steel Beam and Chloroblast share the existing hit and attempt pipeline. |
+| [Restrictions and prerequisites](#restrictions-and-prerequisites) | Belch uses persistent Berry history. Last Resort uses the current entry's move-use history. |
+| [Locked sequences](#charge-recharge-and-locked-sequences) | Rampage, Rollout and Uproar share the forced continuation payload with separate interruption policies. |
+| [Preparation](#preparation-and-semi-invulnerability) | Focus Punch and Beak Blast bind their preparation to the original queued actor. |
+| [Damage, action and team history](#damage-action-and-team-history) | Retaliation, per-turn damage and stat loss, cumulative received hits and cumulative faints have separate records. |
+| [Custom stats, healing and costs](#custom-stats-healing-and-costs) | Belly Drum, Stockpile and its consumers, Strength Sap and weather-based healing use shared stage and HP helpers. |
+| [Field and accuracy conditions](#field-and-accuracy-conditions) | Gravity, Magic Room, Wonder Room, Mist, Safeguard, Magnet Rise, Lock-On and Focus Energy attach to the field, side or active Pokémon. |
+| [Ordinary-type Terastallization](#transformations) | Typed singles actions can declare Tera. The engine tracks the side allowance, defensive type, original offensive types and Tera Blast. |
 
 ### Remaining architecture families
 
@@ -367,21 +378,12 @@ Some moves need several of these capabilities.
 
 | Missing support | Example moves | Required extension |
 | --- | --- | --- |
-| [Wiring existing primitives](#wiring-existing-primitives) | Grass Knot, Heat Crash, Power Trip | Reuse existing power helpers with move-specific wiring. Weather/terrain setters, Reflect, primary confusion, Psystrike/Secret Sword, Detect, Flip Turn and Roar are implemented above. |
-| [Conditional damage/type rules](#conditional-damage-and-type-rules) | Terrain Pulse | Complete and review Terrain Pulse's contextual power and type. |
-| [Residual conditions and trapping](#residual-conditions-and-trapping) | Leech Seed, Salt Cure, Aqua Ring, Ingrain, Mean Look, Syrup Bomb | Source-aware conditions, timers, switch cleanup and ordered residuals. |
-| [Delayed effects](#delayed-effects) | Wish, Future Sight, Doom Desire, Yawn | Pending records with side/slot semantics that survive the appropriate switches. |
-| [Restrictions and prerequisites](#restrictions-and-prerequisites) | Belch, Last Resort | Shared selection and execution checks with per-Pokémon history. |
-| [Charge/recharge/locked sequences](#charge-recharge-and-locked-sequences) | Sky Drop, Outrage, Rollout, Uproar | Extend shared continuations for carrying a target and executing repeated moves. |
-| [Preparation and semi-invulnerability](#preparation-and-semi-invulnerability) | Focus Punch, Beak Blast, Sky Drop | Preparation timing, pre-execution reactions and carried-target rules. Fly, Bounce, Dig, Dive, Phantom Force and Shadow Force use the shared charge pipeline. |
-| [Damage/action/team history](#damage-action-and-team-history) | Counter, Mirror Coat, Rage Fist, Last Respects, Assurance, Lash Out, Fusion Bolt | Typed records and counters beyond the replaceable current-move hit buffer. |
-| [Ability/type/form/moveset mutation](#ability-type-form-and-moveset-mutation) | Skill Swap, Gastro Acid, Soak, Conversion, Transform, Mimic, Sketch | Eligibility, lifecycle hooks, restoration, copied PP and public knowledge. |
-| [Custom stats, healing and costs](#custom-stats-healing-and-costs) | Belly Drum, Guard Split, Power Trick, Stockpile, Strength Sap, Synthesis | Direct assignments, HP costs, counters and contextual healing. |
-| [Special damage outcomes](#special-damage-outcomes) | Seismic Toss, Final Gambit, Fissure, False Swipe, Present, Steel Beam, Supercell Slam | Fixed/OHKO damage, HP floors, direct costs, randomized outcomes and crash rules. |
-| [Field/accuracy conditions](#field-and-accuracy-conditions) | Gravity, Magic Room, Wonder Room, Safeguard, Mist, Magnet Rise, Lock-On, Focus Energy | Application plus lifecycle and consumers for each condition. |
-| [Calls and queue manipulation](#calls-and-queue-manipulation) | Metronome, Copycat, Instruct, After You, Quash, Upper Hand, Thunderclap | Call eligibility/history, queued prerequisites and action reordering. |
+| [Delayed effects](#delayed-effects) | Future Sight, Doom Desire | Position-owned attack payloads with the original caster's attribution. |
+| [Carried-target continuations](#preparation-and-semi-invulnerability) | Sky Drop | Bind the carrier and carried Pokémon for a historical ruleset. |
+| [Presentation and form interactions](#ability-type-form-and-moveset-mutation) | Illusion, Terastallized forms | Add disguise-aware opponent observations and connect form interactions to the transformation lifecycle. |
+| [Calls and queue manipulation](#calls-and-queue-manipulation) | Metronome, Copycat, Instruct, After You, Quash | Complete caller-specific eligibility, PP and continuation handling. After You and Quash require the doubles queue. |
 | [Doubles targeting/combinations](#doubles-targeting-and-combinations) | Follow Me, Rage Powder, Ally Switch, Helping Hand, Dragon Darts, pledges | Target coordinates, redirection, spread plans, per-active queues and combinations. |
-| [Transformations](#transformations) | Tera Blast, Tera Starstorm | Eligibility and transformation lifecycle; requests are currently rejected. |
+| [Advanced transformations](#transformations) | Tera Starstorm | Add Stellar and species-specific Tera form lifecycles. |
 
 Use the outlines below as implementation slices. Each slice identifies where to
 store state, when to apply the effect, and what to verify before updating the
@@ -389,28 +391,6 @@ support inventory. Project catalogue descriptors to numeric rules on the host.
 Keep battle data in fixed-shape arrays and advance PRNG keys only for rules
 that require a draw. Use singles as the first checkpoint wherever the full
 effect can be represented there.
-
-#### Wiring existing primitives
-
-- Map Grass Knot to the existing target-weight rule, Heat Crash to the weight
-  ratio rule, and Power Trip to the positive-stage rule in team construction.
-  Read each input at the hit boundary and keep type, category, contact and
-  protection metadata independent of the power rule.
-- Verify weight thresholds and effective weight modifiers. For Power Trip,
-  check positive stages, including accuracy and evasion, and show that
-  negative stages contribute nothing. Compare the wired moves against the
-  existing moves that share their formulas.
-
-#### Conditional damage and type rules
-
-- Resolve Terrain Pulse in `moves.properties` from the effective terrain and
-  the user's grounding at move preparation. Apply the type and power change
-  together. Pass the resolved move to accuracy, immunity and damage so the
-  terrain rule is evaluated once. Keep the ordinary terrain power bonus in
-  its existing damage stage.
-- Verify clear terrain, all four terrains, and airborne and grounded users.
-  Include a case where the resolved type changes an immunity and a case where
-  an item, ability or Gravity changes grounding.
 
 #### Multiple and custom secondaries
 
@@ -433,25 +413,37 @@ effect can be represented there.
   switch predicate. Ghost typing and active Shed Shell permit escape. Check
   the predicate when committing a new switch. Resolve committed switches,
   pivots and forced replacements via the switch pipeline.
-- Extend the state for Mean Look and other traps without binding damage, and
-  for Ingrain and No Retreat. Add Aqua Ring, Salt Cure and Leech Seed's paired
-  HP changes with their own durations and transfer rules.
-- Apply healing and damage in the ordered residual phases and use the existing
-  HP and faint path. Give each condition its own switch, faint and transfer
-  policy. Verify expiry, source or target replacement, Salt Cure's type-dependent
-  damage, and when a trapped Pokémon can leave by each supported means.
+- Mean Look, Block, Spirit Shackle and Jaw Lock link their targets to an
+  opposing active party slot. No Retreat self-traps and boosts all five stats.
+  Fairy Lock uses a two-count field timer that covers the following turn.
+- Aqua Ring, Ingrain, Leech Seed and Ghost Curse use indefinite active
+  lifetimes and can transfer through Baton Pass. Ingrain also grounds its
+  holder and prevents forced drag. Rapid Spin and Mortal Spin clear Leech Seed
+  and ordinary binding effects from the user.
+- Salt Cure uses live Water or Steel typing for its damage fraction. It
+  survives the source leaving and clears when its target switches. Syrup Bomb
+  ticks up to three Speed drops and clears when either participant leaves.
+  Both go through the secondary-effect gate, including Substitute and Shield
+  Dust.
+- The relevant checkpoints are Wish at 4, Aqua Ring at 6, Ingrain at 7,
+  Leech Seed at 8, Ghost Curse at 12, binding and Salt Cure at 13, Syrup Bomb
+  at 14 and Yawn at 23. The HP checkpoints use the shared commit and faint
+  path. Leech Seed transfers capped HP loss to the active Pokémon across the
+  field and reverses healing with Liquid Ooze. Big Root boosts applicable recovery.
+  When binding and Salt Cure affect the same holder, binding currently ticks first.
+- Active lifetimes use zero for inactive, a negative value for indefinite
+  effects and positive counts for expiring effects. Wishes store duration
+  and the original heal amount by position. The observation exposes active
+  conditions and turns, while keeping the exact Wish amount private.
 
 #### Delayed effects
 
-- Give pending effects a due turn or trigger, an owner and a fixed-capacity
-  payload. Wish follows the target position and stores the healing amount from
-  its user. Future Sight and Doom Desire need a target position and a source
-  reference with the values the eventual hit can still read. Keep Yawn on the
-  affected active Pokémon.
-- Add scheduling and resolution hooks in the field and switch lifecycles.
-  Deferred hits should reuse hit and faint handling with their original
-  attribution. Test occupied and empty positions, switches on either side,
-  duplicate scheduling, source replacement and entry hazard ordering.
+- Wish follows the active position and heals the next turn using half the
+  caster's maximum HP at the time of the move. Yawn stays on the target and
+  checks live sleep immunity when its timer expires.
+- Future Sight and Doom Desire still need a target position, a source
+  reference and a delayed attack resolver that reuses hit and faint handling.
+  Verify switches on either side, duplicate scheduling and source replacement.
 
 #### Restrictions and prerequisites
 
@@ -462,20 +454,20 @@ effect can be represented there.
 - Torment, Gigaton Hammer and Blood Moon restrict repeat selection based on
   the last move. Imprison checks the current move bank of the opposing source
   at selection and before executing an ordinary move.
-- Store Belch's berry prerequisite in per-Pokémon history. Record the distinct
-  moves needed for Last Resort alongside the move-use events. Verify changes between queueing and execution,
-  expired effects, switch cleanup, and the fallback when no ordinary attack
-  remains. Include interrupted and called moves when deciding what counts as
-  use for each prerequisite.
+- The Berry-consumption flag follows its party slot through switches. Last
+  Resort checks the other move slots' identities and usage since entry.
+  Interrupted actions and calls that spend only their caller's PP do not
+  count as uses of the affected move slot.
 
 #### Charge, recharge and locked sequences
 
 - Catalogue recharge moves use the existing `CONTINUED` action. The repeat
   payload carries policy, move ID, actor slot, target, remaining turns and
   successful hit count.
-- Route Outrage, Rollout and Uproar through the repeat payload with separate
-  progression, interruption and completion policies. Store any randomly
-  selected duration once when the sequence starts.
+- Outrage, Thrash, Petal Dance, Rollout and Uproar use separate repeat
+  progression, interruption and completion policies. Rampage samples its
+  duration once. Rollout counts consecutive hits and reads Defense Curl's
+  switch-cleared power effect. Uproar prevents sleep while active.
 - Verify PP payment, target selection on continuation, and which outcomes
   start, advance or end the sequence. Cover protection, misses, fainting,
   forced switches, and the final confusion or power reset. Sky Drop needs the
@@ -483,10 +475,10 @@ effect can be represented there.
 
 #### Preparation and semi-invulnerability
 
-- Add preparation hooks after the scheduler has the committed choices and
-  before the action queue executes. Bind preparation to the queued actor slot.
-  Focus Punch checks qualifying damage before its own execution. Beak Blast
-  needs a contact reaction that runs only while the actor is prepared.
+- The scheduler prepares both choices before move execution and binds
+  preparation to each original actor slot. An opposing attack that reaches a
+  prepared Pokémon can stop Focus Punch before PP is spent. Beak Blast burns
+  an eligible contact attacker while the preparation is active.
 - Reuse the charge lifecycle for existing concealment. For Sky Drop in a
   historical ruleset, bind carrier and carried target, check each one's action
   and target eligibility, and release both from every cleanup path. Test
@@ -495,15 +487,13 @@ effect can be represented there.
 
 #### Damage, action and team history
 
-- Keep separate records for per-hit damage, per-turn action facts and
-  per-Pokémon counters. Extend hit attribution with source and recipient
-  identity, resolved category and damage cause where a consumer needs them.
-  Feed Counter and Mirror Coat from eligible received damage in the same turn.
-- Count Rage Fist hits and Last Respects faints at their respective hit and
-  faint checkpoints. Feed Assurance, Lash Out and Fusion Bolt from the events
-  that qualify for each move during the current turn. Verify multiple hits,
-  Substitute, indirect damage, switch and revival behavior, and turn resets.
-  Public event history can expose selected facts from these records.
+- Counter and Mirror Coat prepare a category filter at queue time and retain
+  the latest eligible hit for their retaliation. A hit absorbed by Substitute
+  can count for Rage Fist but does not supply retaliation damage.
+- Rage Fist counts received hits, and Last Respects counts team faints.
+  Assurance reads any actual loss of target HP this turn. Lash Out reads
+  actual stage reductions, and the Fusion moves read the preceding successful
+  move. The field boundary clears turn-local records.
 
 #### Protection and survival
 
@@ -521,6 +511,8 @@ effect can be represented there.
   side guards after accuracy and immunity checks. Endure survives each
   lethal direct hit that turn and takes priority over Sturdy and Focus Sash.
   Indirect HP effects can still faint the holder.
+- Hyper Drill and Mighty Cleave hit through applicable guards and leave them
+  active for later moves.
 - King's Shield and Mat Block retain historical mode handling for supplied move
   data. The Scarlet/Violet catalogue omits their records. Doubles still needs
   target enumeration for side protection across multiple active positions.
@@ -557,43 +549,59 @@ effect can be represented there.
 
 #### Ability, type, form and moveset mutation
 
-- Define which identity fields belong to the base Pokémon and which can be
-  overridden during battle. Reuse the effective ability and type readers.
-  Give Skill Swap eligibility checks and ability exit and entry hooks. Route
-  Gastro Acid through suppression and Soak and Conversion through type
-  overrides with explicit cleanup.
-- Keep a bounded overlay for copied stats, types, abilities and move slots.
-  Give Transform, Mimic and Sketch their own lifetime and PP rules. Verify
-  copied versus original slots, switch restoration, suppression and resumption
-  of ability effects, and public information after each mutation.
+- Skill Swap, Role Play, Entrainment, Simple Beam, Worry Seed and Gastro Acid
+  share ability identity, eligibility and lifecycle hooks. Trace, Imposter,
+  ability-changing contact reactions and Neutralizing Gas use those same
+  effective-ability readers. Ability Shield protects its holder from ability
+  replacement and suppression, including with Klutz.
+- Soak, Magic Powder, Reflect Type, Conversion and Conversion 2 replace or copy
+  typing. Forest's Curse contributes an added type to matchups. Double Shock
+  removes Electric after a successful hit. Color Change applies after the attack.
+- Power Trick, Guard Split, Power Split and Speed Swap change raw stats.
+  Psych Up and the stage-swap moves work on stages independently. Baton Pass
+  transfers Power Trick to the incoming Pokémon's own stats.
+- Transform and Imposter copy combat identity, stages and move slots. Transform
+  caps copied PP at five, Mimic uses the copied move's base PP, and Sketch keeps
+  the copy for the rest of the battle. Temporary copies restore their original
+  slots when the user leaves.
+- Hunger Switch, Relic Song and Gulp Missile use switch-cleared forms. Disguise,
+  Ice Face, Shields Down, Zero to Hero and Tera Shift use the lifetime of their
+  own form rules. Plates set Multitype typing. Griseous Core, Adamant Crystal,
+  Lustrous Globe, Rusted Sword and Rusted Shield apply the matching bound forms.
+- Illusion and player-selected transformations still need their own lifecycle
+  and disclosure rules. Move and ability metadata outside the current catalogue
+  may need additional rules for other generations.
 
 #### Custom stats, healing and costs
 
-- Separate raw stat overrides from stage changes. Use raw overrides for Guard
-  Split and Power Trick, and record how Stockpile's count relates to its stage
-  changes. Apply Belly Drum's eligibility and HP cost before its Attack change.
-- Keep Strength Sap's heal amount and stat-drop result explicit. Resolve
-  Synthesis's weather at execution. Test odd maximum HP, full HP, Heal Block,
-  prevention of stat changes, weather suppression and switch cleanup.
+- Belly Drum pays its HP cost before setting Attack. Stockpile tracks its
+  actual Defense and Special Defense changes separately from the count.
+  Swallow and Spit Up consume those layers and remove their recorded stages.
+- Strength Sap captures staged target Attack and separately applies the Attack
+  drop. Synthesis, Moonlight, Morning Sun and Shore Up read effective weather
+  at execution.
 
 #### Special damage outcomes
 
-- Select the damage rule before committing HP. Share fixed damage for Seismic
-  Toss and Final Gambit while keeping Final Gambit's source HP snapshot and
-  self-faint trigger separate. Give Fissure an OHKO-specific eligibility check
-  and accuracy rule. Apply False Swipe's survival floor only to the recipient
-  covered by its rule.
-- Choose Present's damage or heal result with the battle key. Route Steel
-  Beam's direct cost and Supercell Slam's crash through their attempt
-  finalization triggers. Verify immunity, protection, Substitute, Sturdy,
-  faint attribution and costs on all relevant failed or interrupted attempts.
+Team construction projects the catalogue names into scalar `DamageRule` and
+`MoveHpCost` metadata. The move attempt carries those rules through the existing
+accuracy, protection, hit, and fainting paths. The rules add no persistent battle
+state.
+
+| Moves | Represented singles behavior |
+| --- | --- |
+| Final Gambit | After a hit passes its gates, snapshot the user's current HP and record the user's faint before applying that fixed damage to the target or its Substitute. |
+| Fissure, Guillotine, Horn Drill, Sheer Cold | Use level-based accuracy independent of accuracy and evasion stages, then commit max-HP damage through normal recipient and survival handling. Higher-level targets, ordinary immunities, and Sturdy block the hit. Sturdy is revealed when it blocks the move. Sheer Cold also rejects Ice targets and starts at 20% accuracy for a non-Ice user. |
+| False Swipe | Cap damage against the Pokémon at its current HP minus one. Contact effects can still trigger at one HP, and a Substitute takes the uncapped hit. |
+| Present | Sample one keyed outcome during move preparation. Heal the target by one quarter of its max HP with 20% probability, or use power 40, 80, or 120 with 40%, 30%, and 10% probability respectively. The heal can reach the Pokémon behind a Substitute. |
+| Steel Beam and Chloroblast | Pay half maximum HP rounded up after dealing damage, including damage to a Substitute. Steel Beam also pays after a failed hit. An interruption before the attempt pays neither cost. Magic Guard prevents both costs, and Rock Head prevents Chloroblast's recoil. |
 
 #### Field and accuracy conditions
 
-- Give each condition an owner, start and end hooks, and a timer where needed.
-  Use field state for Gravity, Magic Room and Wonder Room, side state for
-  Safeguard and Mist, and active state for Magnet Rise and Focus Energy. Store
-  the intended target identity for Lock-On.
+- Gravity, Magic Room and Wonder Room use field timers. Safeguard and Mist
+  belong to the side. Magnet Rise and Focus Energy belong to the active
+  Pokémon. Lock-On stores the target's team-slot identity and expires when
+  either Pokémon leaves.
 - Pass each live condition into the relevant grounding, item, defense, status,
   stat, accuracy or critical-hit query. Verify starting and ending mid-turn,
   reapplication, switch cleanup and interaction with already-queued actions.
@@ -608,8 +616,8 @@ effect can be represented there.
   from the affected actor's eligible prior action.
 - Keep queue edits in `battle.scheduler`. After You and Quash should change
   the order of pending actions while preserving actor identity and the
-  execution cursor. Upper Hand and Thunderclap need predicates over the
-  target's queued action. Verify ties, acted and replaced targets, called
+  execution cursor. Upper Hand and Thunderclap share a queued-attack
+  predicate with Sucker Punch. Verify ties, acted and replaced targets, called
   moves that fail, PP use and the ordering of subsequently queued actions.
 
 #### Doubles targeting and combinations
@@ -626,15 +634,13 @@ effect can be represented there.
 
 #### Transformations
 
-- Start with Terastallization. Record per-side use and per-Pokémon
-  transformation state. Use the same eligibility rule for action validation
-  and masks. Schedule transformation at the ruleset's action boundary and
-  publish the appropriate state in observations.
-- Resolve defensive typing, STAB and effective move properties from the
-  transformed snapshot before hit routing. Add Tera Blast's type and category
-  behavior and Tera Starstorm's form and target behavior. Verify once-per-battle
-  eligibility, switching, Stellar interactions and public information. Keep
-  Mega, Z-Move and Dynamax policies behind their own ruleset support.
+- Ordinary-type Tera shares eligibility between typed action validation and
+  masks. The scheduler resolves it after switches and before move actions.
+  The transformed Pokémon retains its original offensive typing for STAB
+  and uses its Tera type for defense. Tera Blast uses the Tera type and the
+  better staged attacking stat after transformation.
+- Stellar typing, species-specific Tera forms and Tera Starstorm remain open.
+  Mega, Z-Move and Dynamax need their own ruleset support.
 
 Supported means the represented singles effect exists. Known cross-cutting
 gaps include status-failure classification, residual ordering, ability/item
@@ -647,8 +653,8 @@ inactive no-op remains separate. Attack index 4 represents
 forced Struggle. Legacy integer inputs and the existing flat legal-action mask
 are retained as compatibility adapters.
 An independent `transformation` field uses `Transformation.NONE`, `MEGA`,
-`Z_MOVE`, `DYNAMAX`, or `TERA`. Non-`NONE` requests remain rejected until
-the corresponding battle mechanics and eligibility checks are implemented.
+`Z_MOVE`, `DYNAMAX`, or `TERA`. The typed Tera action is available where
+the ordinary-type singles eligibility mask permits it.
 
 Roost uses a turn-scoped, switch-cleared volatile flag. The effective active
 snapshot removes Flying without mutating stored types; pure Flying becomes

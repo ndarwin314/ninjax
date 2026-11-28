@@ -7,16 +7,18 @@ import jax.numpy as jnp
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.pokemon import StatEnum
 from ninjax.records.events import Cause, EventKind, emit
-from ninjax.side.trapping import clear_binding
+from ninjax.side.state import ActiveResiduals
+from ninjax.side.trapping import clear_binding, clear_source_linked
 from ninjax.side.updates import conditional_add_boosts, update_active_fields
 
 
 def _end_fainted_effects(state, *, target):
     """End represented effects that require the original holder to stay active."""
     state = clear_destiny_bond(state, target)
-    state = clear_binding(state, 1 - target)
+    state = clear_binding(clear_source_linked(state, target), target)
     v = state.volatile_status
     v = v.replace(
+        residuals=jax.tree.map(partial(_reset_residual_row, target=target), v.residuals, ActiveResiduals()),
         ability_state=v.ability_state.replace(
             ability_override=v.ability_state.ability_override.at[target, 0].set(-1),
             ability_suppressed=v.ability_state.ability_suppressed.at[target, 0].set(False),
@@ -30,6 +32,11 @@ def _end_fainted_effects(state, *, target):
         substitute_hp=v.substitute_hp.at[target, 0].set(0))
     return state.replace(volatile_status=v,
         switch_requested=state.switch_requested.at[target].set(False))
+
+
+def _reset_residual_row(values, defaults, *, target):
+    """Drop the fainted holder's timers while retaining side-owned Wish."""
+    return values.at[target].set(defaults[target])
 
 
 def _apply_ko_ability(state, *, source):
@@ -110,6 +117,9 @@ def record_faint(state, target, source, cause, enabled):
     """Save a faint's identity and cause independently of observation events."""
     faints = state.pending_faints
     enabled = jnp.asarray(enabled).reshape(()) & ~faints.pending[target]
+    history = state.damage_history
+    state = state.replace(damage_history=history.replace(
+        total_fainted=history.total_fainted.at[target].add(enabled.astype(jnp.int32))))
     source = jnp.asarray(source, jnp.int32)
     source_slot = jnp.where(source >= 0, state.active_index[jnp.clip(source, 0, 1), 0], -1)
     return state.replace(pending_faints=faints.replace(
@@ -131,6 +141,11 @@ def commit_hp_change(state, player, old_hp, new_hp, max_hp, source, cause, attac
     new_hp = jnp.where(old_hp > 0, new_hp, old_hp)
     fainted = (old_hp[0] > 0) & (new_hp[0] == 0)
     state = update_active_fields(state, player, current_hp=new_hp, is_alive=new_hp > 0)
+    history = state.damage_history
+    slot = state.active_index[player, 0]
+    history = history.replace(hurt_this_turn=history.hurt_this_turn.at[player, slot].set(
+        history.hurt_this_turn[player, slot] | (new_hp[0] < old_hp[0])))
+    state = state.replace(damage_history=history)
     v = state.volatile_status
     loss = jnp.where(attack, jnp.maximum(old_hp - new_hp, 0), v.move_history.last_damage[player])
     state = state.replace(volatile_status=v.replace(move_history=v.move_history.replace(last_damage=v.move_history.last_damage.at[player].set(loss))))

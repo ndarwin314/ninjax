@@ -19,7 +19,10 @@ from ninjax.enums.field import Terrain, Weather
 from ninjax.records.events import Cause
 from ninjax.restrictions import tick_hit_restrictions
 from ninjax.side.faint_effects import direct_faint, resolve_faints
+from ninjax.side.form_effects import reactive_form_update
 from ninjax.side.item_effects import refresh_paradox, update_items
+from ninjax.side.property_effects import toggle_hunger_form
+from ninjax.side.residual_conditions import tick_syrup_bomb, tick_yawn
 from ninjax.side.state import BattleState
 from ninjax.side.trapping import tick_binding
 
@@ -90,14 +93,20 @@ def step_field(
 
     order = residual_speed_order(state)
     key, state = step_side_conditions(key, state)
-    state = run_hp_residuals(state, (ResidualHPPhase.WEATHER, ResidualHPPhase.GRASSY_TERRAIN), order)
+    state = run_hp_residuals(state, (ResidualHPPhase.WEATHER, ResidualHPPhase.WISH, ResidualHPPhase.GRASSY_TERRAIN), order)
     key, state = lax.cond(state.winner < 0, _before_status, _skip_ordered_group, key, state, order)
-    state = run_hp_residuals(state, (ResidualHPPhase.POISON, ResidualHPPhase.BURN), order)
-    state = run_hp_residuals(tick_binding(state), (ResidualHPPhase.BINDING,), order)
+    phase = ResidualHPPhase
+    state = run_hp_residuals(state, (phase.AQUA_RING, phase.INGRAIN, phase.LEECH_SEED,
+                                    phase.POISON, phase.BURN, phase.CURSE), order)
+    state = run_hp_residuals(tick_binding(state), (phase.BINDING_AND_SALT,), order)
+    state = lax.cond(state.winner < 0, tick_syrup_bomb, _keep_hit_restrictions, state, order)
     state = lax.cond(state.winner < 0, tick_hit_restrictions, _keep_hit_restrictions, state, order)
+    key, state = lax.cond(state.winner < 0, tick_yawn, _skip_ordered_group, key, state, order)
     key, state = lax.cond(state.winner < 0, _perish_residual, _skip_residual_effects, key, state)
     key, state = lax.cond(state.winner < 0, _late_residuals, _skip_ordered_group, key, state, order)
 
+    wish = state.slot_residuals
+    wish_turns = jnp.maximum(wish.wish_turns - 1, 0)
     state = state.replace(
         turn_number=state.turn_number + 1,
         weather=Weather(new_weather, weather_duration),
@@ -105,16 +114,28 @@ def step_field(
         trick_room_duration=jnp.maximum(state.trick_room_duration - 1, 0),
         gravity_duration=jnp.maximum(state.gravity_duration - 1, 0),
         magic_room_duration=jnp.maximum(state.magic_room_duration - 1, 0),
+        wonder_room_duration=jnp.maximum(state.wonder_room_duration - 1, 0),
+        fairy_lock_turns=jnp.maximum(state.fairy_lock_turns - 1, 0),
+        slot_residuals=wish.replace(wish_turns=wish_turns, wish_hp=jnp.where(wish_turns > 0, wish.wish_hp, 0)),
         volatile_status=state.volatile_status.replace(
             roost=jnp.zeros_like(state.volatile_status.roost),
+            magnet_rise_turns=jnp.maximum(state.volatile_status.magnet_rise_turns - 1, 0),
+            lock_on_target_slot=jnp.where(state.volatile_status.lock_on_turns > 1,
+                                         state.volatile_status.lock_on_target_slot, -1),
+            lock_on_turns=jnp.maximum(state.volatile_status.lock_on_turns - 1, 0),
+            queued_move=state.volatile_status.queued_move.replace(
+                preparation=jnp.zeros_like(state.volatile_status.queued_move.preparation),
+                focus_lost=jnp.zeros_like(state.volatile_status.queued_move.focus_lost)),
             move_history=state.volatile_status.move_history.replace(
                 previous_move_result=state.volatile_status.move_history.move_result,
                 move_result=jnp.zeros_like(state.volatile_status.move_history.move_result))),
     )
 
-    return key, refresh_paradox(state)
+    state = toggle_hunger_form(toggle_hunger_form(state, 0), 1)
+    state = reactive_form_update(reactive_form_update(state, 0, False), 1, False)
+    return key, refresh_paradox(state.replace(damage_history=state.damage_history.reset_turn()))
 
 
 def _keep_hit_restrictions(state, order):
-    """Leave move restriction timers alone once the battle is terminal."""
+    """Preserve condition state once the battle is terminal."""
     return state

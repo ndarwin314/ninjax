@@ -7,22 +7,26 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 
-from ninjax.ability_effects import worry_seed
+from ninjax.ability_effects import ability_move
 from ninjax.battle.switching import force_switch_target, forced_switch_move, queue_entry_recovery, reflected_switching_source
 from ninjax.enums.abilities import AbilityEnum
+from ninjax.enums.moves import MoveFlags
 from ninjax.enums.field import TerrainEnum
-from ninjax.enums.pokemon import StatEnum, Status
+from ninjax.enums.pokemon import StatEnum, Status, Type
 from ninjax.moves.model import Move
 from ninjax.moves.protection import apply_protection, blocked_by_protection
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
 from ninjax.restrictions import apply_persistent_restriction, apply_restriction
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
-from ninjax.side.field_conditions import field_status, set_terrain, set_weather
+from ninjax.side.field_conditions import FIELD_CONDITION_MOVES, field_condition_effect, field_status, set_terrain, set_weather
 from ninjax.side.hp_effects import take_damage_percent, take_damage_value
 from ninjax.side.item_effects import after_hp_change, force_eat_berry, is_berry, recycle_item, status_berry, swap_items
+from ninjax.side.property_effects import COPY_MOVES, STAT_MOVES, TYPE_MOVES, copy_move, stat_move, transform, type_move
 from ninjax.side.queries import ability_against_move
+from ninjax.side.residual_conditions import RESIDUAL_STATUS_MOVES, apply_residual_status
 from ninjax.side.stat_effects import stat_changes
+from ninjax.side.stat_healing import belly_drum, stockpile, strength_sap, swallow, weather_heal
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import apply_confusion, set_status
 from ninjax.side.updates import update_active_fields
@@ -183,10 +187,52 @@ def _status_substitute(k, s, *, attacker_idx):
     return (k, create_substitute(s, attacker_idx))
 
 
-def _status_worry_seed(k, s, *, attacker_idx):
-    """Apply Worry Seed while retaining the current random key."""
+def _ability_status(key, state, *, player, ident):
+    """Dispatch an ability override or suppression."""
+    state, success = ability_move(state, player, ident)
+    return key, state, success
 
-    return (k, worry_seed(s, attacker_idx))
+
+def _stat_status(key, state, *, player, ident):
+    """Dispatch a stage or raw stat replacement."""
+    return key, stat_move(state, player, ident), jnp.bool_(True)
+
+
+def _copy_status(key, state, *, player, ident):
+    """Dispatch moveset copying and full Transform."""
+    state, success = jax.lax.cond(ident == 144, _transform_move, copy_move, state, player, ident)
+    return key, state, success
+
+
+def _transform_move(state, player, ident):
+    """Return the result of a full Transform."""
+    return transform(state, player)
+
+
+def _type_status(key, state, *, player, ident):
+    """Dispatch a type change with its explicit PRNG key."""
+    return type_move(key, state, player, ident)
+
+
+def _blocked_property(key, state):
+    """Skip a reflected move whose new target blocks it."""
+    return key, state, jnp.bool_(False)
+
+
+def _status_property(key, state, *, attacker_idx, move):
+    """Mutate active properties and mark unsuccessful attempts."""
+    ident = move.identifier[0]
+    branch = jnp.select((jnp.isin(ident, jnp.array(TYPE_MOVES)), jnp.isin(ident, jnp.array(STAT_MOVES)),
+                         jnp.isin(ident, jnp.array(COPY_MOVES))), (1, 2, 3), default=0)
+    reflectable = (move.move_flags[0] & MoveFlags.REFLECTABLE) != 0
+    source = jnp.where(reflectable, reflected_switching_source(state, attacker_idx, move), attacker_idx)
+    target = jnp.where(move.target_self[0], source, 1-source)
+    blocked = (source != attacker_idx) & (blocked_by_protection(state, move, source) |
+        (ability_against_move(state, target, move)[0] == AbilityEnum.GOOD_AS_GOLD))
+    handlers = (_ability_status, _type_status, _stat_status, _copy_status)
+    key, state, success = jax.lax.switch(jnp.where(blocked, 4, branch),
+        tuple(partial(handler, player=source, ident=ident) for handler in handlers) + (_blocked_property,), key, state)
+    return key, jax.lax.cond(success, _identity, partial(_record_status_failure, target=target), state)
 
 
 def _status_direct(k, s, *, attacker_idx, move):
@@ -288,6 +334,49 @@ def _parting_shot(key, state, *, attacker_idx, move):
     return key, state.replace(event_context=context, switch_requested=state.switch_requested.at[source].set(success))
 
 
+def _skipped_residual_application(state, player, move):
+    """Skip a reflected residual move that its new target blocks."""
+    return state, jnp.bool_(False)
+
+
+def _status_residual(key, state, *, attacker_idx, move):
+    """Route move-created residuals through eligibility and reflection."""
+    from_side = reflected_switching_source(state, attacker_idx, move)
+    reflected = ((move.move_flags[0] & MoveFlags.REFLECTABLE) != 0) & (from_side != attacker_idx)
+    source = jnp.where(reflected, from_side, attacker_idx)
+    target = jnp.where(move.target_self[0], source, 1-source)
+    grass_seed_target = (move.identifier[0] == 73) & jnp.any(
+        state.effective_types(1-attacker_idx, include_added=True) == Type.GRASS)
+    blocked = reflected & (blocked_by_protection(state, move, source) |
+        (ability_against_move(state, target, move)[0] == AbilityEnum.GOOD_AS_GOLD))
+    blocked |= grass_seed_target
+    old = state.event_context
+    state = state.replace(event_context=old.replace(source=source))
+    state, success = jax.lax.cond(blocked, _skipped_residual_application, apply_residual_status, state, source, move)
+    state = state.replace(event_context=old)
+    return key, jax.lax.cond(success, _identity, partial(_record_status_failure, target=target), state)
+
+
+def _special_status(key, state, *, attacker_idx, move):
+    """Dispatch stat-cost and contextual healing moves through shared helpers."""
+    ident = move.identifier[0]
+    branch = jnp.select((ident == 187, ident == 254, ident == 256, ident == 668),
+                        (0, 1, 2, 3), default=4)
+    return key, jax.lax.switch(branch, (
+        partial(belly_drum, player=attacker_idx),
+        partial(stockpile, player=attacker_idx),
+        partial(swallow, player=attacker_idx),
+        partial(strength_sap, player=attacker_idx),
+        partial(weather_heal, player=attacker_idx, ident=ident)), state)
+
+
+def _timed_condition_status(key, state, *, attacker_idx, move):
+    """Start or toggle a field condition and record rejected reapplication."""
+    state, success = field_condition_effect(state, attacker_idx, move)
+    target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
+    return key, jax.lax.cond(success, _identity, partial(_record_status_failure, target=target), state)
+
+
 def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value):
     """Select a status handler, leaving forced switching to its dispatch path."""
     ident = move.identifier[0]
@@ -299,13 +388,15 @@ def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value
          (ident == 271) | (ident == 415),   # Trick / Switcheroo
          ident == 194,                     # Destiny Bond
          ident == 164,                     # Substitute
-         ident == 388,                    # Worry Seed
+         jnp.isin(ident, jnp.array((272, 285, 380, 388, 493, 494) + TYPE_MOVES + STAT_MOVES + COPY_MOVES)),
          (ident == 259) | (ident == 286),  # Torment / Imprison
          (ident == 361) | (ident == 461) | (ident == 863),
          (ident == 747) | (ident == 752) | (ident == 278),
-         ident == 575),
-        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
-        default=10,
+         ident == 575, jnp.isin(ident, jnp.array(RESIDUAL_STATUS_MOVES)),
+         jnp.isin(ident, jnp.array([187, 254, 256, 668, 235, 236, 234, 659])),
+         jnp.isin(ident, jnp.array(FIELD_CONDITION_MOVES))),
+        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+        default=13,
     )
     return jax.lax.switch(
         branch,
@@ -315,11 +406,14 @@ def _status_move_effects(key, state, attacker_idx, move, stat_index, boost_value
             partial(_status_swap_items, attacker_idx=attacker_idx),
             partial(_status_destiny_bond, attacker_idx=attacker_idx),
             partial(_status_substitute, attacker_idx=attacker_idx),
-            partial(_status_worry_seed, attacker_idx=attacker_idx),
+            partial(_status_property, attacker_idx=attacker_idx, move=move),
             partial(_status_persistent_restriction, attacker_idx=attacker_idx, move=move),
             partial(_status_recovery_request, attacker_idx=attacker_idx, move=move),
             partial(_status_item_use, attacker_idx=attacker_idx, move=move),
             partial(_parting_shot, attacker_idx=attacker_idx, move=move),
+            partial(_status_residual, attacker_idx=attacker_idx, move=move),
+            partial(_special_status, attacker_idx=attacker_idx, move=move),
+            partial(_timed_condition_status, attacker_idx=attacker_idx, move=move),
             partial(_generic_status_move, attacker_idx=attacker_idx, move=move,
                     stat_index=stat_index, boost_value=boost_value),
         ),
@@ -384,7 +478,7 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     target = jnp.where(move.target_self[0], attacker_idx, 1 - attacker_idx)
     # Record these explicit failure conditions independently of HP deltas, so
     # previous-turn move results distinguish failed healing/status attempts.
-    heal_failed = ((move.identifier[0] == 105) | (move.identifier[0] == 355)) & (state.active.current_hp[target, 0] >= state.active.max_hp[target])
+    heal_failed = (move.healing_fraction[0] > 0) & (state.active.current_hp[target, 0] >= state.active.max_hp[target])
     status_failed = (move.status_effect[0] != Status.NONE) & (
         (state.active.status[target, 0] != Status.NONE) | state.is_status_immune(target, move.status_effect)[0])
     roost_succeeds = (move.identifier[0] == 355) & (state.active.current_hp[attacker_idx, 0] > 0) & (state.active.current_hp[attacker_idx, 0] < state.active.max_hp[attacker_idx])
@@ -422,6 +516,12 @@ def _generic_status_move(key, state, attacker_idx, move, stat_index, boost_value
     # Chilly Reception can pivot even when snow was already active.
     field_failed &= move.identifier[0] != 881
     state = field_status(state, attacker_idx, move)
+    # Defense Curl's stage boost and its Rollout power effect have separate
+    # lifetimes. The power effect persists even if the Defense stage is capped.
+    v = state.volatile_status
+    curled = v.defense_curl[attacker_idx, 0] | (move.identifier[0] == 111)
+    state = state.replace(volatile_status=v.replace(
+        defense_curl=v.defense_curl.at[attacker_idx, 0].set(curled)))
 
     state = apply_restriction(state, attacker_idx, move)
     state = set_weather(state, move.weather_effect[0], 5)

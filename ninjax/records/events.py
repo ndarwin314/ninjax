@@ -28,6 +28,9 @@ class EventKind(IntEnum):
     ABILITY = 15
     ITEM_REVEALED = 16
     MOVE_FAILED = 17
+    TYPE = 18
+    FORM = 19
+    MOVE_COPY = 20
 
 class Cause(IntEnum):
     """Cause."""

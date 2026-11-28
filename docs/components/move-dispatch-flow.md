@@ -121,10 +121,10 @@ flowchart TD
     R --> T
 ```
 
-Recharge bypasses `before_move`. A charge release does not pay PP again.
-Struggle uses a synthetic move and has its own recoil path. In the public action
-encoder, non-`NONE` transformations are rejected; the internal `is_tera`
-parameter is not evidence of a complete transformation lifecycle.
+Recharge bypasses `before_move`. Charge releases and repeat continuations
+reuse the shared move executor without paying PP again. Struggle uses a
+synthetic move and has its own recoil path. The scheduler resolves accepted
+Tera declarations after switches and before executing queued attacks.
 
 ## 4. Move preparation and special dispatch
 
@@ -256,7 +256,7 @@ before the scan; some multi-hit moves check later hits independently. The
 accumulated `damage` is calculated damage, while `HitResults` records actual
 loss for an individual hit. Multi-hit recoil aggregation by total actual HP loss
 is not implemented. Only certain `after_damage` callbacks also run after a
-Substitute hit. See [passive mechanics](random-battle-passives.md) for supported
+Substitute hit. See [passive mechanics](../mechanics/random-battle-passives.md) for supported
 ability/item hooks and their limitations.
 
 ## 7. Status branch and turn aftermath

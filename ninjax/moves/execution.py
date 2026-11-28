@@ -15,16 +15,19 @@ from ninjax.ability_effects import prepare_type_change
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.field import WeatherEnum
 from ninjax.enums.items import ItemEnum
-from ninjax.enums.moves import MoveType, SemiInvulnerability
+from ninjax.enums.moves import MoveFlags, MoveType, SemiInvulnerability
 from ninjax.enums.pokemon import StatEnum, Status
 from ninjax.moves.finalization import _struggle_recoil, finish_attempt
+from ninjax.moves.locked import update_lock
 from ninjax.moves.properties import effective_move
 from ninjax.moves.routing import _apply_move_effects, move_misses
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitResults, record_hit
 from ninjax.restrictions import move_blocked_at_execution
 from ninjax.side.faint_effects import clear_destiny_bond, direct_faint
-from ninjax.side.item_effects import consume
+from ninjax.side.form_effects import catch_gulp_missile
+from ninjax.side.item_effects import consume, held_item_active
+from ninjax.side.property_effects import _pack_bank, _unpack_bank
 from ninjax.side.queries import effective_weather, is_choice_item
 from ninjax.side.state import BattleState
 from ninjax.side.updates import add_boosts, update_active_fields
@@ -160,13 +163,13 @@ def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
             cause=jnp.int32(Cause.MOVE)))
     state = emit(state, EventKind.MOVE, attacker_index, detail=move.identifier[0])
 
-    choice = is_choice_item(state.active.item[attacker_index, 0])
+    choice = is_choice_item(state.active.item[attacker_index, 0]) & held_item_active(state, attacker_index)
     lock = state.volatile_status.restrictions.choice_lock
     state = state.replace(volatile_status=state.volatile_status.replace(restrictions=state.volatile_status.restrictions.replace(choice_lock=lock.at[attacker_index, 0].set(
         jnp.where(choice & (lock[attacker_index, 0] < 0), move_index, lock[attacker_index, 0])))))
     # Moves that call other moves do not themselves activate Protean/Libero.
     state = jax.lax.cond(
-        move.identifier[0] == 214,
+        (move.identifier[0] == 214) | (move.identifier[0] == 383) | (move.identifier[0] == 118),
         _identity,
         partial(_prepare_move_type_change, attacker_index=attacker_index, move=move),
         state,
@@ -177,7 +180,8 @@ def _prepare_move_use(key, state: BattleState, attacker_index, move_index):
     slot = state.active_index[attacker_index, 0]
     moves = state.team.moves
     state = state.replace(team=state.team.replace(moves=moves.replace(
-        current_pp=moves.current_pp.at[attacker_index, slot, move_index].add(-1))))
+        current_pp=moves.current_pp.at[attacker_index, slot, move_index].add(-1))),
+        used_move_ids=state.used_move_ids.at[attacker_index, slot, move_index].set(move.identifier[0]))
     return key, state
 
 
@@ -239,15 +243,19 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
     """
     struggle = state.event_context.move_id == -1
     move = state.active_moves(attacker_index, move_index)
-    explosion = (move.identifier[0] == 153) & move.implemented[0]
+    explosion = move.detonates[0] & move.implemented[0]
     charge_move = jnp.isin(move.identifier[0], jnp.array([19, 76, 91, 143, 291, 340, 467, 553, 554, 566, 669, 800, 905])) & move.implemented[0]
 
     v = state.volatile_status
     target = 1-attacker_index
-    fake_fails = (move.identifier[0] == 252) & (v.move_history.active_move_actions[attacker_index, 0] > 1)
-    sucker_fails = (move.identifier[0] == 389) & (~v.queued_move.pending_move[target, 0] |
+    first_turn_only = (move.identifier[0] == 252) | (move.identifier[0] == 660)
+    fake_fails = first_turn_only & (v.move_history.active_move_actions[attacker_index, 0] > 1)
+    needs_pending_attack = (move.identifier[0] == 389) | (move.identifier[0] == 909) | (move.identifier[0] == 918)
+    sucker_fails = needs_pending_attack & (~v.queued_move.pending_move[target, 0] |
         (v.queued_move.pending_move_type[target, 0] == MoveType.STATUS) |
         (v.queued_move.pending_actor_slot[target, 0] != state.active_index[target, 0]))
+    # Upper Hand also requires the queued opposing attack to have positive priority.
+    sucker_fails |= (move.identifier[0] == 918) & (v.queued_move.queued_priority[target, 0] <= 0)
 
 
     # Releases and Struggle bypass initial failure/charge checks. Preserve
@@ -280,6 +288,7 @@ def dispatch_selected_move(key, state, attacker_index, move_index, continued=Fal
         key,
         state,
     )
+    key, state = update_lock(key, state, attacker_index, move, continued)
     # Explosion's saved HP is action-local, even when the target was unaffected.
     state = jax.lax.cond(
         explosion & ready & ~struggle,
@@ -346,6 +355,22 @@ def _use_selected_slot(k, s, p, i):
     return (k, s, jnp.asarray(i, jnp.int32), jnp.bool_(True))
 
 
+def _remember_executed_move(state, move):
+    """Retain the most recently attempted move independently of the move bank."""
+    return state.replace(last_executed_move=_pack_bank(move))
+
+
+def _replace_move_slot(bank, move, *, player, slot, index):
+    """Temporarily write one called move into an active Pokémon's move bank."""
+    return bank.at[player, slot, index].set(move)
+
+
+def _restore_called_slot(bank, original, *, player, slot, index, unchanged):
+    """Restore the caller's move unless the called move replaced that slot."""
+    return bank.at[player, slot, index].set(
+        jnp.where(unchanged, original, bank[player, slot, index]))
+
+
 def _restore_sleep_talk_context(s, *, old_move, player, old_override):
     """Restore Sleep Talk's event and Encore context after success or failure."""
     v = s.volatile_status
@@ -357,29 +382,64 @@ def _restore_sleep_talk_context(s, *, old_move, player, old_override):
                 encore_overridden=v.queued_move.encore_overridden.at[player, 0].set(old_override))))
 
 
+def _install_copycat(state, *, player, index, called):
+    """Temporarily install the selected previous move for the shared dispatch."""
+    slot = state.active_index[player, 0]
+    moves = jax.tree.map(partial(_replace_move_slot, player=player, slot=slot, index=index),
+                         state.team.moves, called)
+    state = state.replace(team=state.team.replace(moves=moves),
+        event_context=state.event_context.replace(move_id=called.identifier[0]))
+    state = prepare_type_change(state, player, effective_move(state, player, called))
+    return emit(state, EventKind.MOVE, player, detail=called.identifier[0])
+
+
+def _restore_copycat(state, *, player, slot, index, original, identifier, old_move):
+    """Restore the caller's slot unless the called move replaced its identity."""
+    unchanged = state.team.moves.identifier[player, slot, index, 0] == identifier
+    moves = jax.tree.map(partial(_restore_called_slot, player=player, slot=slot,
+                                 index=index, unchanged=unchanged), state.team.moves, original)
+    return state.replace(team=state.team.replace(moves=moves),
+                         event_context=state.event_context.replace(move_id=old_move))
+
+
 def _execute_selected_or_called_move(key, state, player, move_index, sleep_talk, continued=False):
-    """Select the effective slot, dispatch once and restore called-move context."""
+    """Select a move, dispatch once, and restore any temporary caller slot."""
     old_move = state.event_context.move_id
     old_override = state.volatile_status.queued_move.encore_overridden[player, 0]
     key, state, selected, ready = jax.lax.cond(sleep_talk, _prepare_sleep_talk,
-        _use_selected_slot,
-        key, state, player, move_index)
-    key, state = jax.lax.cond(
-        ready,
-        partial(dispatch_selected_move, continued=continued),
-        _unchanged_selected_move,
-        key,
-        state,
-        player,
-        selected,
-    )
-
+        _use_selected_slot, key, state, player, move_index)
+    original = state.active_moves(player, selected)
+    copycat = (original.identifier[0] == 383) & original.implemented[0]
+    called = _unpack_bank(state.last_executed_move, original)
+    allowed = ((called.identifier[0] > 0) & called.implemented[0] &
+               ((called.move_flags[0] & MoveFlags.FAIL_COPYCAT) == 0) &
+               (called.identifier[0] != 383))
+    install = ready & copycat & allowed
+    failed = ready & copycat & ~allowed
+    slot = state.active_index[player, 0]
+    state = jax.lax.cond(failed, partial(_record_copycat_failure, player=player), _identity, state)
+    state = jax.lax.cond(install,
+        partial(_install_copycat, player=player, index=selected, called=called), _identity, state)
+    active_move = state.active_moves(player, selected)
+    state = jax.lax.cond(ready & ~failed, partial(_remember_executed_move, move=active_move),
+                         _identity, state)
+    key, state = jax.lax.cond(ready & ~failed,
+        partial(dispatch_selected_move, continued=continued), _unchanged_selected_move,
+        key, state, player, selected)
+    state = jax.lax.cond(install,
+        partial(_restore_copycat, player=player, slot=slot, index=selected,
+                original=original, identifier=called.identifier[0], old_move=old_move),
+        _identity, state)
     return key, jax.lax.cond(
         sleep_talk & ready,
         partial(_restore_sleep_talk_context, old_move=old_move, player=player, old_override=old_override),
-        _identity,
-        state,
-    )
+        _identity, state)
+
+
+def _record_copycat_failure(state, *, player):
+    """Mark an attempt that has no eligible move in global history."""
+    state = record_hit(state, 0, player, HitOutcome.FAILED)
+    return emit(state, EventKind.MOVE_FAILED, player, detail=383)
 
 
 def execute_sleep_talk(key, state, player, move_index):
@@ -411,6 +471,7 @@ def prepare_charge_move(key, state, player, index):
     The forced continuation skips this helper and therefore never repeats boosts.
     """
     identifier = state.active_moves(player, index).identifier[0]
+    state = catch_gulp_missile(state, player, identifier == 291)
     boost = (identifier == 905) | (identifier == 800)
     state = jax.lax.cond(boost, partial(add_boosts, side_idx=player, idx=StatEnum.SPECIAL_ATTACK, val=1), _identity, state)
     weather = effective_weather(state.weather.weather, state.ability, state.active.current_hp)

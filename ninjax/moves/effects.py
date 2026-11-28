@@ -25,7 +25,8 @@ from ninjax.side.queries import ability_against_move, contact_reactions_allowed,
 from ninjax.side.stat_effects import conditional_reduce_boosts, stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import apply_confusion, set_status
-from ninjax.side.trapping import clear_binding
+from ninjax.side.residual_conditions import apply_residual_secondary, clear_leech_seed
+from ninjax.side.trapping import apply_linked_trap, clear_binding
 from ninjax.side.updates import add_boosts, clear_boosts, conditional_add_boosts
 
 
@@ -59,11 +60,11 @@ def _clear_hazard_row(values, *, player):
     return values.at[player].set(jnp.zeros_like(values[player]))
 
 
-def _after_damage_spin(s, *, player):
-    """Remove represented entry hazards and raise the surviving user's Speed."""
+def _after_damage_spin(s, *, player, rapid):
+    """Remove entry hazards and bindings, adding Speed for Rapid Spin."""
     s = s.replace(hazards=jax.tree.map(partial(_clear_hazard_row, player=player), s.hazards))
-    s = clear_binding(s, player)
-    return jax.lax.cond(s.active_field('current_hp', player)[0] > 0,
+    s = clear_leech_seed(clear_binding(s, player), player)
+    return jax.lax.cond(rapid & (s.active_field('current_hp', player)[0] > 0),
         partial(_after_damage_add_boosts, player=player), _preserve_operand, s)
 
 
@@ -179,7 +180,7 @@ def do_contact(key: chex.PRNGKey, state: BattleState, attacker_idx,
     defender_item = state.active_field('item', 1-attacker_idx)
     attacker_item = state.active_field('item', attacker_idx)
     # Snapshot powder immunity before contact damage and status reactions.
-    powder_immune = is_powder_immune_fields(state.effective_types(attacker_idx), attacker_ability)
+    powder_immune = is_powder_immune_fields(state.effective_types(attacker_idx, include_added=True), attacker_ability)
     reacts = contact_reactions_allowed(attacker_ability[0], attacker_item[0])
     key, def_key, attack_key = random.split(key, 3)
 
@@ -257,10 +258,35 @@ def _apply_secondary(key, state, *, target, move, ability, index):
         _secondary_confusion, _unchanged_secondary, key, state, target)
     state = stat_changes(state, target, effects.stats[index], effects.stages[index], True)
     state = jax.lax.cond(effects.restriction[index],
-        apply_hit_restriction, _skip_hit_restriction, state, target, move, ability)
+        _apply_secondary_condition, _skip_hit_restriction, state, target, move, ability)
     v = state.volatile_status
     flinch = effects.flinch[index] & (ability != A.INNER_FOCUS)
     return key, state.replace(volatile_status=v.replace(flinched=v.flinched.at[target, 0].set(v.flinched[target, 0] | flinch)))
+
+
+def _apply_secondary_condition(state, target, move, ability):
+    """Apply a restriction or an ongoing condition from a landed secondary."""
+    ident = move.identifier[0]
+    restriction = (ident == 675) | (ident == 917)
+    return jax.lax.cond(restriction, apply_hit_restriction, _apply_ongoing_secondary,
+                        state, target, move, ability)
+
+
+def _apply_ongoing_secondary(state, target, move, ability):
+    """Apply a non-restriction secondary to the active target."""
+    return apply_residual_secondary(state, target, move)
+
+
+def _jaw_lock(state, player):
+    """Link both participants when Jaw Lock lands on the real target."""
+    state, _ = apply_linked_trap(state, player, 1-player)
+    state, _ = apply_linked_trap(state, 1-player, player)
+    return state
+
+
+def _skip_jaw_lock(state, player):
+    """Preserve existing traps on other hits."""
+    return state
 
 
 def _skip_hit_restriction(state, target, move, ability):
@@ -326,8 +352,11 @@ def after_damage(state, player, move):
         hazards=state.hazards.replace(
             stealth_rocks=state.hazards.stealth_rocks.at[target].set(state.hazards.stealth_rocks[target] | (ident == 830)),
             spikes=state.hazards.spikes.at[target].set(jnp.minimum(3, state.hazards.spikes[target] + (ident == 845)))))
-    # Clear Smog, Ice Spinner and Rapid Spin each have one distinct callback.
-    branch = jnp.select((ident == 499, ident == 861, ident == 229), (0, 1, 2), default=3)
+    state = jax.lax.cond(ident == 746, _jaw_lock, _skip_jaw_lock, state, player)
+    terrain_clear = (ident == 861) | (ident == 798)
+    rapid = ident == 229
+    mortal = (ident == 866) & (state.active_field('current_hp', player)[0] > 0)
+    branch = jnp.select((ident == 499, terrain_clear, rapid | mortal), (0, 1, 2), default=3)
     return jax.lax.switch(branch,
         (partial(_after_damage_clear_boosts, target=target), _after_damage_update_field,
-         partial(_after_damage_spin, player=player), _preserve_operand), state)
+         partial(_after_damage_spin, player=player, rapid=rapid), _preserve_operand), state)

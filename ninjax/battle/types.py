@@ -66,9 +66,10 @@ class BattleAction(struct.PyTreeNode):
         noop = (self.move_type == ActionType.NO_OP) & (self.index == 0)
         encoded = jnp.where(attack, self.index, jnp.where(switch, self.index + 8,
             jnp.where(continued, 5, jnp.where(noop, 14, -1)))).astype(jnp.int32)
-        # Transformation identities are retained in the PyTree, but their
-        # eligibility and battle lifecycle are not implemented yet.
-        return jnp.where(self.transformation == Transformation.NONE, encoded, -1)
+        # The environment validates Tera eligibility against the battle state.
+        supported = (self.transformation == Transformation.NONE) | (
+            (self.transformation == Transformation.TERA) & attack)
+        return jnp.where(supported, encoded, -1)
 
     @classmethod
     def from_legacy(cls, action):

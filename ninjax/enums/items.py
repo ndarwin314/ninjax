@@ -67,3 +67,9 @@ class ItemEnum(JaxEnum):
     GRIP_CLAW = auto()
     BINDING_BAND = auto()
 
+    GRISEOUS_CORE = auto()
+    ADAMANT_CRYSTAL = auto()
+    LUSTROUS_GLOBE = auto()
+    RUSTED_SWORD = auto()
+    RUSTED_SHIELD = auto()
+    BIG_ROOT = auto()

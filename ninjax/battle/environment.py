@@ -16,6 +16,7 @@ from ninjax.battle.ordering import action_order
 from ninjax.battle.scheduler import advance_turn
 from ninjax.battle.switching import swap_is_alive
 from ninjax.battle.types import BattleAction, BattleParams, EpisodeState, Phase, Transformation
+from ninjax.battle.terastallization import tera_eligible
 from ninjax.calculations.logic import triple_and
 from ninjax.enums.abilities import AbilityEnum
 from ninjax.enums.items import ItemEnum
@@ -49,15 +50,14 @@ def _keep_episode(x):
 
 def _preview_timestep(*, valid_selection, choose, state, self):
     """Build the preview transition and report an invalid lead selection."""
-    return (lax.cond(valid_selection, choose, _keep_episode, state),
-                                 transition(jnp.zeros(2), self.observe(lax.cond(valid_selection, choose, _keep_episode, state)),
-                                            shape=(2,), extras={**self._extras(lax.cond(valid_selection, choose, _keep_episode, state)),
-                                                              "invalid_action": ~valid_selection}))
+    state = lax.cond(valid_selection, choose, _keep_episode, state)
+    extras = {**self._extras(state), "invalid_action": ~valid_selection}
+    return state, transition(jnp.zeros(2), self.observe(state), shape=(2,), extras=extras)
 
 
-def _step_encoded_actions(*, self, state, encoded):
-    """Dispatch ordinary encoded actions after team preview has finished."""
-    return self.step(state, encoded)
+def _step_encoded_actions(*, self, state, action):
+    """Dispatch typed actions after team preview has finished."""
+    return self._step_battle_action(state, action)
 
 
 def _advance_accepted_actions(current, chosen, *, self):
@@ -149,7 +149,14 @@ class Battle(Environment):
         """Extras."""
         return {"acting_player_mask": state.acting_player_mask,
                 "legal_action_mask": self.legal_action_mask(state), "phase": state.phase,
+                "tera_action_mask": self.tera_action_mask(state),
                 "invalid_action": jnp.bool_(False)}
+
+    def tera_action_mask(self, state):
+        """Return (2, 15) legal attack columns that can request Tera."""
+        mask = self.legal_action_mask(state)
+        attack = jnp.arange(15)[None, :] < 5
+        return mask & attack & tera_eligible(state.battle)[:, None] & (state.phase == Phase.TURN)
 
     def legal_action_mask(self, state):
         """Mask moves and switches for the phase, including represented trapping."""
@@ -158,7 +165,7 @@ class Battle(Environment):
         switches = alive & (jnp.arange(6)[None, :] != battle.active_index)
         revive = (battle.team.current_hp[..., 0] == 0) & state.selected
         hp = battle.active_field('current_hp')
-        items = battle.active_field('item')[:, 0]
+        items = battle.effective_item()[:, 0]
         categories = battle.active_move_field('move_type')[..., 0]
         moves = (battle.active_move_field('current_pp')[..., 0] > 0) & ~battle.active_move_field('disabled')[..., 0]
 
@@ -176,7 +183,8 @@ class Battle(Environment):
         mask = jnp.concatenate((moves, jnp.concatenate((forced[:, None], jnp.zeros((2, 3), bool)), axis=1), switches,
                                 jnp.zeros((2, 1), bool)), axis=1)
         v = battle.volatile_status
-        continuing = ((v.continuation.charging_move_id[:, 0] != 0) | v.continuation.recharging[:, 0]) & (state.phase == Phase.TURN) & (hp[:, 0] > 0)
+        continuing = ((v.continuation.charging_move_id[:, 0] != 0) | v.continuation.recharging[:, 0] |
+                      (v.continuation.locked.move_id[:, 0] != 0)) & (state.phase == Phase.TURN) & (hp[:, 0] > 0)
         mask = jnp.where(continuing[:, None], jnp.arange(15)[None, :] == 5, mask)
         # Inactive players supply a no-op; their actual input is ignored.
         return jnp.where(state.acting_player_mask[:, None], mask,
@@ -217,18 +225,24 @@ class Battle(Environment):
             selection = action.selection.astype(bool)
             selecting = state.phase == Phase.TEAM_SELECTION
             valid_selection = jnp.all(jnp.any(selection, axis=1)) & jnp.all(action.transformation == Transformation.NONE)
-            encoded = action.encode()
             choose = partial(_select_preview_leads, selection=selection, self=self)
             if self.params.team_preview:
                 return lax.cond(selecting,
                     partial(_preview_timestep, valid_selection=valid_selection, choose=choose, state=state, self=self),
-                    partial(_step_encoded_actions, self=self, state=state, encoded=encoded))
+                    partial(_step_encoded_actions, self=self, state=state, action=action))
         else:
             action = BattleAction.from_legacy(action)
+        return self._step_battle_action(state, action)
+
+    def _step_battle_action(self, state, action):
+        """Validate typed actions and execute an ordinary battle decision."""
         encoded = action.encode()
         mask = self.legal_action_mask(state)
         valid = (state.phase != Phase.TEAM_SELECTION) & (encoded >= 0) & (encoded < 15)
         valid &= mask[jnp.arange(2), jnp.clip(encoded, 0, 14)]
+        tera_requested = action.transformation == Transformation.TERA
+        tera_allowed = self.tera_action_mask(state)[jnp.arange(2), jnp.clip(encoded, 0, 14)]
+        valid &= ~tera_requested | tera_allowed
         valid = jnp.all(valid | ~state.acting_player_mask)
         advance = partial(_advance_accepted_actions, self=self)
         state = lax.cond(valid & (state.phase != Phase.TERMINAL), advance,

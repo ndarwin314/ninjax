@@ -56,6 +56,23 @@ class HitRule(JaxEnum):
     POPULATION_BOMB = 5
 
 
+class DamageRule(JaxEnum):
+    """Hit outcome rules that operate outside ordinary power modifiers."""
+    STANDARD = 0
+    SOURCE_HP = 1
+    OHKO = 2
+    OHKO_ICE = 3
+    NONLETHAL = 4
+    PRESENT = 5
+
+
+class MoveHpCost(JaxEnum):
+    """When an executed move pays half the user's maximum HP."""
+    NONE = 0
+    ON_DAMAGE = 1
+    ON_DAMAGE_OR_FAILURE = 2
+
+
 class ProtectionKind(JaxEnum):
     """Turn-scoped protection variants sharing the consecutive-use counter."""
     NONE = 0
@@ -129,6 +146,10 @@ class MoveFlags(IntFlag):
     RECHARGE = auto()
     CANNOT_REPEAT = auto()
     SPREAD = auto()
+    CANNOT_MIMIC = auto()
+    CANNOT_SKETCH = auto()
+    REFLECTABLE = auto()
+    FAIL_COPYCAT = auto()
 
     def __eq__(self, other):
         """Compare an enum value with a scalar or traced array value."""

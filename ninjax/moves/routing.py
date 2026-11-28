@@ -23,18 +23,21 @@ from ninjax.item_rules import fling_power, item_is_suppressed
 from ninjax.moves.model import Move
 from ninjax.moves.multi_hit import do_damaging_move
 from ninjax.moves.properties import (
-    absorption_from_fields, effective_move, is_poison_type_user, move_accuracy,
+    absorption_from_fields, effective_move, is_poison_type_user, lock_on_matches, move_accuracy,
     resolve_move_category, substitute_intercepts,
 )
 from ninjax.moves.protection import blocked_by_protection, breaks_protection, remove_protection
 from ninjax.moves.status import _status_move_effects, create_shed_tail_substitute
 from ninjax.records.events import Cause, EventKind, emit
 from ninjax.records.hits import HitOutcome, HitRecipient, record_hit
+from ninjax.restrictions import last_resort_fails
 from ninjax.side.faint_effects import resolve_faints
 from ninjax.side.field_conditions import clear_target_screens
-from ninjax.side.hp_effects import take_damage_percent
-from ninjax.side.item_effects import held_item_active, release_fling_item
-from ninjax.side.queries import ability_against_move, can_remove_item, contact_reactions_allowed, is_floating_fields, move_immune_from_fields
+from ninjax.side.hp_effects import take_damage_percent, take_damage_value
+from ninjax.side.item_effects import cure_status, held_item_active, release_fling_item
+from ninjax.side.form_effects import catch_gulp_missile, relic_song_form
+from ninjax.side.property_effects import color_change, lose_type
+from ninjax.side.queries import ability_against_move, can_remove_item, contact_reactions_allowed, move_immune_from_fields
 from ninjax.side.stat_effects import stat_changes
 from ninjax.side.state import BattleState
 from ninjax.side.status_effects import set_status
@@ -61,14 +64,20 @@ def _ready_move(k, s):
     return (k, s, jnp.bool_(True))
 
 
-def _defer_forced_switch(key, state, attacker_idx, move, stat_index, boost_value):
-    """Leave forced switching to the common continuation after hit dispatch."""
+def _skip_hit_effects(key, state, attacker_idx, move, stat_index, boost_value):
+    """Skip effects for failed healing or defer a forced switch to the continuation."""
     return key, state
 
 
 def do_healing_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx, move: Move, stat_index, boost_value) -> Tuple[chex.PRNGKey, BattleState]:
-    """Heal the defending active by a quarter of max HP for an absorb ability."""
-    state = take_damage_percent(state, 1-attacker_idx, -1/4)
+    """Apply target healing after the hit gates, using the effect's rounding."""
+    target = 1 - attacker_idx
+    max_hp = state.active_stats(target)[0]
+    present = _present_heals(move) & (state.hit_results[0].outcome == HitOutcome.HIT)
+    # Showdown rounds move healing half up. Keep the existing round-down rule
+    # for absorption abilities.
+    healing = jnp.maximum(1, (max_hp + 2 * present.astype(jnp.int32)) // 4)
+    state = take_damage_value(state, target, -healing, False)
     return key,state
 
 
@@ -87,6 +96,7 @@ def do_flash_fire_from_move(key: chex.PRNGKey, state: BattleState, attacker_idx,
 def _apply_move_effects(key, state, attacker_index, move_index):
     """Skip Struggle accuracy while sharing the downstream hit executor."""
     key, move = prepare_hit_move(key, state, attacker_index, state.active_moves(attacker_index, move_index))
+    state = _remember_hit_type(state, attacker_index, move)
     absorption = absorption_from_fields(move, ability_against_move(state, 1-attacker_index, move))
     # Forced Struggle already uses -1 as its action-local public move marker.
     # Accuracy can write events but does not change the resolved move.
@@ -128,13 +138,56 @@ def _attempt_accuracy(k, s, *, hit, attacker_index, move):
     return k, s, hit
 
 
-def _fling_failed(move):
-    """Check the item prerequisite after projecting its transient metadata."""
-    return (move.identifier[0] == 374) & (move.flung_item[0] == ItemEnum.NONE)
+def _remember_hit_type(state, player, move):
+    """Record the resolved type for Conversion 2, even if the move misses."""
+    v = state.volatile_status
+    history = v.move_history
+    return state.replace(volatile_status=v.replace(move_history=history.replace(
+        last_move_type=history.last_move_type.at[player, 0].set(move.type[0]))))
 
 
-def _failed_fling(k, state, *, attacker_index):
-    """Record a Fling without a usable item as a failed move."""
+def _property_move_failed(state, player, move):
+    """Check live move prerequisites, including retained earlier actions."""
+    ident = move.identifier[0]
+    types = state.effective_types(player, include_added=True)
+    target = 1 - player
+    asleep = (state.active_field('status', target)[0] == Status.SLEEP) | (
+        state.ability[target, 0] == AbilityEnum.COMATOSE)
+    user_asleep = (state.active_field('status', player)[0] == Status.SLEEP) | (
+        state.ability[player, 0] == AbilityEnum.COMATOSE)
+    slot = state.active_index[player, 0]
+    history = state.damage_history
+    counter_category = jnp.where(ident == 68, MoveType.PHYSICAL, MoveType.SPECIAL)
+    retaliate = ((ident == 68) | (ident == 243)) & (
+        (history.counter_category[player, slot] != counter_category) |
+        (history.counter_source_slot[player, slot] < 0))
+    return ((ident == 374) & (move.flung_item[0] == ItemEnum.NONE)) | (
+        (ident == 892) & ~jnp.any(types == Type.ELECTRIC)) | (
+        (ident == 682) & ~jnp.any(types == Type.FIRE)) | (
+        (ident == 783) & (state.active_identity('species', player)[0] != 877)) | (
+        (ident == 138) & ~asleep) | ((ident == 173) & ~user_asleep) | (
+        (ident == 798) & (state.terrain.terrain == TerrainEnum.NONE)) | retaliate | (
+        (ident == 255) & (state.volatile_status.stockpile_count[player, 0] == 0)) | (
+        last_resort_fails(state, player, move))
+
+
+def _color_change_after_hits(state, player, move_type):
+    """Apply Color Change once, after the last hit of the move."""
+    return color_change(state, player, move_type, True)
+
+
+def _keep_type(state, player, ident):
+    """Preserve typing on other moves or failed attacks."""
+    return state
+
+
+def _spend_attack_type(state, player, ident):
+    """Remove the user's required type after a successful attack."""
+    return lose_type(state, player, jnp.where(ident == 892, Type.ELECTRIC, Type.FIRE))
+
+
+def _failed_property_move(k, state, *, attacker_index):
+    """Record a move whose item, type or species prerequisite failed."""
     return k, record_hit(state, 0, 1 - attacker_index, HitOutcome.FAILED), jnp.bool_(False)
 
 
@@ -156,14 +209,52 @@ def semi_invulnerable_to_move(state, attacker, move):
         location == SemiInvulnerability.VANISHED)
     no_guard = (state.ability[attacker, 0] == AbilityEnum.NO_GUARD) | (state.ability[target, 0] == AbilityEnum.NO_GUARD)
     toxic_bypass = (ident == 92) & is_poison_type_user(state, attacker)
-    return avoided & ~no_guard & ~toxic_bypass & ~move.target_self[0]
+    return avoided & ~no_guard & ~toxic_bypass & ~move.target_self[0] & ~lock_on_matches(state, attacker, target)
 
 
-def _prepare_accuracy(key, state, attacker_index, move, absorption=None):
+def _move_target_immune(state, target, move, types, ability, item, gravity):
+    """Combine ordinary type/ability immunity with active floating conditions."""
+    raised = (state.volatile_status.magnet_rise_turns[target, 0] > 0) & ~gravity[0]
+    return move_immune_from_fields(types, ability, item, move, gravity) | (
+        raised & (move.type[0] == Type.GROUND) & (move.move_type[0] != MoveType.STATUS))
+
+
+def _ohko_ineligible(move, level_difference, defender_types, defender_ability):
+    """Reject a higher-level target, Sheer Cold's Ice target, or Sturdy."""
+    return move.ohko[0] & ((level_difference < 0) |
+        (move.ohko_ice[0] & jnp.any(defender_types == Type.ICE)) |
+        (defender_ability[0] == AbilityEnum.STURDY))
+
+
+def _ohko_accuracy(state, attacker, move, absorption, ordinary_accuracy):
+    """Use level-based accuracy and let hit routing report gated OHKOs."""
+    target = 1 - attacker
+    levels = state.active_field('level')[:, 0]
+    difference = levels[attacker] - levels[target]
+    ability = ability_against_move(state, target, move)
+    defender_types = state.effective_types(target, include_added=True)
+    ice_user = jnp.any(state.effective_types(attacker, include_added=True) == Type.ICE)
+    accuracy = (30 + difference - 10 * (move.ohko_ice[0] & ~ice_user)) / 100
+    no_guard = jnp.any(state.ability[:, 0] == AbilityEnum.NO_GUARD) | lock_on_matches(state, attacker, target)
+    immune = _move_target_immune(state, target, move, defender_types, ability,
+        state.effective_item(target), state.grounding_override(target))
+    gated = (immune | _ohko_ineligible(move, difference, defender_types, ability) |
+             (absorption.stat != 0) | absorption.flash_fire | absorption.heal)
+    return jnp.full_like(ordinary_accuracy, jnp.where(no_guard | gated, 1., accuracy))
+
+
+def _standard_accuracy(state, attacker, move, absorption, accuracy):
+    """Keep the normal accuracy rules for moves without an OHKO policy."""
+    return accuracy
+
+
+def _prepare_accuracy(key, state, attacker_index, move, absorption):
     """Record misses/immunity and return whether normal hit routing is allowed."""
     key, subkey = random.split(key)
     r = random.uniform(subkey)
     accuracy = move_accuracy(state, attacker_index, move, absorption)
+    accuracy = jax.lax.cond(move.ohko[0], _ohko_accuracy, _standard_accuracy,
+        state, attacker_index, move, absorption, accuracy)
 
     # Worry Seed fails against these identities before accuracy, including
     # while an ability's effects are suppressed.
@@ -176,9 +267,9 @@ def _prepare_accuracy(key, state, attacker_index, move, absorption=None):
     protected = _blocked_helper(state, move, attacker_index)
 
     hit = (jnp.less_equal(r, accuracy)[0] | protected) & move.implemented[0] & ~semi_invulnerable_to_move(state, attacker_index, move)
-    branch = jnp.select((_fling_failed(move), cannot_target), (0, 1), default=2)
+    branch = jnp.select((_property_move_failed(state, attacker_index, move), cannot_target), (0, 1), default=2)
     return jax.lax.switch(branch, (
-        partial(_failed_fling, attacker_index=attacker_index),
+        partial(_failed_property_move, attacker_index=attacker_index),
         partial(_block_accuracy_target, attacker_index=attacker_index),
         partial(_attempt_accuracy, hit=hit, attacker_index=attacker_index, move=move)), key, state)
 
@@ -200,15 +291,15 @@ def _resolve_and_hit(key, state, attacker_index, move):
     """Resolve a selected move for callers that already checked accuracy."""
     key, move = prepare_hit_move(key, state, attacker_index, move)
     absorption = absorption_from_fields(move, ability_against_move(state, 1-attacker_index, move))
-    branch = jnp.select((_fling_failed(move), semi_invulnerable_to_move(state, attacker_index, move)),
+    branch = jnp.select((_property_move_failed(state, attacker_index, move), semi_invulnerable_to_move(state, attacker_index, move)),
                         (0, 1), default=2)
-    key, state = jax.lax.switch(branch, (_reject_resolved_fling, _record_move_miss,
+    key, state = jax.lax.switch(branch, (_reject_resolved_property_move, _record_move_miss,
         partial(_move_hits, absorption=absorption)), key, state, attacker_index, move)
     return key, release_fling_item(state, attacker_index, move.flung_item[0])
 
 
-def _reject_resolved_fling(key, state, player, move):
-    """Record a failed Fling through the accuracy-free entry point."""
+def _reject_resolved_property_move(key, state, player, move):
+    """Record a failed prerequisite through the accuracy-free entry point."""
     return key, record_hit(state, 0, 1 - player, HitOutcome.FAILED)
 
 
@@ -231,8 +322,31 @@ def prepare_hit_move(key, state, player, move):
     move = jax.lax.cond(state.event_context.move_id == -1, _struggle_move, effective_move, state, player, move)
     identifier = move.identifier[0]
     move = jax.lax.cond(identifier == 374, _prepare_fling, _keep_fling, state, player, move)
-    return jax.lax.cond(move.implemented[0] & ((identifier == 722) | (identifier == 801)),
+    # Rollout doubles each successful continuation and doubles again when
+    # Defense Curl's volatile is present on the same active Pokémon.
+    v = state.volatile_status
+    rollout_power = move.base_power * (1 << (v.continuation.locked.successful_hits[player, 0] +
+                                               v.defense_curl[player, 0].astype(jnp.int32)))
+    move = move.replace(base_power=jnp.where(identifier == 205, rollout_power, move.base_power))
+    key, move = jax.lax.cond(move.implemented[0] & move.present[0],
+        _prepare_present, _keep_hit_category, key, state, player, move)
+    tera_blast = (identifier == 851) & state.active_field('is_terastallized', player)[0]
+    return jax.lax.cond(move.implemented[0] & ((identifier == 722) | (identifier == 801) | tera_blast),
         _resolve_hit_category, _keep_hit_category, key, state, player, move)
+
+
+def _prepare_present(key, state, player, move):
+    """Select Present's healing or power outcome before its accuracy check."""
+    key, sample = random.split(key)
+    roll = random.randint(sample, (), 0, 10)
+    power = jnp.select((roll < 2, roll < 6, roll < 9), (0, 40, 80), default=120)
+    return key, move.replace(base_power=jnp.full_like(move.base_power, power),
+        healing_fraction=jnp.full_like(move.healing_fraction, jnp.where(roll < 2, .25, 0.)))
+
+
+def _present_heals(move):
+    """Identify the healing result on the transient move for this attempt."""
+    return move.present[0] & (move.healing_fraction[0] > 0)
 
 
 def _keep_fling(state, player, move):
@@ -259,8 +373,17 @@ def _prepare_fling(state, player, move):
 def apply_pre_damage_move_effects(state, player, move, damaging_hit):
     """Apply move-specific TryHit effects after gates and before Substitute."""
     identifier = move.identifier[0]
-    breaks_screens = (identifier == 280) | (identifier == 873)
-    return clear_target_screens(state, 1 - player, damaging_hit & breaks_screens)
+    breaks_screens = (identifier == 280) | (identifier == 706) | (identifier == 873)
+    state = clear_target_screens(state, 1 - player, damaging_hit & breaks_screens)
+    return jax.lax.cond((identifier == 253) & damaging_hit, _wake_from_uproar, _identity, state)
+
+
+def _wake_from_uproar(state):
+    """Wake both active sleepers when Uproar reaches its target."""
+    for player in (0, 1):
+        asleep = state.active_field('status', player)[0] == Status.SLEEP
+        state = jax.lax.cond(asleep, partial(cure_status, player=player), _identity, state)
+    return state
 
 
 def _apply_shed_tail(state, *, player):
@@ -282,14 +405,23 @@ def _move_hits(key: chex.PRNGKey, state: BattleState, attacker_index: int, move:
     # Only status drags routed to the status branch can request a switch. Misses,
     # protection and immunity must never reach the switch preparation/entry path.
     ident = move.identifier[0]
+    state = catch_gulp_missile(state, attacker_index, (ident == 57) & (branch == 0))
     forced = (branch == 1) & forced_switch_move(move)
     parting = (branch == 1) & (ident == 575)
     key, state = jax.lax.switch(jnp.where(forced, 6, branch),
         [do_damaging_move, _status_move_effects, do_stat_boost_from_move,
-         do_flash_fire_from_move, do_healing_from_move, is_immune, _defer_forced_switch],
+         do_flash_fire_from_move, do_healing_from_move, is_immune, _skip_hit_effects],
         key, state, attacker_index, move, stat, boost_value)
     target = 1 - attacker_index
     hit = state.hit_results[0]
+    history = state.hit_results[:]
+    direct = jnp.any((history.recipient == HitRecipient.POKEMON) & (history.damage > 0))
+    color = (branch == 0) & direct & (state.active_field('current_hp', target)[0] > 0) & (
+        state.ability[target, 0] == AbilityEnum.COLOR_CHANGE)
+    state = jax.lax.cond(color, _color_change_after_hits, _keep_type, state, target, move.type[0])
+    state = relic_song_form(state, attacker_index, (ident == 547) & (branch == 0) & (hit.outcome == HitOutcome.HIT))
+    remove_type = ((ident == 892) | (ident == 682)) & (branch == 0) & (hit.outcome == HitOutcome.HIT)
+    state = jax.lax.cond(remove_type, _spend_attack_type, _keep_type, state, attacker_index, ident)
     damaging = ((ident == 525) | (ident == 509)) & (branch == 0) & (hit.outcome == HitOutcome.HIT)
     drag_hit = (damaging & (hit.recipient == HitRecipient.POKEMON) &
                 (state.active_field('current_hp', target)[0] > 0) &
@@ -388,20 +520,25 @@ def _prepare_normal_hit(key, state, attacker_index, move, *, absorption=None):
     defender_types = state.effective_types(defender_idx, include_added=True)
     defender_item = state.active_field('item', defender_idx)
     defender_hp = state.active_field('current_hp', defender_idx)[0]
-    gravity = state.gravity_duration > 0
+    gravity = state.grounding_override(defender_idx)
     v = state.volatile_status
     move = move.replace(priority=jnp.where(v.queued_move.encore_overridden[attacker_index], v.queued_move.queued_priority[attacker_index], move.priority))
     if absorption is None:
         absorption = absorption_from_fields(move, ability)
-    immune = move_immune_from_fields(defender_types, ability, defender_item, move, gravity)
+    immune = _move_target_immune(state, defender_idx, move, defender_types, ability, state.effective_item(defender_idx), gravity)
+    levels = state.active_field('level')[:, 0]
+    immune |= _ohko_ineligible(move, levels[attacker_index] - levels[defender_idx],
+                              defender_types, ability)
     # Opposing absorption abilities intercept before ordinary type immunity.
     branch_index = jnp.select(
         (absorption.stat != 0, absorption.flash_fire, absorption.heal, immune,
          move.move_type == MoveType.STATUS), (2, 3, 4, 5, 1), default=0)
+    present_healing = _present_heals(move) & (branch_index[0] == 0)
+    branch_index = jnp.where(present_healing, 4, branch_index)
     branch_index = jnp.where(move.target_self & (move.move_type == MoveType.STATUS), 1, branch_index)
     # Psychic Terrain blocks opposing priority moves before absorption abilities
     # or other hit effects can activate, but only for grounded targets.
-    grounded = (~is_floating_fields(defender_types, ability, defender_item) | gravity)[0]
+    grounded = state.is_grounded(defender_idx)[0]
     priority_blocked = (((state.terrain.terrain == TerrainEnum.PSYCHIC) & grounded) |
         (ability[0] == AbilityEnum.QUEENLY_MAJESTY)) & (move.priority[0] > 0) & ~move.target_self[0]
     prankster_dark = ((state.ability[attacker_index, 0] == AbilityEnum.PRANKSTER) &
@@ -461,10 +598,21 @@ def _prepare_normal_hit(key, state, attacker_index, move, *, absorption=None):
     failed_substitute = (move.identifier[0] == 164) & (
         (state.volatile_status.substitute_hp[attacker_index, 0] > 0) |
         (max_hp <= 1) | (4 * hp <= max_hp))
+    healed = present_healing & (branch_index[0] == 4)
+    heal_failed = healed & ((defender_hp >= state.active_stats(defender_idx)[0]) |
+        (v.restrictions.heal_block_turns[defender_idx, 0] > 0))
     outcome = jnp.where(blocked, HitOutcome.PROTECTED, jnp.where(sub_blocked | priority_blocked | failed_substitute, HitOutcome.BLOCKED,
-                        jnp.where(branch_index[0] >= 2, HitOutcome.IMMUNE, HitOutcome.HIT)))
+                        jnp.where(heal_failed, HitOutcome.FAILED,
+                            jnp.where((branch_index[0] >= 2) & ~healed, HitOutcome.IMMUNE, HitOutcome.HIT))))
+    sturdy = move.ohko[0] & (ability[0] == AbilityEnum.STURDY) & (outcome == HitOutcome.IMMUNE)
+    slot = state.active_index[defender_idx, 0]
+    known = state.known_abilities[defender_idx, slot]
+    state = state.replace(known_abilities=state.known_abilities.at[defender_idx, slot].set(
+        jnp.where(sturdy, AbilityEnum.STURDY, known)))
+    state = emit(state, EventKind.ABILITY, defender_idx, detail=AbilityEnum.STURDY, enabled=sturdy)
     recipient = jnp.where(outcome == HitOutcome.HIT, HitRecipient.POKEMON, HitRecipient.NONE)
     state = record_hit(state, 0, target, outcome, recipient)
+    branch_index = jnp.where(heal_failed, 6, branch_index)
     # A breaker removes protection only after passing the hit gates, before
     # the damaging branch decides whether Substitute intercepts the hit.
     state = remove_protection(state, defender_idx, (branch_index[0] == 0) & breaks_protection(move))

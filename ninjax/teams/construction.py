@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from ninjax.calculations.stats import Nature, StatTable
 from ninjax.data.load_json import dex
 from ninjax.enums.field import TerrainEnum, WeatherEnum
-from ninjax.enums.moves import EffectivenessRule, HitRule, MoveFlags, MoveType, PowerRule, SecondaryEffectType
+from ninjax.enums.moves import DamageRule, EffectivenessRule, HitRule, MoveFlags, MoveHpCost, MoveType, PowerRule, SecondaryEffectType
 from ninjax.enums.pokemon import FormEnum, StatEnum, Status, Type
 from ninjax.moves.model import Move, MoveSecondaries, SECONDARY_SLOTS, STAT_CHANGE_SLOTS
 from ninjax.moves.support import is_move_supported
@@ -26,7 +26,7 @@ STAT_NAMES = ('hp', 'atk', 'def', 'spa', 'spd', 'spe')
 # Only formula selection belongs in metadata; live inputs come from battle state.
 POWER_RULES = {
     'Acrobatics': PowerRule.DOUBLE_WITHOUT_ITEM,
-    'Stomping Tantrum': PowerRule.DOUBLE_AFTER_FAILURE,
+    'Stomping Tantrum': PowerRule.DOUBLE_AFTER_FAILURE, 'Temper Flare': PowerRule.DOUBLE_AFTER_FAILURE,
     'Stored Power': PowerRule.POSITIVE_STAGES, 'Power Trip': PowerRule.POSITIVE_STAGES,
     'Low Kick': PowerRule.TARGET_WEIGHT, 'Grass Knot': PowerRule.TARGET_WEIGHT,
     'Heavy Slam': PowerRule.WEIGHT_RATIO, 'Heat Crash': PowerRule.WEIGHT_RATIO,
@@ -35,6 +35,7 @@ POWER_RULES = {
     'Rising Voltage': PowerRule.DOUBLE_ON_GROUNDED_ELECTRIC_TARGET,
     'Hex': PowerRule.TARGET_STATUS, 'Infernal Parade': PowerRule.TARGET_STATUS,
     'Eruption': PowerRule.USER_HP, 'Water Spout': PowerRule.USER_HP, 'Dragon Energy': PowerRule.USER_HP,
+    'Flail': PowerRule.LOW_HP_POWER, 'Reversal': PowerRule.LOW_HP_POWER,
     'Crush Grip': PowerRule.TARGET_HP_120, 'Hard Press': PowerRule.TARGET_HP_100,
     'Electro Ball': PowerRule.ELECTRO_BALL, 'Gyro Ball': PowerRule.GYRO_BALL,
     'Facade': PowerRule.USER_STATUS_MODIFIER,
@@ -42,7 +43,20 @@ POWER_RULES = {
     'Brine': PowerRule.TARGET_HALF_HP_MODIFIER,
     'Psyblade': PowerRule.ELECTRIC_TERRAIN_MODIFIER,
     'Collision Course': PowerRule.SUPER_EFFECTIVE_MODIFIER, 'Electro Drift': PowerRule.SUPER_EFFECTIVE_MODIFIER,
-    'Terrain Pulse': PowerRule.DOUBLE_IN_TERRAIN
+    'Terrain Pulse': PowerRule.DOUBLE_IN_TERRAIN,
+}
+
+# These Showdown callbacks and OHKO flags are absent from the flat catalogue.
+DAMAGE_RULES = {
+    'Final Gambit': DamageRule.SOURCE_HP,
+    'Fissure': DamageRule.OHKO, 'Guillotine': DamageRule.OHKO, 'Horn Drill': DamageRule.OHKO,
+    'Sheer Cold': DamageRule.OHKO_ICE,
+    'False Swipe': DamageRule.NONLETHAL,
+    'Present': DamageRule.PRESENT,
+}
+MOVE_HP_COSTS = {
+    'Chloroblast': MoveHpCost.ON_DAMAGE,
+    'Steel Beam': MoveHpCost.ON_DAMAGE_OR_FAILURE,
 }
 
 # Showdown's Terastallized form names use the same Ivy Cudgel typing.
@@ -57,6 +71,19 @@ FORM_IDS.update({
     'taurospaldeablaze': FormEnum.TAUROS_PALDEA_BLAZE,
     'taurospaldeaaqua': FormEnum.TAUROS_PALDEA_AQUA,
     'morpekohangry': FormEnum.MORPEKO_HANGRY,
+    'mimikyubusted': FormEnum.MIMIKYU_BUSTED,
+    'eiscuenoice': FormEnum.EISCUE_NOICE,
+    'miniormeteor': FormEnum.MINIOR_METEOR,
+    'palafinhero': FormEnum.PALAFIN_HERO,
+    'meloettapirouette': FormEnum.MELOETTA_PIROUETTE,
+    'cramorantgulping': FormEnum.CRAMORANT_GULPING,
+    'cramorantgorging': FormEnum.CRAMORANT_GORGING,
+    'terapagosterastal': FormEnum.TERAPAGOS_TERASTAL,
+    'giratinaorigin': FormEnum.GIRATINA_ORIGIN,
+    'dialgaorigin': FormEnum.DIALGA_ORIGIN,
+    'palkiaorigin': FormEnum.PALKIA_ORIGIN,
+    'zaciancrowned': FormEnum.ZACIAN_CROWNED,
+    'zamazentacrowned': FormEnum.ZAMAZENTA_CROWNED,
 })
 
 
@@ -91,7 +118,7 @@ def _project_secondaries(name, entries, status_ids, stat_ids):
         stats=stats, stages=stages, user_stats=user_stats, user_stages=user_stages,
         flinch=jnp.array([slot.get('volatileStatus') == 'flinch' for slot in slots]),
         confusion=jnp.array([slot.get('volatileStatus') == 'confusion' for slot in slots]),
-        restriction=jnp.array([i == 0 and name in ('Throat Chop', 'Psychic Noise')
+        restriction=jnp.array([i == 0 and name in ('Throat Chop', 'Psychic Noise', 'Salt Cure', 'Syrup Bomb', 'Spirit Shackle')
                                for i in range(SECONDARY_SLOTS)]))
 
 
@@ -109,7 +136,9 @@ def make_move(name):
     effectiveness_rules = {'Freeze-Dry': EffectivenessRule.FREEZE_DRY,
                            'Flying Press': EffectivenessRule.FLYING_PRESS}
     effects = {'power_rule': jnp.array([POWER_RULES.get(name, PowerRule.FIXED)]),
-               'effectiveness_rule': jnp.array([effectiveness_rules.get(name, EffectivenessRule.DEFAULT)])}
+               'effectiveness_rule': jnp.array([effectiveness_rules.get(name, EffectivenessRule.DEFAULT)]),
+               'damage_rule': jnp.array([DAMAGE_RULES.get(name, DamageRule.STANDARD)]),
+               'hp_cost': jnp.array([MOVE_HP_COSTS.get(name, MoveHpCost.NONE)])}
     # Normalize Showdown condition IDs on the host, never inside traced code.
     weather_ids = {'raindance': WeatherEnum.RAIN, 'sunnyday': WeatherEnum.SUN,
                    'sandstorm': WeatherEnum.SANDSTORM, 'snowscape': WeatherEnum.SNOW}
@@ -200,13 +229,16 @@ def make_move(name):
         effects['perish_effect'] = jnp.array([True])
     if name == 'Defog':
         effects['always_hit'] = jnp.array([True])
-    pp = data['pp'] * 8 // 5 if supported else 0
+    pp = (data['pp'] if data.get('noPPBoosts') else data['pp'] * 8 // 5) if supported else 0
+    effects['native_pp'] = jnp.array([data['pp'] if supported else 0])
     flags = (int(MoveFlags.CONTACT) if data['contact'] else 0) | (int(MoveFlags.BULLET) if name in ('Bullet Seed', 'Rock Blast') else 0) | (int(MoveFlags.PUNCHING) if name == 'Surging Strikes' else 0)
     for source, flag in [('sound', MoveFlags.SOUND), ('bullet', MoveFlags.BULLET),
                          ('pulse', MoveFlags.LAUNCHER), ('bite', MoveFlags.BITING),
                          ('heal', MoveFlags.HEALING), ('powder', MoveFlags.POWDER), ('defrost', MoveFlags.DEFROST),
                          ('bypasssub', MoveFlags.BYPASS_SUBSTITUTE), ('slicing', MoveFlags.SLICING),
-                         ('punch', MoveFlags.PUNCHING), ('wind', MoveFlags.WIND)]:
+                         ('punch', MoveFlags.PUNCHING), ('wind', MoveFlags.WIND),
+                         ('failmimic', MoveFlags.CANNOT_MIMIC), ('nosketch', MoveFlags.CANNOT_SKETCH),
+                         ('reflectable', MoveFlags.REFLECTABLE), ('failcopycat', MoveFlags.FAIL_COPYCAT)]:
         if data.get('flags', {}).get(source):
             flags |= int(flag)
     if 'flags' in data:
@@ -267,8 +299,10 @@ def make_sandbox_teams(reference):
             missing = [n for n in display if not is_move_supported(n)]
             omissions.append({'species': species, 'moves': missing, 'ability': config.get('ability'), 'item': config.get('item')})
             types = [int(Type[t.upper()]) for t in record['types']]
+            # Unsupported ruleset-only type names stay in the source metadata.
+            tera = Type.__members__.get((config.get('tera_type') or '').upper(), Type.NONE)
             mons.append(Pokemon(type_list=jnp.array(types + [0]*(2-len(types))), moves=stack([make_move(n) for n in display]),
                                 stat_table=stats, species=jnp.array([species_data.get('num', 0)]), form=jnp.array([int(FORM_IDS.get(species_key, FormEnum.DEFAULT))]),
-                                weight_hg=jnp.array([weight_hg])))
+                                weight_hg=jnp.array([weight_hg]), tera_type=jnp.array([tera])))
         sides.append(stack(mons))
     return stack(sides), omissions

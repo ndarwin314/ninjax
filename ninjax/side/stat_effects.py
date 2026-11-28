@@ -8,7 +8,7 @@ from ninjax.calculations.stats import StatBoosts
 from ninjax.enums.abilities import AbilityEnum as A, AbilityEnum
 from ninjax.enums.pokemon import StatEnum
 from ninjax.side.state import BattleState
-from ninjax.side.updates import add_boosts, set_boosts
+from ninjax.side.updates import add_boosts, remember_stat_drop, set_boosts
 
 
 def _apply_opposing_drop_boost(s, *, player, stat, lowered_count):
@@ -39,6 +39,7 @@ def reduce_boosts(state: BattleState, side_idx, idx, val, bounceable=False) -> B
     ability = state.ability
     not_clear_body = (ability[side_idx]!=AbilityEnum.CLEAR_BODY)[0]
     not_clear_body = not_clear_body & ~((ability[side_idx, 0] == AbilityEnum.BIG_PECKS) & (jnp.asarray(idx) == StatEnum.DEFENSE))
+    not_clear_body &= (state.side_conditions.mist[side_idx, 0] == 0) | (ability[1-side_idx, 0] == A.INFILTRATOR)
     old = state.boosts.normal_boosts[side_idx]
     state = add_boosts(state, side_idx, idx, -val * not_clear_body)
 
@@ -78,14 +79,17 @@ def _accuracy_stage(state, player, stat, amount, opposing):
 
 
     delta = amount * jnp.where(state.ability[player, 0] == A.CONTRARY, -1, 1)
-    immune = (state.ability[player, 0] == A.CLEAR_BODY) | ((state.ability[player, 0] == A.KEEN_EYE) & (stat == 6))
+    delta *= jnp.where(state.ability[player, 0] == A.SIMPLE, 2, 1)
+    mist = (state.side_conditions.mist[player, 0] > 0) & (state.ability[1-player, 0] != A.INFILTRATOR)
+    immune = mist | (state.ability[player, 0] == A.CLEAR_BODY) | ((state.ability[player, 0] == A.KEEN_EYE) & (stat == 6))
     delta = jnp.where(opposing & (amount < 0) & immune, 0, delta)
     old = state.boosts.acc_boosts[player]
     state = set_boosts(state, player, StatBoosts(normal_boosts=state.boosts.normal_boosts[player],
         acc_boosts=state.boosts.acc_boosts[player].at[stat-6].add(delta)))
 
-    lowered = opposing & jnp.any(state.boosts.acc_boosts[player] < old)
-    return opposing_drop_response(state, player, lowered.astype(jnp.int32))
+    lowered = jnp.any(state.boosts.acc_boosts[player] < old)
+    state = remember_stat_drop(state, player, lowered)
+    return opposing_drop_response(state, player, (opposing & lowered).astype(jnp.int32))
 
 
 def _valid_stage(state, player, stat, amount, opposing):
